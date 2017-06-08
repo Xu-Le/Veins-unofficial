@@ -1,0 +1,75 @@
+//
+// Copyright (C) 2011 David Eckhoff <eckhoff@cs.fau.de>, 2016 Xu Le <xmutongxinXuLe@163.com>
+//
+// Documentation for these modules is at http://veins.car2x.org/
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+//
+
+package org.car2x.veins.modules.wave;
+
+import org.car2x.veins.base.modules.BaseApplLayer;
+import org.car2x.veins.modules.wave.IHeterogeneousLayer;
+
+//
+// WAVE application layer base class.
+//
+// @author David Eckhoff, Xu Le
+//
+// @see BaseApplLayer
+// @see Nic80211p
+// @see Mac1609_4
+// @see PhyLayer80211p
+//
+simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
+{
+    @class(BaseWaveApplLayer);
+    @display("i=block/routing");
+
+    bool sendWhileParking  = default(false); // send messages when the car is parked
+    bool sendBeacons = default(true); // tell the applayer to periodically send beacons
+    bool callRoutings = default(false); // whether send routing requests
+    bool callWarnings = default(false); // whether send warning notifies when emergent incident happens
+    bool callContents = default(false); // whether this applayer should send data
+    bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
+
+    int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
+    int beaconPriority = default(1); // the access category of the beacon messages
+    int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
+    int routingPriority = default(2); // the access category of the routing messages
+	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
+    int warningPriority = default(0); // the access category of the warning messages
+	int contentLengthBits = default(768bit) @unit(bit); // the length of a content packet
+    int contentPriority = default(3); // the access category of the content messages
+    int dataLengthBits = default(18272bit) @unit(bit); //the length of a data packet 8*(2312-20-8)
+    int dataPriority = default(3); //the access category for data packets
+    int maxHopConstraint = default(5); // the maximum of routing message hop count constraint.
+
+    double maxStoreTime = default(5s) @unit(s); // the maximum time to store routing message from others
+    double guidUsedTime = default(10s) @unit(s); // the maximum time from a GUID's allocated time to its recycled time
+
+    volatile double beaconInterval = default(15s) @unit(s); // the intervall between 2 beacon messages
+    volatile double neighborElapsed = default(30s) @unit(s); // if exceeds this time haven't receive beacon message from neighbors, regard it turning into disconnected
+    volatile double examineNeighborsInterval = default(15s) @unit(s); // the intervall between 2 examine neighbors messages
+    volatile double memoryElapsed = default(15s) @unit(s); // if exceeds this time, the memory of received packet will be forgotten
+    volatile double forgetMemoryInterval = default(30s) @unit(s); // the intervall between 2 forget the memory of received packets messages
+
+    xml routingPlan;
+    xml warningPlan;
+    xml contentPlan;
+
+    gates:
+        input cellularIn @directIn; // cellularIn gate for sendDirect, receive packets from cellular base station
+}

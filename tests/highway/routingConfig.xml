@@ -1,0 +1,16 @@
+		<RoutingPlan type="3">
+			<parameter name="simtime" type="double" value="75.0"/>
+			<parameter name="receiver" type="long" value="16"/>
+		</RoutingPlan>
+		<RoutingPlan type="9">
+			<parameter name="simtime" type="double" value="70.0"/>
+			<parameter name="receiver" type="long" value="14"/>
+		</RoutingPlan>
+		<RoutingPlan type="15">
+			<parameter name="simtime" type="double" value="77.5"/>
+			<parameter name="receiver" type="long" value="14"/>
+		</RoutingPlan>
+		<RoutingPlan type="18">
+			<parameter name="simtime" type="double" value="80.0"/>
+			<parameter name="receiver" type="long" value="19"/>
+		</RoutingPlan>
