@@ -24,9 +24,9 @@ class HopItem
 {
 public:
 	HopItem() : addr(0), posX(0.0), posY(0.0), posZ(0.0), speedX(0.0), speedY(0.0), speedZ(0.0) {}
-    HopItem(long a, double px, double py, double pz, double sx, double sy, double sz) : addr(a), posX(px), posY(py), posZ(pz), speedX(sx), speedY(sy), speedZ(sz) {}
-    HopItem(const HopItem& rhs) : addr(rhs.addr), posX(rhs.posX), posY(rhs.posY), posZ(rhs.posZ), speedX(rhs.speedX), speedY(rhs.speedY), speedZ(rhs.speedZ) {}
-    
+	HopItem(long a, double px, double py, double pz, double sx, double sy, double sz) : addr(a), posX(px), posY(py), posZ(pz), speedX(sx), speedY(sy), speedZ(sz) {}
+	HopItem(const HopItem& rhs) : addr(rhs.addr), posX(rhs.posX), posY(rhs.posY), posZ(rhs.posZ), speedX(rhs.speedX), speedY(rhs.speedY), speedZ(rhs.speedZ) {}
+	
 	long addr;
 	double posX;
 	double posY;

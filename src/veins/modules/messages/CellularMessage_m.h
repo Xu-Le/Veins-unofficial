@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.0 from veins/modules/messages/CellularMessage.msg.
+// Generated file, do not edit! Created by nedtool 5.0 from CellularMessage.msg.
 //
 
 #ifndef __CELLULARMESSAGE_M_H
@@ -15,8 +15,18 @@
 
 
 
+// cplusplus {{
+enum CellularMsgCC {
+	TRANSMISSION_STARTING,
+	TRANSMISSION_ENDING,
+	DATA_PACKET_NORMAL,
+	DATA_PACKET_LAST,
+	DOWNLOADING_COMPLETING
+};
+// }}
+
 /**
- * Class generated from <tt>veins/modules/messages/CellularMessage.msg:19</tt> by nedtool.
+ * Class generated from <tt>CellularMessage.msg:30</tt> by nedtool.
  * <pre>
  * packet CellularMessage
  * {

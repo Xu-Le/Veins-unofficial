@@ -20,7 +20,7 @@
 // }}
 
 /**
- * Class generated from <tt>veins/modules/messages/BeaconMessage.msg:26</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/BeaconMessage.msg:27</tt> by nedtool.
  * <pre>
  * packet BeaconMessage extends WaveShortMessage
  * {

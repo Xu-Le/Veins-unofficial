@@ -7,6 +7,8 @@ src/**/*_m.cc
 doc/pdf
 doc/doxy
 doc/neddoc
+doc/*.jpg
+doc/Veins.uml
 
 /run
 /debug
@@ -18,6 +20,7 @@ tests/**/results
 tests/**/.tkenvrc
 tests/**/out.tmp
 tests/**/err.tmp
+tests/**/*.csv
 tests/traci
 tests/netedit.exe.lnk
 tests/sumo-gui.exe.lnk

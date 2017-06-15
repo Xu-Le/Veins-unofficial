@@ -16,7 +16,7 @@
 
 
 /**
- * Class generated from <tt>veins/modules/messages/WaitTimeElapsedMessage.msg:21</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/WaitTimeElapsedMessage.msg:23</tt> by nedtool.
  * <pre>
  * //
  * // Defines a self control message that handle with broadcast suppression wait time elapsed event

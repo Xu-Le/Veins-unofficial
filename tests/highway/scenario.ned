@@ -20,6 +20,7 @@ package org.car2x.veins.tests.highway;
 import org.car2x.veins.nodes.Scenario;
 
 import org.car2x.veins.modules.routing.WarningStatisticCollector;
+import org.car2x.veins.modules.application.ContentStatisticCollector;
 import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.ContentServer;
 import org.car2x.veins.nodes.RSU;
@@ -39,12 +40,13 @@ network scenario extends Scenario
 			@display("p=1000,24");
 		}
 		rsu[numRSU]: RSU {
-			parameters:
-				@display("p=$posX,$posY;b=10,10,oval");
+			@display("p=$posX,$posY;b=10,10,oval");
 		}
 		warningCollector: WarningStatisticCollector {
-			parameters:
-				@display("p=600,24");
+			@display("p=600,24");
+		}
+		contentCollector: ContentStatisticCollector {
+		    @display("p=750,24");
 		}
 
 	connections:

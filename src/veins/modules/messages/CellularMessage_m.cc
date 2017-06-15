@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.0 from veins/modules/messages/CellularMessage.msg.
+// Generated file, do not edit! Created by nedtool 5.0 from CellularMessage.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:

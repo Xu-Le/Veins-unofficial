@@ -16,27 +16,44 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-cplusplus {{
-enum CellularMsgCC {
-	TRANSMISSION_STARTING,
-	TRANSMISSION_ENDING,
-	DATA_PACKET_NORMAL,
-	DATA_PACKET_LAST,
-	DOWNLOADING_COMPLETING
-};
-}}
+#ifndef __CONTENTUTILS_H__
+#define __CONTENTUTILS_H__
 
-packet CellularMessage
+#include <omnetpp/clog.h>
+
+using omnetpp::getThisPtr;
+
+/** Segment structure of data. */
+struct Segment
 {
-	// @brief express which kind of control signaling message.
-	// 0: request to start transmission;
-	// 1: request to end transmission;
-	// 2: normal data packet transmission;
-	// 3: last data packet transmission;
-	int controlCode;
-	int downloader;  // identifier of downloader's application
-	int contentSize; // content size of requested large volume file
-	int curOffset;   // current content offset of the data this packet contains
-	int startOffset; // start offset position of this content
-	int endOffset;   // end offset position of this content
-}
+    Segment();
+    ~Segment();
+
+    void assign(const Segment *rhs);
+    void print();
+
+    int begin;
+    int end;
+    struct Segment *next;
+};
+
+/**
+ * @brief Utility class for content downloading application.
+ *
+ * @author Xu Le
+ * @ingroup applLayer
+ */
+class ContentUtils
+{
+public:
+    /** @name constructor, destructor. */
+    ///@{
+    ContentUtils() {}
+    ~ContentUtils() {}
+    ///@}
+
+public:
+    static int rateTable[25]; ///< measured in kbps.
+};
+
+#endif /* __CONTENTUTILS_H__ */

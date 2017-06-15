@@ -20,7 +20,7 @@
 // }}
 
 /**
- * Class generated from <tt>veins/modules/messages/WarningMessage.msg:26</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/WarningMessage.msg:27</tt> by nedtool.
  * <pre>
  * packet WarningMessage extends WaveShortMessage
  * {

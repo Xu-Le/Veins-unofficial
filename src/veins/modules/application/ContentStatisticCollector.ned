@@ -16,27 +16,11 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-cplusplus {{
-enum CellularMsgCC {
-	TRANSMISSION_STARTING,
-	TRANSMISSION_ENDING,
-	DATA_PACKET_NORMAL,
-	DATA_PACKET_LAST,
-	DOWNLOADING_COMPLETING
-};
-}}
+package org.car2x.veins.modules.application;
 
-packet CellularMessage
+simple ContentStatisticCollector
 {
-	// @brief express which kind of control signaling message.
-	// 0: request to start transmission;
-	// 1: request to end transmission;
-	// 2: normal data packet transmission;
-	// 3: last data packet transmission;
-	int controlCode;
-	int downloader;  // identifier of downloader's application
-	int contentSize; // content size of requested large volume file
-	int curOffset;   // current content offset of the data this packet contains
-	int startOffset; // start offset position of this content
-	int endOffset;   // end offset position of this content
+	@class(ContentStatisticCollector);
+	@display("i=abstract/db");
 }
+

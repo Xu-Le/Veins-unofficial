@@ -20,7 +20,7 @@
 // }}
 
 /**
- * Class generated from <tt>veins/modules/messages/DataMessage.msg:25</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/DataMessage.msg:26</tt> by nedtool.
  * <pre>
  * packet DataMessage extends WaveShortMessage
  * {

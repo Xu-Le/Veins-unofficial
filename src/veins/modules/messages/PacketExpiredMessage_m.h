@@ -16,7 +16,7 @@
 
 
 /**
- * Class generated from <tt>veins/modules/messages/PacketExpiredMessage.msg:21</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/PacketExpiredMessage.msg:23</tt> by nedtool.
  * <pre>
  * //
  * // Defines a self control message that handle with packet expired event

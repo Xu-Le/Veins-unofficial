@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.0 from veins/modules/messages/WiredMessage.msg.
+// Generated file, do not edit! Created by nedtool 5.0 from WiredMessage.msg.
 //
 
 #ifndef __WIREDMESSAGE_M_H
@@ -17,15 +17,16 @@
 
 // cplusplus {{
 enum WiredMsgCC {
-    START_TRANSMISSION,
-    END_TRANSMISSION,
-    NORMAL_DATA_PACKET,
-    LAST_DATA_PACKET
+	START_TRANSMISSION,
+	END_TRANSMISSION,
+	NORMAL_DATA_PACKET,
+	LAST_DATA_PACKET,
+	COMPLETE_DOWNLOADING
 };
 // }}
 
 /**
- * Class generated from <tt>veins/modules/messages/WiredMessage.msg:28</tt> by nedtool.
+ * Class generated from <tt>WiredMessage.msg:30</tt> by nedtool.
  * <pre>
  * packet WiredMessage
  * {

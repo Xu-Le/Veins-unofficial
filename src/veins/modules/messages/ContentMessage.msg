@@ -17,12 +17,14 @@
 
 cplusplus {{
 #include "veins/modules/messages/WaveShortMessage_m.h"
+#include "veins/modules/application/ContentUtils.h"
 enum ContentMsgCC {
     CONTENT_REQUEST,
     CONTENT_RESPONSE,
     SCHEME_DISTRIBUTION,
     ACKNOWLEDGEMENT,
     CARRIER_SELECTION,
+    DOWNLOADING_COMPLETED,
     LINK_BREAK_DIRECT,
     LINK_BREAK_DR,
     LINK_BREAK_RR,
@@ -33,9 +35,9 @@ enum ContentMsgCC {
 class SchemeTuple
 {
 public:
-	SchemeTuple() : slot(-1), receiver(-1), downloader(-1), amount(-1) {}
-    SchemeTuple(int s, int r, int d, int a) : slot(s), receiver(r), downloader(d), amount(a) {}
-    SchemeTuple(const SchemeTuple& rhs) : slot(rhs.slot), receiver(rhs.receiver), downloader(rhs.downloader), amount(rhs.amount) {}
+	SchemeTuple() : slot(-1), receiver(-1), downloader(-1), amount(-1), offset() {}
+    SchemeTuple(int s, int r, int d, int a) : slot(s), receiver(r), downloader(d), amount(a), offset() {}
+    SchemeTuple(const SchemeTuple& rhs) : slot(rhs.slot), receiver(rhs.receiver), downloader(rhs.downloader), amount(rhs.amount) { offset.assign(&rhs.offset); }
 
 	SchemeTuple& operator=(const SchemeTuple& rhs)
 	{
@@ -45,6 +47,7 @@ public:
 		receiver = rhs.receiver;
 		downloader = rhs.downloader;
 		amount = rhs.amount;
+		offset.assign(&rhs.offset);
 		return *this;
 	}
 
@@ -52,6 +55,7 @@ public:
     int receiver;
     int downloader;
     int amount;
+    Segment offset;
 };
 typedef std::list<std::pair<Coord /* pos */, Coord /* speed */> > NeighborItems;
 typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;

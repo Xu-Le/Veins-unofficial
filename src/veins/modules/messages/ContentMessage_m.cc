@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.0 from veins/modules/messages/ContentMessage.msg.
+// Generated file, do not edit! Created by nedtool 5.0 from ContentMessage.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:

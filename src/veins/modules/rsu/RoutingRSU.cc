@@ -32,54 +32,54 @@ void RoutingRSU::initialize(int stage)
 
 void RoutingRSU::finish()
 {
-    BaseRSU::finish();
+	BaseRSU::finish();
 }
 
 void RoutingRSU::handleSelfMsg(cMessage *msg)
 {
-    BaseRSU::handleSelfMsg(msg);
+	BaseRSU::handleSelfMsg(msg);
 }
 
 void RoutingRSU::decorateWSM(WaveShortMessage *wsm)
 {
-    BaseRSU::decorateWSM(wsm);
+	BaseRSU::decorateWSM(wsm);
 }
 
 void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 {
-    EV << logName() << ": " << "onRouting!\n";
+	EV << logName() << ": " << "onRouting!\n";
 
-    int guid = routingMsg->getGUID(); // alias
+	int guid = routingMsg->getGUID(); // alias
 
-    if ( messageMemory.find(guid) != messageMemory.end() )
-    {
-        EV << "routing message(GUID=" << guid << ") has been rebroadcast recently, discard it.\n";
-        return;
-    }
+	if ( messageMemory.find(guid) != messageMemory.end() )
+	{
+		EV << "routing message(GUID=" << guid << ") has been rebroadcast recently, discard it.\n";
+		return;
+	}
 
-    // check if the hop count of the message exceeds
-    if ( routingMsg->getHopCount() > maxHopConstraint )
-    {
-        EV << "routing message(GUID=" << guid << ") exceeds its maximum hop count, discard it.\n";
-        return;
-    }
+	// check if the hop count of the message exceeds
+	if ( routingMsg->getHopCount() > maxHopConstraint )
+	{
+		EV << "routing message(GUID=" << guid << ") exceeds its maximum hop count, discard it.\n";
+		return;
+	}
 
-    // catch a new routing message
-    EV << "catch a routing message(GUID=" << guid << "), help to rebroadcast it.\n";
+	// catch a new routing message
+	EV << "catch a routing message(GUID=" << guid << "), help to rebroadcast it.\n";
 
-    messageMemory.insert(std::pair<int, simtime_t>(guid, simTime()));
+	messageMemory.insert(std::pair<int, simtime_t>(guid, simTime()));
 
-    RoutingMessage *dupWSM = new RoutingMessage(*routingMsg);
-    decorateWSM(dupWSM);
-    sendWSM(dupWSM);
+	RoutingMessage *dupWSM = new RoutingMessage(*routingMsg);
+	decorateWSM(dupWSM);
+	sendWSM(dupWSM);
 }
 
 void RoutingRSU::onContent(ContentMessage* contentMsg)
 {
-    EV << "RoutingRSUs don't react to content messages since they don't provide content service.\n";
+	EV << "RoutingRSUs don't react to content messages since they don't provide content service.\n";
 }
 
 void RoutingRSU::onData(DataMessage* dataMsg)
 {
-    EV << "RoutingRSUs don't react to data messages since they don't provide content service.\n";
+	EV << "RoutingRSUs don't react to data messages since they don't provide content service.\n";
 }

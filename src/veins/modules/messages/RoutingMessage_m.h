@@ -20,7 +20,7 @@
 // }}
 
 /**
- * Class generated from <tt>veins/modules/messages/RoutingMessage.msg:26</tt> by nedtool.
+ * Class generated from <tt>veins/modules/messages/RoutingMessage.msg:27</tt> by nedtool.
  * <pre>
  * packet RoutingMessage extends WaveShortMessage
  * {
