@@ -20,6 +20,7 @@ tests/**/results
 tests/**/.tkenvrc
 tests/**/out.tmp
 tests/**/err.tmp
+tests/**/*.txt
 tests/**/*.csv
 tests/traci
 tests/netedit.exe.lnk

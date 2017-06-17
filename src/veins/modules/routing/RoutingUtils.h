@@ -75,7 +75,11 @@ public:
 	///@}
 
 public:
-	static bool GUIDPool[RAND_MAX]; ///< an array records whether a GUID has been used.
+#if RAND_MAX == 0x7fff
+	static bool GUIDPool[32767]; ///< an array records whether a GUID has been used.
+#else
+	static bool GUIDPool[65535]; ///< an array records whether a GUID has been used.
+#endif
 };
 
 #endif /* __ROUTINGUTILS_H__ */

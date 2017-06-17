@@ -18,7 +18,11 @@
 
 #include "veins/modules/routing/RoutingUtils.h"
 
-bool RoutingUtils::GUIDPool[RAND_MAX] = { 0 };
+#if RAND_MAX == 0x7fff
+bool RoutingUtils::GUIDPool[32767] = { 0 };
+#else
+bool RoutingUtils::GUIDPool[65535] = { 0 };
+#endif
 
 double RoutingUtils::_length(Coord& point1, Coord& point2)
 {
@@ -74,6 +78,7 @@ short RoutingUtils::relativeDirection(double ownDir, double otherDir)
 int RoutingUtils::generateGUID()
 {
 	int high = rand(), low = rand();
+#if RAND_MAX == 0x7fff
 	while ( GUIDPool[high] ) // loop until rand() function produce a random number hasn't been used
 		high = rand();
 	GUIDPool[high] = true; // denote this random number is used by now
@@ -81,11 +86,20 @@ int RoutingUtils::generateGUID()
 		low = rand();
 	GUIDPool[low] = true; // denote this random number is used by now
 	return (high << 16) + low;
+#else
+    while ( GUIDPool[high >> 16] ) // loop until rand() function produce a random number hasn't been used
+        high = rand();
+    GUIDPool[high >> 16] = true; // denote this random number is used by now
+    while ( GUIDPool[low & 0xffff] ) // loop until rand() function produce a random number hasn't been used
+        low = rand();
+    GUIDPool[low & 0xffff] = true; // denote this random number is used by now
+    return (high & 0xffff0000) + (low & 0xffff);
+#endif
 }
 
 void RoutingUtils::recycleGUID(int GUID)
 {
-	int low = GUID & 0xffff, high = (GUID>>16) & 0xffff;
+	int low = GUID & 0xffff, high = GUID >> 16;
 	GUIDPool[low] = false;
 	GUIDPool[high] = false;
 }

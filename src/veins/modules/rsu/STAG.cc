@@ -310,7 +310,7 @@ void STAG::_obtainArcPathList()
 	EV << "===== Arc path list =====\n";
 	for (itAPL = arcPathList.begin(); itAPL != arcPathList.end(); ++itAPL)
 	{
-		for (int k = 0; k < itAPL->size(); ++k)
+		for (size_t k = 0; k < itAPL->size(); ++k)
 			EV << itAPL->at(k) << " ";
 		EV << std::endl;
 	}
@@ -1342,7 +1342,7 @@ void STAG::__eraseUnchosenArcPath()
 	EV << "===== chosen arc path list =====\n";
 	for (itAPL = arcPathList.begin(); itAPL != arcPathList.end(); ++itAPL)
 	{
-		for (int k = 0; k < itAPL->size(); ++k)
+		for (size_t k = 0; k < itAPL->size(); ++k)
 			EV << itAPL->at(k) << " ";
 		EV << std::endl;
 	}
