@@ -171,6 +171,7 @@ WiredMessage::WiredMessage(const char *name, int kind) : ::omnetpp::cPacket(name
     this->curOffset = 0;
     this->startOffset = 0;
     this->endOffset = 0;
+    this->bytesNum = 0;
 }
 
 WiredMessage::WiredMessage(const WiredMessage& other) : ::omnetpp::cPacket(other)
@@ -198,6 +199,8 @@ void WiredMessage::copy(const WiredMessage& other)
     this->curOffset = other.curOffset;
     this->startOffset = other.startOffset;
     this->endOffset = other.endOffset;
+    this->bytesNum = other.bytesNum;
+    this->neighborInfo = other.neighborInfo;
 }
 
 void WiredMessage::parsimPack(omnetpp::cCommBuffer *b) const
@@ -209,6 +212,8 @@ void WiredMessage::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->curOffset);
     doParsimPacking(b,this->startOffset);
     doParsimPacking(b,this->endOffset);
+    doParsimPacking(b,this->bytesNum);
+    doParsimPacking(b,this->neighborInfo);
 }
 
 void WiredMessage::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -220,6 +225,8 @@ void WiredMessage::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->curOffset);
     doParsimUnpacking(b,this->startOffset);
     doParsimUnpacking(b,this->endOffset);
+    doParsimUnpacking(b,this->bytesNum);
+    doParsimUnpacking(b,this->neighborInfo);
 }
 
 int WiredMessage::getControlCode() const
@@ -280,6 +287,26 @@ int WiredMessage::getEndOffset() const
 void WiredMessage::setEndOffset(int endOffset)
 {
     this->endOffset = endOffset;
+}
+
+int WiredMessage::getBytesNum() const
+{
+    return this->bytesNum;
+}
+
+void WiredMessage::setBytesNum(int bytesNum)
+{
+    this->bytesNum = bytesNum;
+}
+
+NeighborItems& WiredMessage::getNeighborInfo()
+{
+    return this->neighborInfo;
+}
+
+void WiredMessage::setNeighborInfo(const NeighborItems& neighborInfo)
+{
+    this->neighborInfo = neighborInfo;
 }
 
 class WiredMessageDescriptor : public omnetpp::cClassDescriptor
@@ -346,7 +373,7 @@ const char *WiredMessageDescriptor::getProperty(const char *propertyname) const
 int WiredMessageDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 6+basedesc->getFieldCount() : 6;
+    return basedesc ? 8+basedesc->getFieldCount() : 8;
 }
 
 unsigned int WiredMessageDescriptor::getFieldTypeFlags(int field) const
@@ -364,8 +391,10 @@ unsigned int WiredMessageDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
+        FD_ISCOMPOUND,
     };
-    return (field>=0 && field<6) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<8) ? fieldTypeFlags[field] : 0;
 }
 
 const char *WiredMessageDescriptor::getFieldName(int field) const
@@ -383,8 +412,10 @@ const char *WiredMessageDescriptor::getFieldName(int field) const
         "curOffset",
         "startOffset",
         "endOffset",
+        "bytesNum",
+        "neighborInfo",
     };
-    return (field>=0 && field<6) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<8) ? fieldNames[field] : nullptr;
 }
 
 int WiredMessageDescriptor::findField(const char *fieldName) const
@@ -397,6 +428,8 @@ int WiredMessageDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='c' && strcmp(fieldName, "curOffset")==0) return base+3;
     if (fieldName[0]=='s' && strcmp(fieldName, "startOffset")==0) return base+4;
     if (fieldName[0]=='e' && strcmp(fieldName, "endOffset")==0) return base+5;
+    if (fieldName[0]=='b' && strcmp(fieldName, "bytesNum")==0) return base+6;
+    if (fieldName[0]=='n' && strcmp(fieldName, "neighborInfo")==0) return base+7;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -415,8 +448,10 @@ const char *WiredMessageDescriptor::getFieldTypeString(int field) const
         "int",
         "int",
         "int",
+        "int",
+        "NeighborItems",
     };
-    return (field>=0 && field<6) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<8) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **WiredMessageDescriptor::getFieldPropertyNames(int field) const
@@ -475,6 +510,8 @@ std::string WiredMessageDescriptor::getFieldValueAsString(void *object, int fiel
         case 3: return long2string(pp->getCurOffset());
         case 4: return long2string(pp->getStartOffset());
         case 5: return long2string(pp->getEndOffset());
+        case 6: return long2string(pp->getBytesNum());
+        case 7: {std::stringstream out; out << pp->getNeighborInfo(); return out.str();}
         default: return "";
     }
 }
@@ -495,6 +532,7 @@ bool WiredMessageDescriptor::setFieldValueAsString(void *object, int field, int 
         case 3: pp->setCurOffset(string2long(value)); return true;
         case 4: pp->setStartOffset(string2long(value)); return true;
         case 5: pp->setEndOffset(string2long(value)); return true;
+        case 6: pp->setBytesNum(string2long(value)); return true;
         default: return false;
     }
 }
@@ -508,6 +546,7 @@ const char *WiredMessageDescriptor::getFieldStructName(int field) const
         field -= basedesc->getFieldCount();
     }
     switch (field) {
+        case 7: return omnetpp::opp_typename(typeid(NeighborItems));
         default: return nullptr;
     };
 }
@@ -522,6 +561,7 @@ void *WiredMessageDescriptor::getFieldStructValuePointer(void *object, int field
     }
     WiredMessage *pp = (WiredMessage *)object; (void)pp;
     switch (field) {
+        case 7: return (void *)(&pp->getNeighborInfo()); break;
         default: return nullptr;
     }
 }

@@ -24,9 +24,6 @@
 #include "veins/modules/messages/CellularMessage_m.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 
-using omnetpp::SimTime;
-using omnetpp::cMessage;
-
 /**
  * @brief LTE Base Station.
  *
@@ -46,10 +43,10 @@ public:
 	void finish() override;
 
 private:
-    /** @brief The self message kinds. */
-    enum SelfMsgKinds {
-        DISTRIBUTE_EVT
-    };
+	/** @brief The self message kinds. */
+	enum SelfMsgKinds {
+		DISTRIBUTE_EVT
+	};
 
 	/** @brief Called every time a message arrives. */
 	void handleMessage(omnetpp::cMessage *msg) override;
@@ -62,20 +59,20 @@ private:
 	void handleWiredIncomingMsg(WiredMessage *wiredMsg);
 
 public:
-    /** @brief The class to store downloader's information. */
-    class DownloaderInfo
-    {
-    public:
-        DownloaderInfo(int t, int s, int r) : totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
+	/** @brief The class to store downloader's information. */
+	class DownloaderInfo
+	{
+	public:
+		DownloaderInfo(int t, int s, int r) : totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
 
-        int totalContentSize;
-        int cacheStartOffset;
-        int cacheEndOffset;
-        int distributedOffset;
-        int requiredEndOffset;
-        SimTime distributedAt;
-        cGate *correspondingGate;
-    };
+		int totalContentSize;
+		int cacheStartOffset;
+		int cacheEndOffset;
+		int distributedOffset;
+		int requiredEndOffset;
+		SimTime distributedAt;
+		cGate *correspondingGate;
+	};
 
 	/** @name gate IDs. */
 	///@{
@@ -89,19 +86,19 @@ public:
 	int wirelessDataLength; ///< length of the cellular packet data measured in bits.
 	int wirelessBitsRate; ///< data transmission rate measured in bps of wireless radio.
 
-    /** @name performance consideration. */
-    ///@{
-    int distributeLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
-    int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
-    SimTime distributePeriod;  ///< period to handle self message distributeEvt.
-    ///@}
+	/** @name performance consideration. */
+	///@{
+	int distributeLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
+	int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
+	SimTime distributePeriod;  ///< period to handle self message distributeEvt.
+	///@}
 
-    cMessage *distributeEvt; ///< self message used to periodically distribute data to vehicle.
+	cMessage *distributeEvt; ///< self message used to periodically distribute data to vehicle.
 
 	cModule *rootModule; ///< store the pointer to system module to find the sender vehicle's compound module.
 
-    std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
-    std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.
+	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
+	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.
 };
 
 #endif /* __BASESTATION_H__ */

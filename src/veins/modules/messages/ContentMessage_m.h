@@ -18,51 +18,58 @@
 // cplusplus {{
 #include "veins/modules/messages/WaveShortMessage_m.h"
 #include "veins/modules/application/ContentUtils.h"
+
 enum ContentMsgCC {
-    CONTENT_REQUEST,
-    CONTENT_RESPONSE,
-    SCHEME_DISTRIBUTION,
-    ACKNOWLEDGEMENT,
-    CARRIER_SELECTION,
-    DOWNLOADING_COMPLETED,
-    LINK_BREAK_DIRECT,
-    LINK_BREAK_DR,
-    LINK_BREAK_RR,
-    RELAY_DISCOVERY,
-    DISCOVERY_RESPONSE
+	CONTENT_REQUEST,
+	CONTENT_RESPONSE,
+	SCHEME_DISTRIBUTION,
+	ACKNOWLEDGEMENT,
+	CARRIER_SELECTION,
+	DOWNLOADING_COMPLETED,
+	LINK_BREAK_DIRECT,
+	LINK_BREAK_DR,
+	LINK_BREAK_RR,
+	RELAY_DISCOVERY,
+	DISCOVERY_RESPONSE
 };
 
 class SchemeTuple
 {
 public:
-	SchemeTuple() : slot(-1), receiver(-1), downloader(-1), amount(-1), offset() {}
-    SchemeTuple(int s, int r, int d, int a) : slot(s), receiver(r), downloader(d), amount(a), offset() {}
-    SchemeTuple(const SchemeTuple& rhs) : slot(rhs.slot), receiver(rhs.receiver), downloader(rhs.downloader), amount(rhs.amount) { offset.assign(&rhs.offset); }
+	SchemeTuple() : slot(-1), receiver(-1), downloader(-1), amount(-1), _offset(), offset(&_offset) {}
+	SchemeTuple(int s, int r, int d, int a) : slot(s), receiver(r), downloader(d), amount(a), _offset(), offset(&_offset) {}
+	SchemeTuple(const SchemeTuple& rhs) : slot(rhs.slot), receiver(rhs.receiver), downloader(rhs.downloader), amount(rhs.amount)
+	{
+		_offset.assign(&rhs._offset);
+		offset = &_offset;
+	}
 
 	SchemeTuple& operator=(const SchemeTuple& rhs)
 	{
-	    if (this == &rhs)
-	    	return *this;
+		if (this == &rhs)
+			return *this;
 		slot = rhs.slot;
 		receiver = rhs.receiver;
 		downloader = rhs.downloader;
 		amount = rhs.amount;
-		offset.assign(&rhs.offset);
+		_offset.assign(&rhs._offset);
+		offset = &_offset;
 		return *this;
 	}
 
-    int slot;
-    int receiver;
-    int downloader;
-    int amount;
-    Segment offset;
+	int slot;
+	int receiver;
+	int downloader;
+	int amount;
+	Segment _offset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
+	Segment *offset; ///< external variable, use offset = offset->next to iterate the segment list.
 };
-typedef std::list<std::pair<Coord /* pos */, Coord /* speed */> > NeighborItems;
+
 typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
 // }}
 
 /**
- * Class generated from <tt>ContentMessage.msg:69</tt> by nedtool.
+ * Class generated from <tt>ContentMessage.msg:77</tt> by nedtool.
  * <pre>
  * packet ContentMessage extends WaveShortMessage
  * {
@@ -77,6 +84,7 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
  *     // 7: cooperative RSU's discover notification sends to the first entering relay;
  *     // 8: the first entering relay response to cooperative RSU's discover notification.
  *     int controlCode;
+ *     int receiver;    // identifier of receiver's application
  *     int downloader;  // which downloader this content message aims to
  *     int contentSize; // content size of request large-volume file
  *     int receivedOffset; // data amount received offset
@@ -91,6 +99,7 @@ class ContentMessage : public ::WaveShortMessage
 {
   protected:
     int controlCode;
+    int receiver;
     int downloader;
     int contentSize;
     int receivedOffset;
@@ -118,6 +127,8 @@ class ContentMessage : public ::WaveShortMessage
     // field getter/setter methods
     virtual int getControlCode() const;
     virtual void setControlCode(int controlCode);
+    virtual int getReceiver() const;
+    virtual void setReceiver(int receiver);
     virtual int getDownloader() const;
     virtual void setDownloader(int downloader);
     virtual int getContentSize() const;

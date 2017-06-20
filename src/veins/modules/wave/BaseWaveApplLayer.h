@@ -226,6 +226,7 @@ protected:
 	std::list<std::pair<double /* simtime */, int /* size */> > contentPlanList; ///< content plans of all vehicles configured by a xmlfile.
 	std::map<LAddress::L3Type, NeighborInfo*> neighbors; ///< a map from a vehicle to all its neighbor mobility info.
 	std::map<int /* GUID */, WaveShortMessage*> messageMemory; ///< a map from a message's GUID to the point to this message.
+	std::map<LAddress::L3Type, NeighborInfo*>::iterator itN; ///< an iterator used to traverse container neighbors.
 	///@}
 
 	/** @name messages. */

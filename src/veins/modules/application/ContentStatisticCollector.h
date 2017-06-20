@@ -30,25 +30,25 @@
 class ContentStatisticCollector : public ::omnetpp::cSimpleModule
 {
 public:
-    /** @name constructor, destructor. */
-    ///@{
-    ContentStatisticCollector() : cSimpleModule() {}
-    ContentStatisticCollector(unsigned stacksize) : cSimpleModule(stacksize) {}
-    virtual ~ContentStatisticCollector();
-    ///@}
+	/** @name constructor, destructor. */
+	///@{
+	ContentStatisticCollector() : cSimpleModule() {}
+	ContentStatisticCollector(unsigned stacksize) : cSimpleModule(stacksize) {}
+	virtual ~ContentStatisticCollector();
+	///@}
 
-    void initialize(int stage) override;
-    void finish() override;
+	void initialize(int stage) override;
+	void finish() override;
 
 public:
-    static long globalContentRequests; ///< accumulated content request number in the whole simulation.
-    static long globalParticipatingRSUNum; ///< accumulated number of RSUs participated in the cooperative downloading process.
-    static double globalDSRCFlux; ///< accumulated amount of flux produced by DSRC approach.
-    static double globalCellularFlux; ///< accumulated amount of flux produced by cellular approach.
-    static double globalConsumingTime; ///< accumulated total time cost in data consuming process.
-    static double globalDownloadingTime; ///< accumulated total time cost in cooperative downloading process.
-    static double globalInterruptedTime; ///< accumulated interrupted time in cooperative downloading process.
-    static double globalConsumptionStartingDelay; ///< accumulated time delay from content request to content consumption starting.
+	static long globalContentRequests; ///< accumulated content request number in the whole simulation.
+	static long globalParticipatingRSUNum; ///< accumulated number of RSUs participated in the cooperative downloading process.
+	static double globalDSRCFlux; ///< accumulated amount of flux produced by DSRC approach.
+	static double globalCellularFlux; ///< accumulated amount of flux produced by cellular approach.
+	static double globalConsumingTime; ///< accumulated total time cost in data consuming process.
+	static double globalDownloadingTime; ///< accumulated total time cost in cooperative downloading process.
+	static double globalInterruptedTime; ///< accumulated interrupted time in cooperative downloading process.
+	static double globalConsumptionStartingDelay; ///< accumulated time delay from content request to content consumption starting.
 };
 
 #endif /* __CONTENTSTATISTICCOLLECTOR_H__ */

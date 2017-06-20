@@ -19,22 +19,22 @@
 #ifndef __CONTENTUTILS_H__
 #define __CONTENTUTILS_H__
 
-#include <omnetpp/clog.h>
+#include "veins/base/utils/Coord.h"
 
-using omnetpp::getThisPtr;
+typedef std::list<std::pair<Coord /* pos */, Coord /* speed */> > NeighborItems;
 
 /** Segment structure of data. */
 struct Segment
 {
-    Segment();
-    ~Segment();
+	Segment();
+	~Segment();
 
-    void assign(const Segment *rhs);
-    void print();
+	void assign(const Segment *rhs);
+	void print();
 
-    int begin;
-    int end;
-    struct Segment *next;
+	int begin;
+	int end;
+	struct Segment *next;
 };
 
 /**
@@ -46,14 +46,23 @@ struct Segment
 class ContentUtils
 {
 public:
-    /** @name constructor, destructor. */
-    ///@{
-    ContentUtils() {}
-    ~ContentUtils() {}
-    ///@}
+	/** @name constructor, destructor. */
+	///@{
+	ContentUtils() {}
+	~ContentUtils() {}
+	///@}
+
+	/** @brief transform total application layer bytes to total link layer bytes.
+	 *
+	 * @param applBytes total application layer bytes;
+	 * @param headerLen header length of single packet measured in bytes;
+	 * @param dataLen max data length of single packet measured in bytes;
+	 * @return total application layer bytes.
+	 */
+	static int calcLinkBytes(int applBytes, int headerLen, int dataLen);
 
 public:
-    static int rateTable[25]; ///< measured in kbps.
+	static int rateTable[50]; ///< measured in kbps.
 };
 
 #endif /* __CONTENTUTILS_H__ */

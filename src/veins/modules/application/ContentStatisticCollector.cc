@@ -32,57 +32,57 @@ double ContentStatisticCollector::globalConsumptionStartingDelay = 0.0;
 
 void ContentStatisticCollector::initialize(int stage)
 {
-    cComponent::initialize(stage);
+	cComponent::initialize(stage);
 
-    if (stage == 0)
-        EV << "ContentStatisticCollector::initialize() called.\n";
+	if (stage == 0)
+		EV << "ContentStatisticCollector::initialize() called.\n";
 }
 
 void ContentStatisticCollector::finish()
 {
-    EV << "ContentStatisticCollector::finish() called.\n";
+	EV << "ContentStatisticCollector::finish() called.\n";
 
-    // record statistics
-    recordScalar("globalContentRequests", globalContentRequests);
-    recordScalar("globalParticipatingRSUNum", globalParticipatingRSUNum);
-    recordScalar("globalDSRCFlux", globalDSRCFlux);
-    recordScalar("globalCellularFlux", globalCellularFlux);
-    recordScalar("globalDownloadingTime", globalDownloadingTime);
-    recordScalar("globalInterruptedTime", globalInterruptedTime);
+	// record statistics
+	recordScalar("globalContentRequests", globalContentRequests);
+	recordScalar("globalParticipatingRSUNum", globalParticipatingRSUNum);
+	recordScalar("globalDSRCFlux", globalDSRCFlux);
+	recordScalar("globalCellularFlux", globalCellularFlux);
+	recordScalar("globalDownloadingTime", globalDownloadingTime);
+	recordScalar("globalInterruptedTime", globalInterruptedTime);
 
-    if (globalDSRCFlux + globalCellularFlux < 1e-6)
-        globalDSRCFlux = globalCellularFlux = 1.0;
-    if (globalConsumingTime < 1e-6)
-        globalConsumingTime = 1.0;
-    if (globalContentRequests == 0)
-        globalContentRequests = 1;
+	if (globalDSRCFlux + globalCellularFlux < 1e-6)
+		globalDSRCFlux = globalCellularFlux = 1.0;
+	if (globalConsumingTime < 1e-6)
+		globalConsumingTime = 1.0;
+	if (globalContentRequests == 0)
+		globalContentRequests = 1;
 
-    double DSRCFluxRatio = globalDSRCFlux / (globalDSRCFlux + globalCellularFlux);
-    double interruptedTimeRatio = globalInterruptedTime / globalConsumingTime;
-    double averageConsumptionStartingDelay = globalConsumptionStartingDelay / globalContentRequests;
+	double DSRCFluxRatio = globalDSRCFlux / (globalDSRCFlux + globalCellularFlux);
+	double interruptedTimeRatio = globalInterruptedTime / globalConsumingTime;
+	double averageConsumptionStartingDelay = globalConsumptionStartingDelay / globalContentRequests;
 
-    recordScalar("DSRCFluxRatio", DSRCFluxRatio);
-    recordScalar("interruptedTimeRatio", interruptedTimeRatio);
-    recordScalar("averageConsumptionStartingDelay", averageConsumptionStartingDelay);
+	recordScalar("DSRCFluxRatio", DSRCFluxRatio);
+	recordScalar("interruptedTimeRatio", interruptedTimeRatio);
+	recordScalar("averageConsumptionStartingDelay", averageConsumptionStartingDelay);
 
-    // append statistic to file for figuring in MATLAB
-    std::ofstream fout("contentStatistics.csv", std::ios_base::out | std::ios_base::app);
-    if ( !fout.is_open() )
-    {
-        error("cannot open file routingStatistics.csv!");
-    }
-    else
-    {
-        fout << globalContentRequests << ',' << globalParticipatingRSUNum << ',' << globalDSRCFlux << ',' << globalCellularFlux << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
-        fout << DSRCFluxRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;
-    }
-    fout.close();
+	// append statistic to file for figuring in MATLAB
+	std::ofstream fout("contentStatistics.csv", std::ios_base::out | std::ios_base::app);
+	if ( !fout.is_open() )
+	{
+		error("cannot open file routingStatistics.csv!");
+	}
+	else
+	{
+		fout << globalContentRequests << ',' << globalParticipatingRSUNum << ',' << globalDSRCFlux << ',' << globalCellularFlux << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
+		fout << DSRCFluxRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;
+	}
+	fout.close();
 
-    cComponent::finish();
+	cComponent::finish();
 }
 
 ContentStatisticCollector::~ContentStatisticCollector()
 {
-    EV << "ContentStatisticCollector::~ContentStatisticCollector() called.\n";
+	EV << "ContentStatisticCollector::~ContentStatisticCollector() called.\n";
 }
 

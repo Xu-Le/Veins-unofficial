@@ -77,6 +77,16 @@ protected:
 	virtual void handleLowerMsg(cMessage *msg) override;
 	/** @brief Handle wired incoming messages. */
 	virtual void handleWiredMsg(WiredMessage *wiredMsg) {}
+	/** @brief Handle west RSU incoming messages. */
+	void handleWestMsg(WiredMessage *wiredMsg) { handleRSUMsg(wiredMsg, 1); }
+	/** @brief Handle east RSU messages. */
+	void handleEastMsg(WiredMessage *wiredMsg) { handleRSUMsg(wiredMsg, 2); }
+	/** @brief Handle north RSU incoming messages(unused yet). */
+	void handleNorthMsg(WiredMessage *wiredMsg) { handleRSUMsg(wiredMsg, 3); }
+	/** @brief Handle south RSU messages(unused yet). */
+	void handleSouthMsg(WiredMessage *wiredMsg) { handleRSUMsg(wiredMsg, 4); }
+	/** @brief Handle west/east RSU messages, param 'direction': west is 1, east is 2, north is 3, south is 4. */
+	virtual void handleRSUMsg(WiredMessage *wiredMsg, int direction) {}
 
 	/** @brief wave short message factory method(template method, subclass should not override it). */
 	virtual WaveShortMessage* prepareWSM(std::string name, int dataLength, t_channel channel, int priority, int serial);
@@ -99,6 +109,7 @@ protected:
 	void forgetMemory();
 
 protected:
+	/** @brief which side this RSU locate along the road. */
 	enum SideDirection {
 		EAST_SIDE,
 		WEST_SIDE,
@@ -121,6 +132,10 @@ protected:
 	///@{
 	int wiredIn;    ///< receive packets from file content server.
 	int wiredOut;   ///< send packets to file content server.
+	int westIn;     ///< receive packets from west neighbor RSU.
+	int westOut;    ///< send packets to west neighbor RSU.
+	int eastIn;     ///< receive packets from east neighbor RSU.
+	int eastOut;    ///< send packets to east neighbor RSU.
 	///@}
 	int wiredHeaderLength; ///< length of the IP packet header.
 

@@ -16,17 +16,21 @@
 
 
 // cplusplus {{
+#include "veins/modules/application/ContentUtils.h"
+
 enum WiredMsgCC {
 	START_TRANSMISSION,
 	END_TRANSMISSION,
 	NORMAL_DATA_PACKET,
 	LAST_DATA_PACKET,
-	COMPLETE_DOWNLOADING
+	COMPLETE_DOWNLOADING,
+	COOPERATIVE_NOTIFICATION,
+	COOPERATIVE_ACKNOWLEDGEMENT
 };
 // }}
 
 /**
- * Class generated from <tt>WiredMessage.msg:30</tt> by nedtool.
+ * Class generated from <tt>WiredMessage.msg:36</tt> by nedtool.
  * <pre>
  * packet WiredMessage
  * {
@@ -35,12 +39,16 @@ enum WiredMsgCC {
  *     // 1: request to end transmission;
  *     // 2: normal data packet transmission;
  *     // 3: last data packet transmission;
+ *     // 4: downloading process completion notification;
+ *     // 5: notify neighbor RSU to participate in downloading process.
  *     int controlCode;
  *     int downloader;  // identifier of downloader's application
  *     int contentSize; // content size of requested large volume file
  *     int curOffset;   // current content offset of the data this packet contains
  *     int startOffset; // start offset position of this content
  *     int endOffset;   // end offset position of this content
+ *     int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
+ *     NeighborItems neighborInfo; // neighbors information of a downloader
  * }
  * </pre>
  */
@@ -53,6 +61,8 @@ class WiredMessage : public ::omnetpp::cPacket
     int curOffset;
     int startOffset;
     int endOffset;
+    int bytesNum;
+    NeighborItems neighborInfo;
 
   private:
     void copy(const WiredMessage& other);
@@ -83,6 +93,11 @@ class WiredMessage : public ::omnetpp::cPacket
     virtual void setStartOffset(int startOffset);
     virtual int getEndOffset() const;
     virtual void setEndOffset(int endOffset);
+    virtual int getBytesNum() const;
+    virtual void setBytesNum(int bytesNum);
+    virtual NeighborItems& getNeighborInfo();
+    virtual const NeighborItems& getNeighborInfo() const {return const_cast<WiredMessage*>(this)->getNeighborInfo();}
+    virtual void setNeighborInfo(const NeighborItems& neighborInfo);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const WiredMessage& obj) {obj.parsimPack(b);}

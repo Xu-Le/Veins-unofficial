@@ -37,6 +37,10 @@ module RSU
     gates:
         input veinswiredIn;   // transmit data to appl module
         output veinswiredOut; // receive data from appl module
+        input veinswestIn;   // transmit data to appl module
+        output veinswestOut; // receive data from appl module
+        input veinseastIn;   // transmit data to appl module
+        output veinseastOut; // receive data from appl module
         input veinsradioIn @directIn; // gate for sendDirect
         
     submodules:
@@ -69,5 +73,9 @@ module RSU
 
 		veinswiredIn --> appl.wiredIn;
 		veinswiredOut <-- appl.wiredOut;
+		veinswestIn --> appl.westIn;
+		veinswestOut <-- appl.westOut;
+		veinseastIn --> appl.eastIn;
+		veinseastOut <-- appl.eastOut;
         veinsradioIn --> nic.radioIn;
 }

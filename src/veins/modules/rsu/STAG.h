@@ -51,15 +51,6 @@ private:
 	clock_t _start_time;
 };
 
-/** File segment store in vehicles. */
-struct Data
-{
-	Data() : downloader(-1), size(0) {}
-
-	int downloader;
-	int size;
-};
-
 /** Input to construct STAG, it is obtained by ContentRSU. */
 class LinkTuple
 {
@@ -85,43 +76,52 @@ private:
 	LinkTuple& operator=(const LinkTuple&);
 };
 
-/** Arc structure of graph. */
-struct Arc
-{
-	Arc();
-	~Arc();
-
-	int arcID;       ///< ID of this arc.
-	int srcID;       ///< tail of this arc.
-	int dstID;       ///< head of this arc.
-	int *bandwidth;  ///< max capacity of this arc.
-	int *flow;       ///< current flow of this arc.
-	int *downloader; ///< current flow data belong to which downloader.
-	bool *idle;      ///< whether current slot of this arc is idle for transmition.
-
-	struct Arc *nextArc;    ///< next out degree arc of the node this arc derived.
-};
-
-/** Node structure of graph. */
-struct Node
-{
-	Node();
-	~Node();
-
-	Data *_S; ///< continuous memory allocation, client code should use S instead.
-	Data **S; ///< convenient matrix form S[i][j], where i is slot dimension and j is downloader dimension.
-
-	struct Arc *firstArc; ///< first out degree arc of this node.
-	struct Arc *lastArc;  ///< last out degree arc of this node.
-};
-
 inline void vectorRemove(std::vector<int>& vec, const int key) { vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end()); }
 
 /** Adjacency list structure representing the graph. */
 class STAG
 {
 public:
-	STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable);
+	/** File segment store in vehicles. */
+	struct Data
+	{
+		Data() : downloader(-1), size(0) {}
+
+		int downloader;
+		int size;
+	};
+
+	/** Arc structure of graph. */
+	struct Arc
+	{
+		Arc();
+		~Arc();
+
+		int arcID;       ///< ID of this arc.
+		int srcID;       ///< tail of this arc.
+		int dstID;       ///< head of this arc.
+		int *bandwidth;  ///< max capacity of this arc.
+		int *flow;       ///< current flow of this arc.
+		int *downloader; ///< current flow data belong to which downloader.
+		bool *idle;      ///< whether current slot of this arc is idle for transmition.
+
+		struct Arc *nextArc;    ///< next out degree arc of the node this arc derived.
+	};
+
+	/** Node structure of graph. */
+	struct Node
+	{
+		Node();
+		~Node();
+
+		Data *_S; ///< continuous memory allocation, client code should use S instead.
+		Data **S; ///< convenient matrix form S[i][j], where i is slot dimension and j is downloader dimension.
+
+		struct Arc *firstArc; ///< first out degree arc of this node.
+		struct Arc *lastArc;  ///< last out degree arc of this node.
+	};
+
+	STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable, std::map<int, int>& _demandingAmountTable);
 	~STAG();
 
 	/** @name regular methods of STAG. */
@@ -227,8 +227,13 @@ public:
 	std::map<int, int>& downloaderTable; ///< maintaining the map from downloader node ID to its index.
 	std::map<int, int>& remainingTable;  ///< maintaining the map from downloader node ID to its remaining data amount.
 	std::map<int, int>& playTable;       ///< maintaining the map from downloader node ID to its play rate.
-	std::map<int, int> prefetchAmountTable; ///< stores data amount that should be prefetched of each downloader.
+	std::map<int, int>& demandingAmountTable; ///< stores data amount that still needed of each downloader.
+	std::map<int, int> prefetchAmountTable;   ///< stores data amount that should be prefetched of each downloader.
 	std::vector<std::vector<FluxScheme> > fluxSchemeList; ///< stores all flux schemes between each node pair, which is certainly the result of this program.
+
+	static int arcIDIncrement; ///< automatically increase ID for all arcs.
+	static int gDownloaderNum; ///< helper variable used to construct Node array and Arc array.
+	static int gSlotNum; ///< helper variable used to construct Node array and Arc array.
 
 private:
 	/** @name data members used by maximum flow algorithm. */

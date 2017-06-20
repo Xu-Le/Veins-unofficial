@@ -166,6 +166,7 @@ Register_Class(ContentMessage);
 ContentMessage::ContentMessage(const char *name, int kind) : ::WaveShortMessage(name,kind)
 {
     this->controlCode = 0;
+    this->receiver = 0;
     this->downloader = 0;
     this->contentSize = 0;
     this->receivedOffset = 0;
@@ -193,6 +194,7 @@ ContentMessage& ContentMessage::operator=(const ContentMessage& other)
 void ContentMessage::copy(const ContentMessage& other)
 {
     this->controlCode = other.controlCode;
+    this->receiver = other.receiver;
     this->downloader = other.downloader;
     this->contentSize = other.contentSize;
     this->receivedOffset = other.receivedOffset;
@@ -206,6 +208,7 @@ void ContentMessage::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::WaveShortMessage::parsimPack(b);
     doParsimPacking(b,this->controlCode);
+    doParsimPacking(b,this->receiver);
     doParsimPacking(b,this->downloader);
     doParsimPacking(b,this->contentSize);
     doParsimPacking(b,this->receivedOffset);
@@ -219,6 +222,7 @@ void ContentMessage::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::WaveShortMessage::parsimUnpack(b);
     doParsimUnpacking(b,this->controlCode);
+    doParsimUnpacking(b,this->receiver);
     doParsimUnpacking(b,this->downloader);
     doParsimUnpacking(b,this->contentSize);
     doParsimUnpacking(b,this->receivedOffset);
@@ -236,6 +240,16 @@ int ContentMessage::getControlCode() const
 void ContentMessage::setControlCode(int controlCode)
 {
     this->controlCode = controlCode;
+}
+
+int ContentMessage::getReceiver() const
+{
+    return this->receiver;
+}
+
+void ContentMessage::setReceiver(int receiver)
+{
+    this->receiver = receiver;
 }
 
 int ContentMessage::getDownloader() const
@@ -372,7 +386,7 @@ const char *ContentMessageDescriptor::getProperty(const char *propertyname) cons
 int ContentMessageDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 8+basedesc->getFieldCount() : 8;
+    return basedesc ? 9+basedesc->getFieldCount() : 9;
 }
 
 unsigned int ContentMessageDescriptor::getFieldTypeFlags(int field) const
@@ -390,10 +404,11 @@ unsigned int ContentMessageDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
         FD_ISCOMPOUND,
         FD_ISCOMPOUND,
     };
-    return (field>=0 && field<8) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<9) ? fieldTypeFlags[field] : 0;
 }
 
 const char *ContentMessageDescriptor::getFieldName(int field) const
@@ -406,6 +421,7 @@ const char *ContentMessageDescriptor::getFieldName(int field) const
     }
     static const char *fieldNames[] = {
         "controlCode",
+        "receiver",
         "downloader",
         "contentSize",
         "receivedOffset",
@@ -414,7 +430,7 @@ const char *ContentMessageDescriptor::getFieldName(int field) const
         "neighborInfo",
         "scheme",
     };
-    return (field>=0 && field<8) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<9) ? fieldNames[field] : nullptr;
 }
 
 int ContentMessageDescriptor::findField(const char *fieldName) const
@@ -422,13 +438,14 @@ int ContentMessageDescriptor::findField(const char *fieldName) const
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     int base = basedesc ? basedesc->getFieldCount() : 0;
     if (fieldName[0]=='c' && strcmp(fieldName, "controlCode")==0) return base+0;
-    if (fieldName[0]=='d' && strcmp(fieldName, "downloader")==0) return base+1;
-    if (fieldName[0]=='c' && strcmp(fieldName, "contentSize")==0) return base+2;
-    if (fieldName[0]=='r' && strcmp(fieldName, "receivedOffset")==0) return base+3;
-    if (fieldName[0]=='c' && strcmp(fieldName, "consumedOffset")==0) return base+4;
-    if (fieldName[0]=='c' && strcmp(fieldName, "consumingRate")==0) return base+5;
-    if (fieldName[0]=='n' && strcmp(fieldName, "neighborInfo")==0) return base+6;
-    if (fieldName[0]=='s' && strcmp(fieldName, "scheme")==0) return base+7;
+    if (fieldName[0]=='r' && strcmp(fieldName, "receiver")==0) return base+1;
+    if (fieldName[0]=='d' && strcmp(fieldName, "downloader")==0) return base+2;
+    if (fieldName[0]=='c' && strcmp(fieldName, "contentSize")==0) return base+3;
+    if (fieldName[0]=='r' && strcmp(fieldName, "receivedOffset")==0) return base+4;
+    if (fieldName[0]=='c' && strcmp(fieldName, "consumedOffset")==0) return base+5;
+    if (fieldName[0]=='c' && strcmp(fieldName, "consumingRate")==0) return base+6;
+    if (fieldName[0]=='n' && strcmp(fieldName, "neighborInfo")==0) return base+7;
+    if (fieldName[0]=='s' && strcmp(fieldName, "scheme")==0) return base+8;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -447,10 +464,11 @@ const char *ContentMessageDescriptor::getFieldTypeString(int field) const
         "int",
         "int",
         "int",
+        "int",
         "NeighborItems",
         "SchemeItems",
     };
-    return (field>=0 && field<8) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<9) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **ContentMessageDescriptor::getFieldPropertyNames(int field) const
@@ -504,13 +522,14 @@ std::string ContentMessageDescriptor::getFieldValueAsString(void *object, int fi
     ContentMessage *pp = (ContentMessage *)object; (void)pp;
     switch (field) {
         case 0: return long2string(pp->getControlCode());
-        case 1: return long2string(pp->getDownloader());
-        case 2: return long2string(pp->getContentSize());
-        case 3: return long2string(pp->getReceivedOffset());
-        case 4: return long2string(pp->getConsumedOffset());
-        case 5: return long2string(pp->getConsumingRate());
-        case 6: {std::stringstream out; out << pp->getNeighborInfo(); return out.str();}
-        case 7: {std::stringstream out; out << pp->getScheme(); return out.str();}
+        case 1: return long2string(pp->getReceiver());
+        case 2: return long2string(pp->getDownloader());
+        case 3: return long2string(pp->getContentSize());
+        case 4: return long2string(pp->getReceivedOffset());
+        case 5: return long2string(pp->getConsumedOffset());
+        case 6: return long2string(pp->getConsumingRate());
+        case 7: {std::stringstream out; out << pp->getNeighborInfo(); return out.str();}
+        case 8: {std::stringstream out; out << pp->getScheme(); return out.str();}
         default: return "";
     }
 }
@@ -526,11 +545,12 @@ bool ContentMessageDescriptor::setFieldValueAsString(void *object, int field, in
     ContentMessage *pp = (ContentMessage *)object; (void)pp;
     switch (field) {
         case 0: pp->setControlCode(string2long(value)); return true;
-        case 1: pp->setDownloader(string2long(value)); return true;
-        case 2: pp->setContentSize(string2long(value)); return true;
-        case 3: pp->setReceivedOffset(string2long(value)); return true;
-        case 4: pp->setConsumedOffset(string2long(value)); return true;
-        case 5: pp->setConsumingRate(string2long(value)); return true;
+        case 1: pp->setReceiver(string2long(value)); return true;
+        case 2: pp->setDownloader(string2long(value)); return true;
+        case 3: pp->setContentSize(string2long(value)); return true;
+        case 4: pp->setReceivedOffset(string2long(value)); return true;
+        case 5: pp->setConsumedOffset(string2long(value)); return true;
+        case 6: pp->setConsumingRate(string2long(value)); return true;
         default: return false;
     }
 }
@@ -544,8 +564,8 @@ const char *ContentMessageDescriptor::getFieldStructName(int field) const
         field -= basedesc->getFieldCount();
     }
     switch (field) {
-        case 6: return omnetpp::opp_typename(typeid(NeighborItems));
-        case 7: return omnetpp::opp_typename(typeid(SchemeItems));
+        case 7: return omnetpp::opp_typename(typeid(NeighborItems));
+        case 8: return omnetpp::opp_typename(typeid(SchemeItems));
         default: return nullptr;
     };
 }
@@ -560,8 +580,8 @@ void *ContentMessageDescriptor::getFieldStructValuePointer(void *object, int fie
     }
     ContentMessage *pp = (ContentMessage *)object; (void)pp;
     switch (field) {
-        case 6: return (void *)(&pp->getNeighborInfo()); break;
-        case 7: return (void *)(&pp->getScheme()); break;
+        case 7: return (void *)(&pp->getNeighborInfo()); break;
+        case 8: return (void *)(&pp->getScheme()); break;
         default: return nullptr;
     }
 }

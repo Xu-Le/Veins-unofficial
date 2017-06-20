@@ -26,6 +26,10 @@ void BaseRSU::initialize(int stage)
 	{
 		wiredIn = findGate("wiredIn");
 		wiredOut = findGate("wiredOut");
+		westIn = findGate("westIn");
+		westOut = findGate("westOut");
+		eastIn = findGate("eastIn");
+		eastOut = findGate("eastOut");
 		wiredHeaderLength = par("wiredHeaderLength").longValue();
 
 		myAddr += RSU_ADDRESS_OFFSET;
@@ -80,11 +84,9 @@ void BaseRSU::finish()
 	// clear containers
 	messageMemory.clear();
 
-	// delete handle self message, it is safe to delete nullptr
-	if (forgetMemoryEvt->isScheduled())
-		cancelAndDelete(forgetMemoryEvt);
-	else
-		delete forgetMemoryEvt;
+	// delete handle self message
+	cancelAndDelete(examineVehiclesEvt);
+	cancelAndDelete(forgetMemoryEvt);
 
 	BaseLayer::finish();
 }
@@ -107,6 +109,22 @@ void BaseRSU::handleMessage(cMessage *msg)
 	{
 		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
 		handleWiredMsg(wiredMsg);
+		delete wiredMsg;
+		wiredMsg = nullptr;
+	}
+	else if (msg->getArrivalGateId() == westIn)
+	{
+		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
+		handleWestMsg(wiredMsg);
+		delete wiredMsg;
+		wiredMsg = nullptr;
+	}
+	else if (msg->getArrivalGateId() == eastIn)
+	{
+		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
+		handleEastMsg(wiredMsg);
+		delete wiredMsg;
+		wiredMsg = nullptr;
 	}
 	else if (msg->getArrivalGateId() == -1)
 		throw cRuntimeError("No self message and no gateID! Check configuration.");

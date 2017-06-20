@@ -163,41 +163,17 @@ void BaseWaveApplLayer::finish()
 	}
 	messageMemory.clear();
 
-	// delete handle self message, it is safe to delete nullptr
-	if (sendBeaconEvt != nullptr && sendBeaconEvt->isScheduled())
-		cancelAndDelete(sendBeaconEvt);
-	else
-		delete sendBeaconEvt;
-	if (examineNeighborsEvt != nullptr && examineNeighborsEvt->isScheduled())
-		cancelAndDelete(examineNeighborsEvt);
-	else
-		delete examineNeighborsEvt;
-	if (callRoutingEvt != nullptr && callRoutingEvt->isScheduled())
-		cancelAndDelete(callRoutingEvt);
-	else
-		delete callRoutingEvt;
-	if (callWarningEvt != nullptr && callWarningEvt->isScheduled())
-		cancelAndDelete(callWarningEvt);
-	else
-		delete callWarningEvt;
-	if (callContentEvt != nullptr && callContentEvt->isScheduled())
-		cancelAndDelete(callContentEvt);
-	else
-		delete callContentEvt;
-	if (forgetMemoryEvt != nullptr && forgetMemoryEvt->isScheduled())
-		cancelAndDelete(forgetMemoryEvt);
-	else
-		delete forgetMemoryEvt;
-	if (recycleGUIDEvt != nullptr && recycleGUIDEvt->isScheduled())
-		cancelAndDelete(recycleGUIDEvt);
-	else
-		delete recycleGUIDEvt;
+	// delete handle self message
+	cancelAndDelete(sendBeaconEvt);
+	cancelAndDelete(examineNeighborsEvt);
+	cancelAndDelete(callRoutingEvt);
+	cancelAndDelete(callWarningEvt);
+	cancelAndDelete(callContentEvt);
+	cancelAndDelete(forgetMemoryEvt);
+	cancelAndDelete(recycleGUIDEvt);
 	for (std::map<simtime_t, PacketExpiredMessage*>::iterator iter = packetExpiresEvts.begin(); iter != packetExpiresEvts.end(); ++iter)
 	{
-		if (iter->second->isScheduled())
-			cancelAndDelete(iter->second);
-		else
-			delete iter->second;
+		cancelAndDelete(iter->second);
 	}
 	packetExpiresEvts.clear();
 
@@ -460,7 +436,7 @@ void BaseWaveApplLayer::sendWSM(WaveShortMessage* wsm)
 
 void BaseWaveApplLayer::onBeacon(BeaconMessage* beaconMsg)
 {
-	EV << logName() << ": " << "onBeacon!\n";
+	EV << "node[" << myAddr << "]: " << "onBeacon!\n";
 
 	LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
 	NeighborInfo *neighborInfo = nullptr;

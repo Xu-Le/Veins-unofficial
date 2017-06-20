@@ -24,7 +24,7 @@
 #define Epsilon    1e-8
 #define square(x)  (x) * (x)
 
-#define ROUTING_DEBUG_LOG    1
+#define ROUTING_DEBUG_LOG    0
 
 /**
  * @brief Utility class for routing protocol design.

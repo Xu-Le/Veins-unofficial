@@ -62,15 +62,9 @@ void WarningRSU::finish()
 	guidUsed.clear();
 	warningPlanList.clear();
 
-	// delete handle self message, it is safe to delete nullptr
-	if (callWarningEvt != nullptr && callWarningEvt->isScheduled())
-		cancelAndDelete(callWarningEvt);
-	else
-		delete callWarningEvt;
-	if (recycleGUIDEvt != nullptr && recycleGUIDEvt->isScheduled())
-		cancelAndDelete(recycleGUIDEvt);
-	else
-		delete recycleGUIDEvt;
+	// delete handle self message
+	cancelAndDelete(callWarningEvt);
+	cancelAndDelete(recycleGUIDEvt);
 
 	BaseRSU::finish();
 }

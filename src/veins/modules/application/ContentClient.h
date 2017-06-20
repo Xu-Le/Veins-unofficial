@@ -91,15 +91,15 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t) : myRole(1), totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), acknowledgedOffset(0) {}
+		DownloaderInfo(int t) : myRole(STRANGER), totalContentSize(t), distributedOffset(0), acknowledgedOffset(0), _cacheOffset(), cacheOffset(&_cacheOffset) {}
 
 		int myRole;
 		int totalContentSize;
-		int cacheStartOffset;
-		int cacheEndOffset;
 		int distributedOffset;
 		int acknowledgedOffset;
 		SimTime distributedAt;
+		Segment _cacheOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
+		Segment *cacheOffset; ///< external variable, use cacheOffset = cacheOffset->next to iterate the segment list.
 	};
 	/** @brief The class to store self downloading information. */
 	class DownloadingInfo
@@ -118,6 +118,10 @@ private:
 		int consumingRate;
 		int segmentNum;
 		SimTime interruptAt;
+		SimTime requestAt;  ///< statistic, the time made the content request.
+		SimTime completeAt; ///< statistic, the time completed the downloading process.
+		SimTime consumingBeginAt; ///< statistic, the time consuming process began.
+		SimTime consumingEndAt;   ///< statistic, the time consuming process ended.
 		std::list<std::pair<int /* start offset */, int /* end offset */> > segments;
 		std::list<std::pair<int, int> >::iterator itS; // static iterator used to find.
 		std::list<std::pair<int, int> >::iterator itD; // dynamic iterator used to insert or erase.

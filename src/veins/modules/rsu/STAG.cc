@@ -21,14 +21,11 @@
 
 using omnetpp::cRuntimeError;
 
-/** automatically increase ID for all arcs. */
-static int arcIDIncrement = 0;
-/** helper variable used to construct Node array and Arc array. */
-static int gDownloaderNum = 0;
-/** helper variable used to construct Node array and Arc array. */
-static int gSlotNum = 0;
+int STAG::arcIDIncrement = 0;
+int STAG::gDownloaderNum = 0;
+int STAG::gSlotNum = 0;
 
-Arc::Arc() : arcID(arcIDIncrement), srcID(-1), dstID(-1), nextArc(NULL)
+STAG::Arc::Arc() : arcID(arcIDIncrement), srcID(-1), dstID(-1), nextArc(NULL)
 {
 	bandwidth = new int[gSlotNum];
 	flow = new int[2*gSlotNum];       // index range [slotNum, 2*slotNum-1) is used for recording purpose
@@ -40,7 +37,7 @@ Arc::Arc() : arcID(arcIDIncrement), srcID(-1), dstID(-1), nextArc(NULL)
 	++arcIDIncrement;
 }
 
-Arc::~Arc()
+STAG::Arc::~Arc()
 {
 	delete []bandwidth;
 	delete []flow;
@@ -48,7 +45,7 @@ Arc::~Arc()
 	delete []idle;
 }
 
-Node::Node() : firstArc(NULL), lastArc(NULL)
+STAG::Node::Node() : firstArc(NULL), lastArc(NULL)
 {
 	_S = new struct Data[(gSlotNum+1)*gDownloaderNum];
 	S = new struct Data*[gSlotNum+1];
@@ -56,15 +53,15 @@ Node::Node() : firstArc(NULL), lastArc(NULL)
 		S[i] = _S + i*gDownloaderNum;
 }
 
-Node::~Node()
+STAG::Node::~Node()
 {
 	delete []S;
 	delete []_S;
 }
 
 /** constructor of class STAG. */
-STAG::STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable)
-	: nodeNum(_nodeNum), linkNum(_linkNum), downloaderNum(_downloaderNum), slotNum(_slotNum), downloaderArray(_downloaderArray), downloaderTable(_downloaderTable), remainingTable(_remainingTable), playTable(_playTable)
+STAG::STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable, std::map<int, int>& _demandingAmountTable)
+	: nodeNum(_nodeNum), linkNum(_linkNum), downloaderNum(_downloaderNum), slotNum(_slotNum), downloaderArray(_downloaderArray), downloaderTable(_downloaderTable), remainingTable(_remainingTable), playTable(_playTable), demandingAmountTable(_demandingAmountTable)
 {
 	arcNum = 2*linkNum + downloaderNum;
 	arcIDIncrement = 0;
@@ -236,7 +233,7 @@ void STAG::maximumFlow()
 	int maxTotalReceivedAmount = totalReceivedAmount;
 	_recordBetterScheme();
 
-	for (int loop = 0; loop < 3; ++loop)
+	for (int loop = 0; loop < slotNum/2; ++loop)
 	{
 		EV << "===============    Loop " << loop + 1 << "    ===============\n";
 
@@ -778,7 +775,9 @@ void STAG::_recordFluxScheme()
 	size_t k = 0;
 	int pathIdx = 0;
 	std::vector<std::pair<int /* slot */, int /* flow */> > sortReceivedSlot;
+	std::vector<std::pair<int /* slot */, int /* path index */> > sortReceivedPath;
 	sortReceivedSlot.reserve(slotNum);
+	sortReceivedPath.reserve(slotNum);
 	for (int downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
 	{
 		std::vector<Segment> segmentOffsets(slotNum);
@@ -789,8 +788,13 @@ void STAG::_recordFluxScheme()
 			{
 				struct Arc *parc = &arcTable[arcPathList[pathIdx][k]];
 				for (int j = 0; j < slotNum; ++j)
+				{
 					if (parc->flow[j] > 0 && parc->dstID == parc->downloader[j]) // && parc->downloader[j] == arcPathList[pathIdx].back()
+					{
 						sortReceivedSlot.push_back(std::pair<int, int>(j, parc->flow[j]));
+						sortReceivedPath.push_back(std::pair<int, int>(j, pathIdx));
+					}
+				}
 			}
 		}
 		std::sort(sortReceivedSlot.begin(), sortReceivedSlot.end());
@@ -802,9 +806,89 @@ void STAG::_recordFluxScheme()
 			accumulatedOffset += sortReceivedSlot[k].second;
 			segmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
 			dupSegmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
-			EV << '(' << sortReceivedSlot[k].first << ',' << sortReceivedSlot[k].second << ")[" << segmentOffsets[sortReceivedSlot[k].first].begin << ',' << segmentOffsets[sortReceivedSlot[k].first].end << "] ";
+			EV << '(' << sortReceivedSlot[k].first+1 << ',' << sortReceivedSlot[k].second << ")[" << segmentOffsets[sortReceivedSlot[k].first].begin << ',' << segmentOffsets[sortReceivedSlot[k].first].end << "] ";
 		}
 		EV << "\n";
+		prefetchAmountTable.insert(std::pair<int, int>(downloaderArray[downloaderIdx], accumulatedOffset));
+
+		// modify prefetching amount if necessary in order to avoid exceeding total content size
+#if INFO_STAG
+		EV << "prefetch amount is " << accumulatedOffset << " bytes, demanding amount is " << demandingAmountTable[downloaderArray[downloaderIdx]] << " bytes.\n";
+#endif
+		int decreasingAmount = prefetchAmountTable[downloaderArray[downloaderIdx]] - demandingAmountTable[downloaderArray[downloaderIdx]]; // alias
+		if (decreasingAmount > 0)
+		{
+			prefetchAmountTable[downloaderArray[downloaderIdx]] = demandingAmountTable[downloaderArray[downloaderIdx]];
+			// in order to modify flux scheme list, thus remove slot scheme in segmentOffsets reversely by slot index
+			std::sort(sortReceivedPath.begin(), sortReceivedPath.end());
+			int sIdx = static_cast<int>(sortReceivedPath.size()) - 1;
+			while (decreasingAmount > 0)
+			{
+				int slot_ = sortReceivedPath[sIdx].first, path_ = sortReceivedPath[sIdx].second; // alias
+				int segmentLength = sortReceivedSlot[sIdx].second; // alias
+				if (segmentLength <= decreasingAmount)
+				{
+					segmentOffsets.pop_back();
+					dupSegmentOffsets.pop_back();
+					decreasingAmount -= segmentLength;
+					if (arcPathList[path_].size() == 2) // direct download arc path
+						arcTable[arcPathList[path_][0]].flow[slot_] = 0;
+					else // relay arc path
+					{
+						struct Arc *marc = &arcTable[arcPathList[path_][0]];
+						arcTable[arcPathList[path_][1]].flow[slot_] = 0;
+						for (int j = slotNum-1; j >= 0; --j)
+						{
+							if (marc->flow[j] == 0)
+								continue;
+							if (marc->flow[j] < segmentLength)
+							{
+								segmentLength -= marc->flow[j];
+								marc->flow[j] = 0;
+							}
+							else
+							{
+								marc->flow[j] -= segmentLength;
+								segmentLength = 0;
+								break;
+							}
+						}
+					}
+					--sIdx;
+				}
+				else
+				{
+					segmentOffsets.back().end -= decreasingAmount;
+					dupSegmentOffsets.back().end -= decreasingAmount;
+					if (arcPathList[path_].size() == 2) // direct download arc path
+					{
+						arcTable[arcPathList[path_][0]].flow[slot_] -= decreasingAmount;
+						decreasingAmount = 0;
+					}
+					else // relay arc path
+					{
+						struct Arc *marc = &arcTable[arcPathList[path_][0]];
+						arcTable[arcPathList[path_][1]].flow[slot_] -= decreasingAmount;
+						for (int j = slotNum-1; j >= 0; --j)
+						{
+							if (marc->flow[j] == 0)
+								continue;
+							if (marc->flow[j] < decreasingAmount)
+							{
+								decreasingAmount -= marc->flow[j];
+								marc->flow[j] = 0;
+							}
+							else
+							{
+								marc->flow[j] -= decreasingAmount;
+								decreasingAmount = 0;
+								break;
+							}
+						}
+					}
+				} // if (segmentLength <= decreasingAmount)
+			}
+		}
 
 		pathIdx = arcPathRange[downloaderIdx].first; // handle with the direct download arc path
 		for (k = 0; k < arcPathList[pathIdx].size()-1; ++k)
@@ -893,6 +977,7 @@ void STAG::_recordFluxScheme()
 		}
 
 		sortReceivedSlot.clear();
+		sortReceivedPath.clear();
 	}
 
 	for (int i = 0; i < nodeNum; ++i)
@@ -905,12 +990,6 @@ void STAG::_recordFluxScheme()
 		EV << "\n";
 #endif
 	}
-
-	for (int d = 0; d < downloaderNum; ++d)
-		prefetchAmountTable.insert(std::pair<int, int>(downloaderArray[d], 0));
-	std::vector<FluxScheme> &rsuFluxScheme = fluxSchemeList[0]; // alias
-	for (k = 0; k < rsuFluxScheme.size(); ++k)
-		prefetchAmountTable[rsuFluxScheme[k].downloader] += rsuFluxScheme[k].flow;
 }
 
 void STAG::_recordBetterScheme()
@@ -1043,7 +1122,9 @@ int STAG::__calcAlternativeFlow(const int curPath, const int m, const int n, con
 	if (!collisionN)
 		__insertChosenSlot(chosenSlot, n, false);
 
+#if DEBUG_STAG
 	__printChosenSlot(chosenSlot);
+#endif
 
 	postFlow = __calcChosenPathPostFlow(chosenSlot, marc, narc, setFlow);
 	if (setFlow)
@@ -1103,6 +1184,9 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 
 	if (setFlow)
 	{
+        memset(marc->flow, 0, slotNum*sizeof(int));
+        memset(narc->flow, 0, slotNum*sizeof(int));
+
 		for (i = 0; i < indicator; ++i)
 			marc->flow[chosenSlot[i]] = marc->bandwidth[chosenSlot[i]] - marcBandwidth[chosenSlot[i]];
 
@@ -1155,7 +1239,7 @@ void STAG::__printChannelStatus()
 
 void STAG::__printChosenSlots()
 {
-#if DEBUG_STAG
+#if INFO_STAG
 	EV << "===== chosen slots =====\n";
 	for (size_t k = 0; k < chosenSlots.size(); ++k)
 	{
@@ -1169,7 +1253,7 @@ void STAG::__printChosenSlot(std::vector<int>& vec)
 {
 	ASSERT(!vec.empty());
 
-#if DEBUG_STAG
+#if INFO_STAG
 	int i = 0, indicator = vec.back(), vecSize = static_cast<int>(vec.size());
 	if (indicator != -1) // relay arc path
 	{
@@ -1193,7 +1277,7 @@ void STAG::__printChosenSlot(std::vector<int>& vec)
 		{
 			EV << " " << vec[i]+1;
 			if (i == vecSize-2)
-				printf(" |");
+                EV << " |";
 		}
 		EV << " " << indicator;
 	}
@@ -1292,8 +1376,16 @@ void STAG::__eraseUnchosenArcPath()
 	std::vector<size_t> chosenPathIndices, unChosenPathIndices;
 	chosenPathIndices.reserve(arcPathList.size());
 	unChosenPathIndices.reserve(arcPathList.size());
+	int downloaderIdx = 0;
 	for (size_t pathIdx = 0; pathIdx < arcPathList.size(); ++pathIdx)
 	{
+		if (downloaderIdx < downloaderNum && static_cast<int>(pathIdx) == arcPathRange[downloaderIdx].first) // don't erase direct download link even if it is not chosen
+		{
+			++downloaderIdx;
+			chosenPathIndices.push_back(pathIdx);
+			continue;
+		}
+
 		bool isChosen = false;
 		for (size_t k = 0; k < arcPathList[pathIdx].size()-1; ++k)
 		{
@@ -1349,7 +1441,7 @@ void STAG::__eraseUnchosenArcPath()
 
 	// update arc path range for each downloader
 	int arcPathListSize = static_cast<int>(arcPathList.size());
-	int downloaderIdx = 0;
+	downloaderIdx = 0;
 	for (int i = 1; i < arcPathListSize; ++i)
 	{
 		if (arcPathList[i].back() != arcPathList[i-1].back())
