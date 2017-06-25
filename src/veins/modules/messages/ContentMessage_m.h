@@ -25,12 +25,14 @@ enum ContentMsgCC {
 	SCHEME_DISTRIBUTION,
 	ACKNOWLEDGEMENT,
 	CARRIER_SELECTION,
+	CARRIER_ENCOUNTER,
 	DOWNLOADING_COMPLETED,
 	LINK_BREAK_DIRECT,
 	LINK_BREAK_DR,
 	LINK_BREAK_RR,
 	RELAY_DISCOVERY,
-	DISCOVERY_RESPONSE
+	DISCOVERY_RESPONSE,
+	STATUS_QUERY
 };
 
 class SchemeTuple
@@ -69,7 +71,7 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
 // }}
 
 /**
- * Class generated from <tt>ContentMessage.msg:77</tt> by nedtool.
+ * Class generated from <tt>ContentMessage.msg:80</tt> by nedtool.
  * <pre>
  * packet ContentMessage extends WaveShortMessage
  * {
@@ -77,12 +79,16 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
  *     // 0: content request;
  *     // 1: RSU's response to content request;
  *     // 2: distribute current RSU's slot decision to relays;
- *     // 3: selected to be carrier by the cooperative RSU;
- *     // 4: link break notify - the communication link between downloader and RSU will break soon;
- *     // 5: link break notify - the communication link between downloader and relay will break soon;
- *     // 6: link break notify - the communication link between relay and RSU will break soon;
- *     // 7: cooperative RSU's discover notification sends to the first entering relay;
- *     // 8: the first entering relay response to cooperative RSU's discover notification.
+ *     // 3: acknowledgement received offset to RSU and relay at the end of each slot;
+ *     // 4: selected to be carrier by the cooperative RSU;
+ *     // 5: carrier encounter the downloader its carried data belongs to;
+ *     // 6: downloading precess completion notification broadcast by downloader;
+ *     // 7: link break notify - the communication link between downloader and RSU will break soon;
+ *     // 8: link break notify - the communication link between downloader and relay will break soon;
+ *     // 9: link break notify - the communication link between relay and RSU will break soon;
+ *     // 10: cooperative RSU's discover notification sends to the first entering relay;
+ *     // 11: the first entering relay response to cooperative RSU's discover notification,
+ *     // 12: query downloading status of downloader.
  *     int controlCode;
  *     int receiver;    // identifier of receiver's application
  *     int downloader;  // which downloader this content message aims to
@@ -90,8 +96,10 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
  *     int receivedOffset; // data amount received offset
  *     int consumedOffset; // data amount consumed offset
  *     int consumingRate;  // data amount consuming rate measured in Bytes each second
- *     NeighborItems neighborInfo; // neighbors information of current downloader (controlCode: 4,5,6)
  *     SchemeItems scheme; // transmitssion scheme each vehicle should obey (controlCode: 2)
+ *     Coord position;  // position of the co-downloader
+ *     Coord speed;     // speed of the co-downloader
+ *     NeighborItems neighbors; // neighbors of the co-downloader
  * }
  * </pre>
  */
@@ -105,8 +113,10 @@ class ContentMessage : public ::WaveShortMessage
     int receivedOffset;
     int consumedOffset;
     int consumingRate;
-    NeighborItems neighborInfo;
     SchemeItems scheme;
+    Coord position;
+    Coord speed;
+    NeighborItems neighbors;
 
   private:
     void copy(const ContentMessage& other);
@@ -139,12 +149,18 @@ class ContentMessage : public ::WaveShortMessage
     virtual void setConsumedOffset(int consumedOffset);
     virtual int getConsumingRate() const;
     virtual void setConsumingRate(int consumingRate);
-    virtual NeighborItems& getNeighborInfo();
-    virtual const NeighborItems& getNeighborInfo() const {return const_cast<ContentMessage*>(this)->getNeighborInfo();}
-    virtual void setNeighborInfo(const NeighborItems& neighborInfo);
     virtual SchemeItems& getScheme();
     virtual const SchemeItems& getScheme() const {return const_cast<ContentMessage*>(this)->getScheme();}
     virtual void setScheme(const SchemeItems& scheme);
+    virtual Coord& getPosition();
+    virtual const Coord& getPosition() const {return const_cast<ContentMessage*>(this)->getPosition();}
+    virtual void setPosition(const Coord& position);
+    virtual Coord& getSpeed();
+    virtual const Coord& getSpeed() const {return const_cast<ContentMessage*>(this)->getSpeed();}
+    virtual void setSpeed(const Coord& speed);
+    virtual NeighborItems& getNeighbors();
+    virtual const NeighborItems& getNeighbors() const {return const_cast<ContentMessage*>(this)->getNeighbors();}
+    virtual void setNeighbors(const NeighborItems& neighbors);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const ContentMessage& obj) {obj.parsimPack(b);}

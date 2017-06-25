@@ -28,6 +28,15 @@ void WarningRSU::initialize(int stage)
 
 	if (stage == 0)
 	{
+		fromRoadhead.x = par("fromRoadheadX").doubleValue();
+		fromRoadhead.y = par("fromRoadheadY").doubleValue();
+		fromRoadhead.z = par("fromRoadheadZ").doubleValue();
+
+		toRoadhead.x = par("toRoadheadX").doubleValue();
+		toRoadhead.y = par("toRoadheadY").doubleValue();
+		toRoadhead.z = par("toRoadheadZ").doubleValue();
+		RoutingUtils::distanceToLine(curPosition, fromRoadhead, toRoadhead, verticalPoint, distFromRoadhead);
+
 		guidUsedTime = par("guidUsedTime").doubleValue();
 		laneId = par("laneId").stringValue();
 
@@ -73,22 +82,22 @@ void WarningRSU::handleSelfMsg(cMessage *msg)
 {
 	switch (msg->getKind())
 	{
-		case RSUMessageKinds::WARNING_NOTIFY_EVT:
-		{
-			callWarning(warningPlanList.front().second);
-			warningPlanList.pop_front();
-			if (!warningPlanList.empty())
-				scheduleAt(warningPlanList.front().first, callWarningEvt);
-			break;
-		}
-		case RSUMessageKinds::RECYCLE_GUID_EVT:
-		{
-			RoutingUtils::recycleGUID(guidUsed.front());
-			guidUsed.pop_front();
-			break;
-		}
-		default:
-			BaseRSU::handleSelfMsg(msg);
+	case RSUMessageKinds::WARNING_NOTIFY_EVT:
+	{
+		callWarning(warningPlanList.front().second);
+		warningPlanList.pop_front();
+		if (!warningPlanList.empty())
+			scheduleAt(warningPlanList.front().first, callWarningEvt);
+		break;
+	}
+	case RSUMessageKinds::RECYCLE_GUID_EVT:
+	{
+		RoutingUtils::recycleGUID(guidUsed.front());
+		guidUsed.pop_front();
+		break;
+	}
+	default:
+		BaseRSU::handleSelfMsg(msg);
 	}
 }
 

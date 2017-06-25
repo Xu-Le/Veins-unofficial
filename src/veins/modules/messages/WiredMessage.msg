@@ -30,6 +30,7 @@ enum WiredMsgCC {
 };
 }}
 
+class noncobject Coord;
 class noncobject NeighborItems;
 
 packet WiredMessage
@@ -48,5 +49,7 @@ packet WiredMessage
 	int startOffset; // start offset position of this content
 	int endOffset;   // end offset position of this content
 	int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
-	NeighborItems neighborInfo; // neighbors information of a downloader
+	Coord position;  // position of the co-downloader
+	Coord speed;     // speed of the co-downloader
+	NeighborItems neighbors; // neighbors of the co-downloader
 }

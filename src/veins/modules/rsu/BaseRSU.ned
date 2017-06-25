@@ -29,14 +29,6 @@ simple BaseRSU extends BaseApplLayer
 	double positionY;
 	double positionZ;
 
-	double fromRoadheadX;
-	double fromRoadheadY;
-	double fromRoadheadZ = default(0);
-
-	double toRoadheadX;
-	double toRoadheadY;
-	double toRoadheadZ = default(0);
-
 	bool sendWarnings = default(true);  // whether this RSU is at work
 	bool helpRoutings = default(false); // whether this RSU will help vehicle rebroadcast routing messages.
 	bool sendContents = default(false); // whether this RSU should send data

@@ -16,6 +16,7 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
+#include <algorithm>
 #include "veins/modules/application/ContentUtils.h"
 
 int ContentUtils::rateTable[50] = { 5600, 5600, 5500, 5500, 5500, 5500, 5400, 5400, 5300, 5300,
@@ -65,3 +66,25 @@ int ContentUtils::calcLinkBytes(int applBytes, int headerLen, int dataLen)
 		lastPacketLength += headerLen; // plus header length
 	return completePacketNum * (headerLen + dataLen) + lastPacketLength;
 }
+
+bool ContentUtils::vectorSearch(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key)
+{
+	int low = 0, high = static_cast<int>(vec.size())-1, mid = 0;
+	while (low <= high)
+	{
+		mid = low + ((high - low) >> 1);
+		if (key == vec[mid])
+			return true;
+		else if (key < vec[mid])
+			high = mid - 1;
+		else
+			low = mid + 1;
+	}
+	return false;
+}
+
+void ContentUtils::vectorRemove(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key)
+{
+	vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end());
+}
+

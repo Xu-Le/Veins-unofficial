@@ -1,8 +1,10 @@
 src/Makefile
 src/*.so
 src/*.dll
-src/**/*_m.h
-src/**/*_m.cc
+src/veins/base/messages/*_m.h
+src/veins/modules/messages/*_m.h
+src/veins/base/messages/*_m.cc
+src/veins/modules/messages/*_m.cc
 
 doc/pdf
 doc/doxy
@@ -17,6 +19,7 @@ doc/Veins.uml
 /out
 
 tests/**/results
+tests/**/.cmdenv-log
 tests/**/.tkenvrc
 tests/**/out.tmp
 tests/**/err.tmp

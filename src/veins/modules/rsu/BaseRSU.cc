@@ -38,15 +38,6 @@ void BaseRSU::initialize(int stage)
 		curPosition.y = par("positionY").doubleValue();
 		curPosition.z = par("positionZ").doubleValue();
 
-		fromRoadhead.x = par("fromRoadheadX").doubleValue();
-		fromRoadhead.y = par("fromRoadheadY").doubleValue();
-		fromRoadhead.z = par("fromRoadheadZ").doubleValue();
-
-		toRoadhead.x = par("toRoadheadX").doubleValue();
-		toRoadhead.y = par("toRoadheadY").doubleValue();
-		toRoadhead.z = par("toRoadheadZ").doubleValue();
-
-		RoutingUtils::distanceToLine(curPosition, fromRoadhead, toRoadhead, verticalPoint, distFromRoadhead);
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
@@ -132,7 +123,7 @@ void BaseRSU::handleMessage(cMessage *msg)
 		throw cRuntimeError("Unknown gateID! Check configuration or override handleMessage().");
 }
 
-void BaseRSU::handleSelfMsg(cMessage* msg)
+void BaseRSU::handleSelfMsg(cMessage *msg)
 {
 	switch (msg->getKind())
 	{
@@ -153,7 +144,7 @@ void BaseRSU::handleSelfMsg(cMessage* msg)
 	}
 }
 
-void BaseRSU::handleLowerMsg(cMessage* msg)
+void BaseRSU::handleLowerMsg(cMessage *msg)
 {
 	if (strcmp(msg->getName(), "beacon") == 0)
 	{
@@ -235,7 +226,7 @@ WaveShortMessage* BaseRSU::prepareWSM(std::string name, int dataLength, t_channe
 	return wsm;
 }
 
-void BaseRSU::decorateWSM(WaveShortMessage* wsm)
+void BaseRSU::decorateWSM(WaveShortMessage *wsm)
 {
 	if (strcmp(wsm->getName(), "beacon") == 0)
 	{
@@ -290,7 +281,7 @@ void BaseRSU::decorateWSM(WaveShortMessage* wsm)
 	}
 }
 
-void BaseRSU::sendWSM(WaveShortMessage* wsm)
+void BaseRSU::sendWSM(WaveShortMessage *wsm)
 {
 	sendDelayedDown(wsm, individualOffset);
 }

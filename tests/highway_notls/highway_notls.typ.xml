@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<types>
+	<type id="a" priority="1" numLanes="1" speed="25"/>
+	<type id="b" priority="1" numLanes="2" speed="25"/>
+	<type id="c" priority="1" numLanes="3" speed="25"/>
+	<type id="d" priority="1" numLanes="4" speed="25"/>
+</types>

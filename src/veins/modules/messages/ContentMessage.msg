@@ -26,12 +26,14 @@ enum ContentMsgCC {
 	SCHEME_DISTRIBUTION,
 	ACKNOWLEDGEMENT,
 	CARRIER_SELECTION,
+	CARRIER_ENCOUNTER,
 	DOWNLOADING_COMPLETED,
 	LINK_BREAK_DIRECT,
 	LINK_BREAK_DR,
 	LINK_BREAK_RR,
 	RELAY_DISCOVERY,
-	DISCOVERY_RESPONSE
+	DISCOVERY_RESPONSE,
+	STATUS_QUERY
 };
 
 class SchemeTuple
@@ -70,6 +72,7 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
 }}
 
 class WaveShortMessage;
+class noncobject Coord;
 class noncobject NeighborItems;
 class noncobject SchemeItems;
 
@@ -79,12 +82,16 @@ packet ContentMessage extends WaveShortMessage
 	// 0: content request;
 	// 1: RSU's response to content request;
 	// 2: distribute current RSU's slot decision to relays;
-	// 3: selected to be carrier by the cooperative RSU;
-	// 4: link break notify - the communication link between downloader and RSU will break soon;
-	// 5: link break notify - the communication link between downloader and relay will break soon;
-	// 6: link break notify - the communication link between relay and RSU will break soon;
-	// 7: cooperative RSU's discover notification sends to the first entering relay;
-	// 8: the first entering relay response to cooperative RSU's discover notification.
+	// 3: acknowledgement received offset to RSU and relay at the end of each slot;
+	// 4: selected to be carrier by the cooperative RSU;
+	// 5: carrier encounter the downloader its carried data belongs to;
+	// 6: downloading precess completion notification broadcast by downloader;
+	// 7: link break notify - the communication link between downloader and RSU will break soon;
+	// 8: link break notify - the communication link between downloader and relay will break soon;
+	// 9: link break notify - the communication link between relay and RSU will break soon;
+	// 10: cooperative RSU's discover notification sends to the first entering relay;
+	// 11: the first entering relay response to cooperative RSU's discover notification,
+	// 12: query downloading status of downloader.
 	int controlCode;
 	int receiver;    // identifier of receiver's application
 	int downloader;  // which downloader this content message aims to
@@ -92,6 +99,8 @@ packet ContentMessage extends WaveShortMessage
 	int receivedOffset; // data amount received offset
 	int consumedOffset; // data amount consumed offset
 	int consumingRate;  // data amount consuming rate measured in Bytes each second
-	NeighborItems neighborInfo; // neighbors information of current downloader (controlCode: 4,5,6)
 	SchemeItems scheme; // transmitssion scheme each vehicle should obey (controlCode: 2)
+	Coord position;  // position of the co-downloader
+	Coord speed;     // speed of the co-downloader
+	NeighborItems neighbors; // neighbors of the co-downloader
 }

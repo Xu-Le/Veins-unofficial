@@ -20,6 +20,7 @@
 #define __BASERSU_H__
 
 #include "veins/base/modules/BaseApplLayer.h"
+#include "veins/base/connectionManager/BaseConnectionManager.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/modules/messages/RoutingMessage_m.h"
@@ -160,9 +161,6 @@ protected:
 	double distFromRoadhead; ///< the distance from vertical point to fromRoadhead.
 
 	Coord curPosition;      ///< current position of this RSU.
-	Coord fromRoadhead;     ///< the tail of road where this RSU locate.
-	Coord toRoadhead;       ///< the head of road where this RSU locate.
-	Coord verticalPoint;    ///< the vertical point from RSU to the road center line.
 
 	cMessage *examineVehiclesEvt; ///< self message event used to examine the connectivity with vehicles.
 	cMessage *forgetMemoryEvt;    ///< self message event used to periodically forget message received too long time ago in memory.

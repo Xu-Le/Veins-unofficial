@@ -33,17 +33,21 @@ void ContentRSU::initialize(int stage)
 		slotNum = par("slotNum").longValue();
 		slotSpan = par("slotSpan").longValue();
 
-		distributeVLinkBytesOnce = 100 * (headerLength + dataLengthBits) / 8; // distributeVLinkPacketsOnce == 1000
+		noticeRelayEntering = false;
+
+		distributeVLinkBytesOnce = 20 * (headerLength + dataLengthBits) / 8; // distributeVLinkPacketsOnce == 20
 		distributeRLinkBytesOnce = 1000 * 1500; // MTU is 1500 bytes, distributeRLinkPacketsOnce == 1000
-		distributeVApplBytesOnce = 100 * dataLengthBits / 8;
+		distributeVApplBytesOnce = 20 * dataLengthBits / 8;
 		distributeRApplBytesOnce = 1000 * 1472; // UDP/IP header length is 28 bytes
 		distributeVPeriod = SimTime::ZERO;
 		distributeRPeriod = SimTime(8 * distributeRLinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 
 		distributeVEvt = new cMessage("distribute v evt", ContentRSUMsgKinds::DISTRIBUTE_V_EVT);
 		distributeREvt = new cMessage("distribute r evt", ContentRSUMsgKinds::DISTRIBUTE_R_EVT);
+		distributeCEvt = new cMessage("distribute c evt", ContentRSUMsgKinds::DISTRIBUTE_C_EVT);
 		distributeVEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at vehicle
 		distributeREvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at another RSU
+		distributeCEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at carrier
 		schemeSwitchEvt = new cMessage("scheme switch evt", ContentRSUMsgKinds::SCHEME_SWITCH_EVT);
 		segmentAdvanceEvt = new cMessage("segment advance evt", ContentRSUMsgKinds::SEGMENT_ADVANCE_EVT);
 	}
@@ -59,6 +63,7 @@ void ContentRSU::finish()
 
 	cancelAndDelete(distributeVEvt);
 	cancelAndDelete(distributeREvt);
+	cancelAndDelete(distributeCEvt);
 	cancelAndDelete(schemeSwitchEvt);
 	cancelAndDelete(segmentAdvanceEvt);
 
@@ -124,15 +129,26 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 		{
 			dataMsg->setIsLast(false);
 			dataMsg->setBytesNum(distributeVApplBytesOnce);
-			// dataMsg->addBitLength(8*distributeVLinkBytesOnce);
-			dataMsg->addBitLength(headerLength);
+			dataMsg->addBitLength(headerLength); // 8*distributeVLinkBytesOnce
 			distributeVPeriod = SimTime(distributeVLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
 			distributeVPeriod /= 2; // TODO: remove it in the future
 			EV << "distribute vehicle period is " << distributeVPeriod.dbl() << "s.\n";
-			scheduleAt(simTime() + distributeVPeriod, distributeVEvt);
-			itRSL->offset->begin += distributeVApplBytesOnce;
-			downloaderInfo->distributedOffset += distributeVApplBytesOnce;
-			EV << "downloader [" << itRSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
+			if (simTime() + distributeVPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
+			{
+				scheduleAt(simTime() + distributeVPeriod, distributeVEvt);
+				itRSL->offset->begin += distributeVApplBytesOnce;
+				downloaderInfo->distributedOffset += distributeVApplBytesOnce;
+			}
+			else
+			{
+				EV << "there is not enough time to transmit data in current slot, cancel the transmission.\n";
+
+				_prepareSchemeSwitch();
+
+				delete dataMsg;
+				dataMsg = nullptr;
+				return;
+			}
 		}
 		else
 		{
@@ -140,32 +156,33 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 			int lastPktAmount = itRSL->offset->end - itRSL->offset->begin; // alias
 			int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
 			dataMsg->setBytesNum(lastPktAmount);
-			// dataMsg->addBitLength(8*totalLinkBytes);
-			dataMsg->addBitLength(headerLength);
+			dataMsg->addBitLength(headerLength); // 8*totalLinkBytes
 			distributeVPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
 			distributeVPeriod /= 2; // TODO: remove it in the future
 			EV << "distribute vehicle period is " << distributeVPeriod.dbl() << "s.\n";
-			downloaderInfo->distributedOffset += lastPktAmount;
-			EV << "downloader [" << itRSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
+			if (simTime() + distributeVPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
+				downloaderInfo->distributedOffset += lastPktAmount;
+			else
+			{
+				EV << "there is not enough time to transmit data in current slot, cancel the transmission.\n";
+
+				_prepareSchemeSwitch();
+
+				delete dataMsg;
+				dataMsg = nullptr;
+				return;
+			}
 
 			if (itRSL->offset->next == NULL)
-			{
-				int prevSlot = itRSL->slot;
-				if (++itRSL != rsuSchemeList.end()) // prepare to schedule self message schemeSwitchEvt
-				{
-					SimTime dispatchedSlotInterval(slotSpan*(itRSL->slot - prevSlot), SIMTIME_MS);
-					schemeSwitchInterval = dispatchedSlotInterval - (simTime() - prevSlotStartTime);
-					EV << "prepare to switch to the scheme in slot " << itRSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
-					scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
-				}
-			}
+				_prepareSchemeSwitch();
 			else // this rarely happens
 			{
 				itRSL->offset = itRSL->offset->next; // prepare to transmit the next segment
-				EV << "prepare to switch to advance the next segment.\n";
+				EV << "prepare to advance to the next segment.\n";
 				scheduleAt(simTime() + SimTime(1, SIMTIME_US), segmentAdvanceEvt);
 			}
 		}
+		EV << "downloader [" << itRSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
 		dataMsg->setCurOffset(downloaderInfo->distributedOffset);
 		sendDelayedDown(dataMsg, distributeVPeriod);
 		break;
@@ -182,7 +199,7 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 				if (downloaderInfo->cacheEndOffset - downloaderInfo->distributedROffset > distributeRApplBytesOnce)
 				{
 					dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
-					dataMsg->setBytesNum(distributeRLinkBytesOnce);
+					dataMsg->setBytesNum(distributeRApplBytesOnce);
 					dataMsg->addBitLength(8*distributeRLinkBytesOnce);
 					scheduleAt(simTime() + distributeRPeriod, distributeREvt);
 					downloaderInfo->distributedROffset += distributeRApplBytesOnce;
@@ -206,6 +223,60 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 		}
 		break;
 	}
+	case ContentRSUMsgKinds::DISTRIBUTE_C_EVT:
+	{
+		for (itCDL = coDownloaders.begin(); itCDL != coDownloaders.end(); ++itCDL)
+		{
+			if (itCDL->second->transmitAt == simTime()) // self message aims to this co-downloader
+			{
+				DownloaderInfo *downloaderInfo = downloaders[itCDL->first]; // alias
+				CoDownloaderInfo *coDownloaderInfo = itCDL->second; // alias
+
+				WaveShortMessage *wsm = prepareWSM("data", dataLengthBits, dataOnSch ? t_channel::type_SCH : t_channel::type_CCH, dataPriority, -1);
+				ASSERT( wsm != nullptr );
+				DataMessage *dataMsg = dynamic_cast<DataMessage*>(wsm);
+
+				dataMsg->setReceiver(coDownloaderInfo->carrier);
+				dataMsg->setDownloader(itCDL->first);
+				// estimate transmission rate between self and receiver only taking relative distance into consideration
+				int distance = RoutingUtils::_length(curPosition, vehicles[coDownloaderInfo->carrier]->pos);
+				ASSERT( distance < 250 );
+				int estimatedRate = ContentUtils::rateTable[distance/5];
+				EV << "estimated rate between myself and carrier [" << coDownloaderInfo->carrier << "] is " << 128*estimatedRate << " bytes per second.\n";
+				SimTime distributeCPeriod(SimTime::ZERO);
+				if (downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset > distributeVApplBytesOnce)
+				{
+					dataMsg->setIsLast(false);
+					dataMsg->setBytesNum(distributeVApplBytesOnce);
+					// dataMsg->addBitLength(8*distributeVLinkBytesOnce);
+					dataMsg->addBitLength(headerLength);
+					distributeCPeriod = SimTime(distributeVLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
+					distributeCPeriod /= 2; // TODO: remove it in the future
+					scheduleAt(simTime() + distributeCPeriod, distributeCEvt);
+					downloaderInfo->distributedOffset += distributeVApplBytesOnce;
+					coDownloaderInfo->transmitAt = simTime() + distributeCPeriod;
+				}
+				else
+				{
+					dataMsg->setIsLast(true);
+					int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
+					int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
+					dataMsg->setBytesNum(lastPktAmount);
+					// dataMsg->addBitLength(8*totalLinkBytes);
+					dataMsg->addBitLength(headerLength);
+					distributeCPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
+					distributeCPeriod /= 2; // TODO: remove it in the future
+					downloaderInfo->distributedOffset += lastPktAmount;
+				}
+				EV << "distribute carrier period is " << distributeCPeriod.dbl() << "s.\n";
+				EV << "downloader [" << itCDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
+				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
+				sendDelayedDown(dataMsg, distributeCPeriod);
+				break;
+			}
+		}
+		break;
+	}
 	default:
 		BaseRSU::handleSelfMsg(msg);
 	}
@@ -215,37 +286,49 @@ void ContentRSU::handleWiredMsg(WiredMessage *wiredMsg)
 {
     ASSERT( wiredMsg->getControlCode() == WiredMsgCC::NORMAL_DATA_PACKET || wiredMsg->getControlCode() == WiredMsgCC::LAST_DATA_PACKET );
 
+    LAddress::L3Type downloader = wiredMsg->getDownloader(); // alias
 	DownloaderInfo *downloaderInfo = downloaders[wiredMsg->getDownloader()];
 	if (downloaderInfo->cacheStartOffset == -1)
 		downloaderInfo->cacheStartOffset = wiredMsg->getCurOffset() - wiredMsg->getBytesNum();
 	downloaderInfo->cacheEndOffset = wiredMsg->getCurOffset();
-	EV << "downloader [" << wiredMsg->getDownloader() << "]'s cache end offset updates to " << downloaderInfo->cacheEndOffset << " bytes.\n";
+	EV << "downloader [" << downloader << "]'s cache end offset updates to " << downloaderInfo->cacheEndOffset << " bytes.\n";
 
 	if (wiredMsg->getControlCode() == WiredMsgCC::LAST_DATA_PACKET) // it is the last data packet, indicating prefetch progress has finished
 	{
-		EV << "its content prefetch progress has finished, now begin to distribute transmission scheme to relays.\n";
-		if (!schemeItemList.empty()) // it is necessary to distribute transmission scheme items to vehicles
+		if (coDownloaders.find(downloader) == coDownloaders.end())
 		{
-			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
-			if (wsm == nullptr) return;
-			ContentMessage *distributionMsg = dynamic_cast<ContentMessage*>(wsm);
+			EV << "its content prefetch progress has finished, now begin to distribute transmission scheme to relays.\n";
 
-			distributionMsg->setControlCode(ContentMsgCC::SCHEME_DISTRIBUTION);
-			distributionMsg->setDownloader(wiredMsg->getDownloader());
-			distributionMsg->setScheme(schemeItemList);
-			sendWSM(distributionMsg);
+			if (!schemeItemList.empty()) // it is necessary to distribute transmission scheme items to vehicles
+			{
+				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+				ASSERT( wsm != nullptr );
+				ContentMessage *distributionMsg = dynamic_cast<ContentMessage*>(wsm);
 
-			// clear scheme item list
-			for (SchemeItems::iterator itSI = schemeItemList.begin(); itSI != schemeItemList.end(); ++itSI)
-				itSI->second.clear();
-			schemeItemList.clear();
+				distributionMsg->setControlCode(ContentMsgCC::SCHEME_DISTRIBUTION);
+				distributionMsg->setDownloader(downloader);
+				distributionMsg->setScheme(schemeItemList);
+				sendWSM(distributionMsg);
+
+				// clear scheme item list
+				for (SchemeItems::iterator itSI = schemeItemList.begin(); itSI != schemeItemList.end(); ++itSI)
+					itSI->second.clear();
+				schemeItemList.clear();
+			}
+			if (!rsuSchemeList.empty()) // handle with self transmission scheme
+			{
+				itRSL = rsuSchemeList.begin();
+				schemeSwitchInterval = SimTime(slotSpan*(itRSL->slot-1), SIMTIME_MS);
+				EV << "prepare to switch to the scheme in slot " << itRSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
+				scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
+			}
 		}
-		if (!rsuSchemeList.empty()) // handle with self transmission scheme
+		else
 		{
-			itRSL = rsuSchemeList.begin();
-			schemeSwitchInterval = SimTime(slotSpan*(itRSL->slot-1), SIMTIME_MS);
-			EV << "prepare to switch to the scheme in slot " << itRSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
-			scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
+			EV << "its content prefetch progress has finished, now begin to transmit data to the carrier.\n";
+
+			coDownloaders[downloader]->transmitAt = simTime();
+			scheduleAt(simTime(), distributeCEvt);
 		}
 	}
 }
@@ -257,25 +340,25 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 	int outGate = direction == 1 ? westOut : eastOut;
 	if (wiredMsg->getControlCode() == WiredMsgCC::COOPERATIVE_NOTIFICATION)
 	{
-		NeighborItems &neighborItems = wiredMsg->getNeighborInfo(); // alias
-
-		EV << "vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
-		VehicleInfo *vehicleInfo = new VehicleInfo(neighborItems.front().first, neighborItems.front().second, simTime());
-		vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
-		neighborItems.pop_front();
+		EV << "vehicle [" << downloader << "] is a co-downloader, insert its info.\n";
+		CoDownloaderInfo *coDownloaderInfo = new CoDownloaderInfo(wiredMsg->getPosition(), wiredMsg->getSpeed());
+		NeighborItems &neighborItems = wiredMsg->getNeighbors();
 		for (NeighborItems::iterator itNI = neighborItems.begin(); itNI != neighborItems.end(); ++itNI)
 		{
-
+			EV << "vehicle [" << *itNI << "] is a neighbor of co-downloader, append it to co-downloader's neighbor vector.\n";
+			coDownloaderInfo->neighbors.push_back(*itNI);
 		}
+		std::sort(coDownloaderInfo->neighbors.begin(), coDownloaderInfo->neighbors.end());
+		coDownloaders.insert(std::pair<LAddress::L3Type, CoDownloaderInfo*>(downloader, coDownloaderInfo));
 
-		EV << "downloader [" << downloader << "] is a cooperating downloader, insert its info.\n";
+		EV << "downloader [" << downloader << "] is a co-downloader, insert its info.\n";
 		downloaderInfo = new DownloaderInfo(wiredMsg->getContentSize(), 0); // consuming rate is set when relay discovery event happens
 		downloaderInfo->totalContentSize = wiredMsg->getContentSize();
 		downloaderInfo->distributedOffset = wiredMsg->getStartOffset();
 		downloaderInfo->acknowledgedOffset = wiredMsg->getStartOffset();
 		downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 
-		WiredMessage *coAckMsg = new WiredMessage("cooperative-ack");
+		WiredMessage *coAckMsg = new WiredMessage("co-ack");
 		coAckMsg->setControlCode(WiredMsgCC::COOPERATIVE_ACKNOWLEDGEMENT);
 		coAckMsg->setDownloader(downloader);
 		coAckMsg->setStartOffset(wiredMsg->getStartOffset());
@@ -288,12 +371,12 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 		downloaderInfo = downloaders[downloader];
 
 		downloaderInfo->distributedROffset = wiredMsg->getStartOffset();
-		WiredMessage *dataMsg = new WiredMessage("data");
+		WiredMessage *dataMsg = new WiredMessage("co-data");
 		dataMsg->setDownloader(downloader);
 		if (wiredMsg->getEndOffset() - wiredMsg->getStartOffset() > distributeRApplBytesOnce)
 		{
 			dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
-			dataMsg->setBytesNum(distributeRLinkBytesOnce);
+			dataMsg->setBytesNum(distributeRApplBytesOnce);
 			dataMsg->addBitLength(8*distributeRLinkBytesOnce);
 			distributeREvt->setContextPointer(&westOut);
 			scheduleAt(simTime() + distributeRPeriod, distributeREvt);
@@ -313,12 +396,35 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 		dataMsg->setCurOffset(downloaderInfo->distributedROffset);
 		sendDelayed(dataMsg, SimTime::ZERO, outGate);
 	}
-	else
+	else // receiving data packet
 	{
+		downloaderInfo = downloaders[downloader];
+
+		if (downloaderInfo->cacheStartOffset == -1)
+			downloaderInfo->cacheStartOffset = wiredMsg->getCurOffset() - wiredMsg->getBytesNum();
+		downloaderInfo->cacheEndOffset = wiredMsg->getCurOffset();
+		EV << "downloader [" << downloader << "]'s cache end offset updates to " << downloaderInfo->cacheEndOffset << " bytes.\n";
 
 		if (wiredMsg->getControlCode() == WiredMsgCC::LAST_DATA_PACKET)
 		{
+			EV << "its co-data receiving progress has finished, now try to choose a carrier.\n";
 
+			bool hasCarrier = selectCarrier(downloader);
+			if (hasCarrier)
+			{
+				EV << "find a carrier " << coDownloaders[downloader]->carrier << ", send carry request to it.\n";
+
+				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+				ASSERT( wsm != nullptr );
+				ContentMessage *selectMsg = dynamic_cast<ContentMessage*>(wsm);
+
+				selectMsg->setControlCode(ContentMsgCC::CARRIER_SELECTION);
+				selectMsg->setReceiver(coDownloaders[downloader]->carrier);
+				selectMsg->setDownloader(wiredMsg->getDownloader());
+				selectMsg->setContentSize(downloaderInfo->totalContentSize);
+
+				sendWSM(selectMsg);
+			}
 		}
 	}
 }
@@ -330,10 +436,32 @@ void ContentRSU::decorateWSM(WaveShortMessage *wsm)
 
 void ContentRSU::onBeacon(BeaconMessage *beaconMsg)
 {
-	// LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
+	LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
 	// bool isOld = vehicles.find(sender) != vehicles.end();
 
 	BaseRSU::onBeacon(beaconMsg);
+
+	if (noticeRelayEntering)
+	{
+		for (itCDL = coDownloaders.begin(); itCDL != coDownloaders.end(); ++itCDL)
+		{
+			std::vector<LAddress::L3Type> &potentialRelays = itCDL->second->neighbors;
+			if (ContentUtils::vectorSearch(potentialRelays, sender))
+			{
+				EV << "noticing vehicle [" << sender << "] is entering communication range.\n";
+
+				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+				ASSERT( wsm != nullptr );
+				ContentMessage *discoveryMsg = dynamic_cast<ContentMessage*>(wsm);
+
+				discoveryMsg->setControlCode(ContentMsgCC::RELAY_DISCOVERY);
+				discoveryMsg->setReceiver(sender);
+				discoveryMsg->setDownloader(itCDL->first);
+
+				sendWSM(discoveryMsg);
+			}
+		}
+	}
 }
 
 void ContentRSU::onRouting(RoutingMessage *routingMsg)
@@ -433,7 +561,29 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::CARRIER_SELECTION: // it is a carrier chosen notification message from RSU
 	{
-		EV_WARN << "RSU should not receive a message sent by itself.\n";
+		EV << "receiving carry response from carrier, now check whether cached data is adequate.\n";
+		downloaderInfo = downloaders[downloader];
+		CoDownloaderInfo *coDownloaderInfo = coDownloaders[downloader];
+		// check whether cached data is adequate for transmitting to carrier
+		if (coDownloaderInfo->transmissionAmount > downloaderInfo->cacheEndOffset - downloaderInfo->cacheStartOffset)
+		{
+			EV << "cached data is not adequate, prefetch lack portion from content server.\n";
+
+			if (coDownloaderInfo->transmissionAmount > downloaderInfo->totalContentSize - downloaderInfo->cacheStartOffset)
+				coDownloaderInfo->transmissionAmount = downloaderInfo->totalContentSize - downloaderInfo->cacheStartOffset;
+			WiredMessage *wiredMsg = new WiredMessage("wired");
+			wiredMsg->setControlCode(WiredMsgCC::START_TRANSMISSION);
+			wiredMsg->setDownloader(downloader);
+			wiredMsg->setStartOffset(downloaderInfo->cacheEndOffset);
+			wiredMsg->setEndOffset(downloaderInfo->cacheEndOffset + coDownloaderInfo->transmissionAmount);
+			wiredMsg->addBitLength(wiredHeaderLength);
+			sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
+		}
+		break;
+	}
+	case ContentMsgCC::CARRIER_ENCOUNTER:
+	{
+		EV_WARN << "RSU should not receive a message sent by carrier when it encounter downloader.\n";
 		break;
 	}
 	case ContentMsgCC::DOWNLOADING_COMPLETED: // it is a downloading completed notification message from vehicle
@@ -489,6 +639,44 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::DISCOVERY_RESPONSE: // it is a response to relay discovery message from relay vehicle
 	{
+		if (contentMsg->getNeighbors().empty()) // received response is no, still paying attention to entering vehicles
+			ContentUtils::vectorRemove(coDownloaders[downloader]->neighbors, contentMsg->getSenderAddress());
+		else // received response is yes, now start to execute STAG algorithm
+		{
+			noticeRelayEntering = false;
+
+			coDownloaders[downloader]->neighbors.clear();
+			downloaderInfo = downloaders[downloader];
+			downloaderInfo->distributedOffset = contentMsg->getReceivedOffset();
+			downloaderInfo->acknowledgedOffset = contentMsg->getReceivedOffset();
+			downloaderInfo->remainingDataAmount = contentMsg->getReceivedOffset() - contentMsg->getConsumedOffset();
+			downloaderInfo->consumingRate = contentMsg->getConsumingRate();
+
+			// insert downloader's mobility information into container vehicles
+			EV << "    vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
+			VehicleInfo *vehicleInfo = new VehicleInfo(contentMsg->getPosition(), contentMsg->getSpeed(), simTime());
+			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
+
+			// use STAG approach to obtain the optimal cooperative transmission scheme
+			SimTime calculatingTime = obtainCooperativeScheme();
+			ackMsgNum = 0;
+
+			// send prefetch data request to content server
+			WiredMessage *wiredMsg = new WiredMessage("prefetch");
+			wiredMsg->setControlCode(WiredMsgCC::START_TRANSMISSION);
+			wiredMsg->setDownloader(downloader);
+			wiredMsg->setContentSize(downloaderInfo->totalContentSize);
+			wiredMsg->setStartOffset(downloaderInfo->distributedOffset);
+			wiredMsg->setEndOffset(downloaderInfo->prefetchDataAmount);
+			EV << "prefetching " << downloaderInfo->prefetchDataAmount << " bytes from content server for it.\n";
+			wiredMsg->addBitLength(wiredHeaderLength + 160); // 5*sizeof(int) * 8
+			sendDelayed(wiredMsg, calculatingTime, wiredOut);
+		}
+		break;
+	}
+	case ContentMsgCC::STATUS_QUERY:
+	{
+		EV << "it is a downloading status query/report message, ignore it.\n";
 		break;
 	}
 	default:
@@ -509,7 +697,6 @@ SimTime ContentRSU::obtainCooperativeScheme()
 	Timer algorithmTimer("Algorithm Time Cost: ");
 
 	predictLinkBandwidth();
-	printLinkBandwidth();
 
 	STAG graph(nodeNum, linkNum, downloaderNum, slotNum, downloaderArray, downloaderTable, remainingTable, playTable, demandingAmountTable);
 
@@ -568,13 +755,6 @@ SimTime ContentRSU::obtainCooperativeScheme()
 	return SimTime(algorithmTimer.elapsed(), SIMTIME_MS);
 }
 
-void ContentRSU::predictVehicleMobility(std::vector<std::vector<Coord> >& vehicleSpeed, std::vector<std::vector<Coord> >& vehiclePos)
-{
-	for (int j = 1; j < slotNum; ++j)
-		for (int nodeId = 1; nodeId < nodeNum; ++nodeId) // update vehicles position, assuming they have uniform motion
-			vehiclePos[nodeId][j] = vehiclePos[nodeId][j-1] + vehicleSpeed[nodeId][0];
-}
-
 void ContentRSU::predictLinkBandwidth()
 {
 	nodeNum = static_cast<int>(vehicles.size()) + 1;
@@ -590,15 +770,18 @@ void ContentRSU::predictLinkBandwidth()
 		nodeIdRevMap.insert(std::pair<int, int>(itV->first, nodeId++));
 	}
 
-	std::vector<Coord> vecPadding(slotNum, Coord::ZERO);
+	std::vector<int> distPadding(nodeNum, 0.0);
+	std::vector<Coord> slotPadding(slotNum+1, Coord::ZERO);
+	std::vector<std::vector<int> > nodeDist;
 	std::vector<std::vector<Coord> > nodeSpeed;
 	std::vector<std::vector<Coord> > nodePos;
 	for (nodeId = 0; nodeId < nodeNum; ++nodeId)
 	{
-		nodeSpeed.push_back(vecPadding);
-		nodePos.push_back(vecPadding);
+		nodeDist.push_back(distPadding);
+		nodeSpeed.push_back(slotPadding);
+		nodePos.push_back(slotPadding);
 	}
-	for (j = 0; j < slotNum; ++j)
+	for (j = 0; j <= slotNum; ++j)
 	{
 		nodeSpeed[0][j] = Coord::ZERO; // RSU has no speed since it cannot move
 		nodePos[0][j] = curPosition;   // node 0 is RSU
@@ -608,12 +791,18 @@ void ContentRSU::predictLinkBandwidth()
 		nodeSpeed[nodeId][0] = vehicles[nodeIdMap[nodeId]]->speed;
 		nodePos[nodeId][0] = vehicles[nodeIdMap[nodeId]]->pos;
 	}
-	predictVehicleMobility(nodeSpeed, nodePos);
+	_predictVehicleMobility(nodeSpeed, nodePos);
 
 	int srcNode = 0, dstNode = 0;
 	for (srcNode = 0; srcNode < nodeNum-1; ++srcNode)
+	{
 		for (dstNode = srcNode+1; dstNode < nodeNum; ++dstNode)
+		{
 			linkTuples.push_back(LinkTuple(srcNode, dstNode, slotNum));
+			memset(linkTuples.back().bandwidth, 0, slotNum*sizeof(int));
+			nodeDist[srcNode][dstNode] = RoutingUtils::_length(nodePos[srcNode][0], nodePos[dstNode][0]);
+		}
+	}
 
 	std::list<LinkTuple>::iterator itLT = linkTuples.begin();
 	for (j = 0; j < slotNum; ++j)
@@ -623,11 +812,21 @@ void ContentRSU::predictLinkBandwidth()
 		{
 			for (dstNode = srcNode+1; dstNode < nodeNum; ++dstNode)
 			{
-				int dist = RoutingUtils::_length(nodePos[srcNode][j], nodePos[dstNode][j]);
-				if (dist >= 250)
-					itLT->bandwidth[j] = 0;
+				int curDist = nodeDist[srcNode][dstNode];
+				int nextDist = RoutingUtils::_length(nodePos[srcNode][j], nodePos[dstNode][j]);
+				nodeDist[srcNode][dstNode] = nextDist;
+				if (curDist < 250 || nextDist < 250)
+				{
+					int minIdx = curDist/5, maxIdx = nextDist/5;
+					if (minIdx > maxIdx)
+						std::swap(minIdx, maxIdx);
+					int maxIdx_ = std::min(49, maxIdx); // avoid reading memory outside of the bounds of ContentUtils::rateTable[]
+					for (int i = minIdx; i <= maxIdx_; ++i)
+						itLT->bandwidth[j] += 128*ContentUtils::rateTable[i];
+					itLT->bandwidth[j] /= maxIdx - minIdx + 1;
+				}
 				else
-					itLT->bandwidth[j] = 128*ContentUtils::rateTable[dist/5];
+					itLT->bandwidth[j] = 0;
 				++itLT;
 			}
 		}
@@ -684,12 +883,10 @@ void ContentRSU::predictLinkBandwidth()
 	}
 	fout.close();
 #endif
-}
 
-void ContentRSU::printLinkBandwidth()
-{
+#if 1
 	EV << nodeNum << " " << linkNum << " " << downloaderNum << " " << slotNum << "\n\n";
-	for (std::list<LinkTuple>::iterator itLT = linkTuples.begin(); itLT != linkTuples.end(); ++itLT)
+	for (itLT = linkTuples.begin(); itLT != linkTuples.end(); ++itLT)
 	{
 		EV << itLT->src << " " << itLT->dst << " |";
 		for (int j = 0; j < slotNum; ++j)
@@ -700,20 +897,67 @@ void ContentRSU::printLinkBandwidth()
 
 	for (std::map<int, int>::iterator itPT = playTable.begin(); itPT != playTable.end(); ++itPT)
 		EV << itPT->first << " " << itPT->second << "\n";
+#endif
+}
+
+void ContentRSU::_predictVehicleMobility(std::vector<std::vector<Coord> >& vehicleSpeed, std::vector<std::vector<Coord> >& vehiclePos)
+{
+	for (int j = 1; j < slotNum; ++j)
+		for (int nodeId = 1; nodeId < nodeNum; ++nodeId) // update vehicles position, assuming they have uniform motion
+			vehiclePos[nodeId][j] = vehiclePos[nodeId][j-1] + vehicleSpeed[nodeId][0];
+}
+
+void ContentRSU::_prepareSchemeSwitch()
+{
+	int prevSlot = itRSL->slot;
+	if (++itRSL != rsuSchemeList.end()) // prepare to schedule self message schemeSwitchEvt
+	{
+		SimTime dispatchedSlotInterval(slotSpan*(itRSL->slot - prevSlot), SIMTIME_MS);
+		schemeSwitchInterval = dispatchedSlotInterval - (simTime() - prevSlotStartTime);
+		EV << "prepare to switch to the scheme in slot " << itRSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
+		scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
+	}
+}
+
+bool ContentRSU::selectCarrier(LAddress::L3Type coDownloader)
+{
+	CoDownloaderInfo *coDownloaderInfo = coDownloaders[coDownloader];
+
+	double minEncounterTime = 3601.0;
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+	{
+		if (coDownloaderInfo->speed.x * itV->second->speed.x > 0)
+			continue;
+		int distR2C = RoutingUtils::_length(curPosition, itV->second->pos);
+		if (distR2C > 150 && (curPosition.x - itV->second->pos.x)*itV->second->speed.x < 0)
+			continue;
+		double distD2C = RoutingUtils::_length(coDownloaderInfo->pos, itV->second->pos);
+		double relativeSpeed = RoutingUtils::_length(coDownloaderInfo->speed, itV->second->speed);
+		double encounterTime = (distD2C - 2*BaseConnectionManager::maxInterferenceDistance) / relativeSpeed;
+		if (minEncounterTime > encounterTime)
+		{
+			minEncounterTime = encounterTime;
+			coDownloaderInfo->carrier = itV->first;
+		}
+	}
+	return minEncounterTime < 3600.0;
 }
 
 void ContentRSU::_sendCooperativeNotification(int downloader, ContentMessage *reportMsg)
 {
 	DownloaderInfo *downloaderInfo = downloaders[downloader];
 	downloaderInfo->acknowledgedOffset = reportMsg->getReceivedOffset();
-	WiredMessage *coNotifyMsg = new WiredMessage("cooperative-notify");
+
+	WiredMessage *coNotifyMsg = new WiredMessage("co-notification");
 	coNotifyMsg->setControlCode(WiredMsgCC::COOPERATIVE_NOTIFICATION);
 	coNotifyMsg->setDownloader(downloader);
 	coNotifyMsg->setContentSize(downloaderInfo->totalContentSize);
 	coNotifyMsg->setStartOffset(downloaderInfo->acknowledgedOffset);
 	coNotifyMsg->setEndOffset(downloaderInfo->cacheEndOffset);
-	coNotifyMsg->setNeighborInfo(reportMsg->getNeighborInfo());
+	coNotifyMsg->setPosition(reportMsg->getPosition());
+	coNotifyMsg->setSpeed(reportMsg->getSpeed());
+	coNotifyMsg->setNeighbors(reportMsg->getNeighbors());
 	coNotifyMsg->addBitLength(wiredHeaderLength);
-	Coord &downloaderSpeed = reportMsg->getNeighborInfo().front().second;
-	sendDelayed(coNotifyMsg, SimTime::ZERO, downloaderSpeed.x < 0 ? westOut : eastOut);
+	sendDelayed(coNotifyMsg, SimTime::ZERO, reportMsg->getPosition().x < 0 ? westOut : eastOut);
 }
+

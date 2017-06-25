@@ -30,7 +30,7 @@ enum WiredMsgCC {
 // }}
 
 /**
- * Class generated from <tt>WiredMessage.msg:36</tt> by nedtool.
+ * Class generated from <tt>WiredMessage.msg:37</tt> by nedtool.
  * <pre>
  * packet WiredMessage
  * {
@@ -48,7 +48,9 @@ enum WiredMsgCC {
  *     int startOffset; // start offset position of this content
  *     int endOffset;   // end offset position of this content
  *     int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
- *     NeighborItems neighborInfo; // neighbors information of a downloader
+ *     Coord position;  // position of the co-downloader
+ *     Coord speed;     // speed of the co-downloader
+ *     NeighborItems neighbors; // neighbors of the co-downloader
  * }
  * </pre>
  */
@@ -62,7 +64,9 @@ class WiredMessage : public ::omnetpp::cPacket
     int startOffset;
     int endOffset;
     int bytesNum;
-    NeighborItems neighborInfo;
+    Coord position;
+    Coord speed;
+    NeighborItems neighbors;
 
   private:
     void copy(const WiredMessage& other);
@@ -95,9 +99,15 @@ class WiredMessage : public ::omnetpp::cPacket
     virtual void setEndOffset(int endOffset);
     virtual int getBytesNum() const;
     virtual void setBytesNum(int bytesNum);
-    virtual NeighborItems& getNeighborInfo();
-    virtual const NeighborItems& getNeighborInfo() const {return const_cast<WiredMessage*>(this)->getNeighborInfo();}
-    virtual void setNeighborInfo(const NeighborItems& neighborInfo);
+    virtual Coord& getPosition();
+    virtual const Coord& getPosition() const {return const_cast<WiredMessage*>(this)->getPosition();}
+    virtual void setPosition(const Coord& position);
+    virtual Coord& getSpeed();
+    virtual const Coord& getSpeed() const {return const_cast<WiredMessage*>(this)->getSpeed();}
+    virtual void setSpeed(const Coord& speed);
+    virtual NeighborItems& getNeighbors();
+    virtual const NeighborItems& getNeighbors() const {return const_cast<WiredMessage*>(this)->getNeighbors();}
+    virtual void setNeighbors(const NeighborItems& neighbors);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const WiredMessage& obj) {obj.parsimPack(b);}

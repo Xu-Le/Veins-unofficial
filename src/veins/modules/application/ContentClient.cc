@@ -35,18 +35,21 @@ void ContentClient::initialize(int stage)
 
 		startPlaying = false;
 		cellularDownloading = false;
+		carriedDownloader = -1;
 
 		slotSpan = par("slotSpan").longValue();
 		prevSlotStartTime = SimTime::ZERO;
-		relayLinkBytesOnce = 100 * (headerLength + dataLengthBits) / 8; // relayLinkPacketsOnce == 1000
-		relayApplBytesOnce = 100 * dataLengthBits / 8;
+		relayLinkBytesOnce = 20 * (headerLength + dataLengthBits) / 8; // relayLinkPacketsOnce == 20
+		relayApplBytesOnce = 20 * dataLengthBits / 8;
 		relayPeriod = SimTime::ZERO;
 
 		requestTimeoutDuration = SimTime(100, SIMTIME_MS);
 		interruptTimeoutDuration = SimTime(5, SIMTIME_S);
 
 		relayEvt = new cMessage("relay evt", ContentClientMsgKinds::RELAY_EVT);
+		forwardEvt = new cMessage("forward evt", ContentClientMsgKinds::FORWARD_EVT);
 		relayEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at downloader
+		forwardEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at downloader
 		schemeSwitchEvt = new cMessage("scheme switch evt", ContentClientMsgKinds::SCHEME_SWITCH_EVT);
 		dataConsumptionEvt = new cMessage("data consumption evt", ContentClientMsgKinds::DATA_CONSUMPTION_EVT);
 		requestTimeoutEvt = new cMessage("request timeout evt", ContentClientMsgKinds::REQUEST_TIMEOUT_EVT);
@@ -63,6 +66,7 @@ void ContentClient::finish()
 	downloaders.clear();
 
 	cancelAndDelete(relayEvt);
+	cancelAndDelete(forwardEvt);
 	cancelAndDelete(schemeSwitchEvt);
 	cancelAndDelete(dataConsumptionEvt);
 	cancelAndDelete(requestTimeoutEvt);
@@ -113,41 +117,94 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 		{
 			dataMsg->setIsLast(false);
 			dataMsg->setBytesNum(relayApplBytesOnce);
-			// dataMsg->addBitLength(8*relayLinkBytesOnce);
-			dataMsg->addBitLength(headerLength);
+			dataMsg->addBitLength(headerLength); // 8*relayLinkBytesOnce
 			relayPeriod = SimTime(relayLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
 			relayPeriod /= 2; // TODO: remove it in the future
 			EV << "relay period is " << relayPeriod.dbl() << "s.\n";
-			scheduleAt(simTime() + relayPeriod, relayEvt);
-			itSL->amount -= relayApplBytesOnce;
-			downloaderInfo->distributedOffset += relayApplBytesOnce;
-			downloaderInfo->distributedAt = simTime();
-			EV << "downloader [" << itSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
+			if (simTime() + relayPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
+			{
+				scheduleAt(simTime() + relayPeriod, relayEvt);
+				itSL->amount -= relayApplBytesOnce;
+				downloaderInfo->distributedOffset += relayApplBytesOnce;
+			}
+			else
+			{
+				EV << "there is not enough time to transmit data in current slot, cancel the transmission.\n";
+
+				_prepareSchemeSwitch();
+
+				delete dataMsg;
+				dataMsg = nullptr;
+				return;
+			}
 		}
 		else
 		{
 			dataMsg->setIsLast(true);
 			int totalLinkBytes = ContentUtils::calcLinkBytes(itSL->amount, headerLength/8, dataLengthBits/8);
 			dataMsg->setBytesNum(itSL->amount);
-			// dataMsg->addBitLength(8 * totalLinkBytes);
-			dataMsg->addBitLength(headerLength);
+			dataMsg->addBitLength(headerLength); // 8*totalLinkBytes
 			relayPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
 			relayPeriod /= 2; // TODO: remove it in the future
 			EV << "relay period is " << relayPeriod.dbl() << "s.\n";
-			downloaderInfo->distributedOffset += itSL->amount;
-			EV << "downloader [" << itSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
-
-			int prevSlot = itSL->slot;
-			if (++itSL != schemeList.end()) // prepare to schedule self message schemeSwitchEvt
+			if (simTime() + relayPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
+				downloaderInfo->distributedOffset += itSL->amount;
+			else
+				EV << "there is not enough time to transmit data in current slot, cancel the transmission.\n";
+			_prepareSchemeSwitch();
+			if (simTime() + relayPeriod - prevSlotStartTime >= SimTime(slotSpan, SIMTIME_MS))
 			{
-				SimTime dispatchedSlotInterval(slotSpan*(itSL->slot - prevSlot), SIMTIME_MS);
-				schemeSwitchInterval = dispatchedSlotInterval - (simTime() - prevSlotStartTime);
-				EV << "prepare to switch to the scheme in slot " << itSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
-				scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
+				delete dataMsg;
+				dataMsg = nullptr;
+				return;
 			}
 		}
+		EV << "downloader [" << itSL->downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
 		dataMsg->setCurOffset(downloaderInfo->distributedOffset);
 		sendDelayedDown(dataMsg, relayPeriod);
+		break;
+	}
+	case ContentClientMsgKinds::FORWARD_EVT:
+	{
+		WaveShortMessage *wsm = prepareWSM("data", dataLengthBits, dataOnSch ? t_channel::type_SCH : t_channel::type_CCH, dataPriority, -1);
+		ASSERT( wsm != nullptr );
+		DataMessage *dataMsg = dynamic_cast<DataMessage*>(wsm);
+
+		dataMsg->setReceiver(carriedDownloader);
+		dataMsg->setDownloader(carriedDownloader);
+		DownloaderInfo *downloaderInfo = downloaders[carriedDownloader];
+		// estimate transmission rate between self and downloader only taking relative distance into consideration
+		int distance = RoutingUtils::_length(curPosition, neighbors[carriedDownloader]->pos);
+		ASSERT( distance < 250 );
+		int estimatedRate = ContentUtils::rateTable[distance/5];
+		EV << "estimated rate between myself and receiver [" << carriedDownloader << "] is " << 128*estimatedRate << " bytes per second.\n";
+		SimTime distributeCDPeriod(SimTime::ZERO);
+		if (downloaderInfo->cacheOffset->end - downloaderInfo->distributedOffset > relayApplBytesOnce)
+		{
+			dataMsg->setIsLast(distance >= 200);
+			dataMsg->setBytesNum(relayApplBytesOnce);
+			dataMsg->addBitLength(headerLength); // 8*relayLinkBytesOnce
+			distributeCDPeriod = SimTime(relayLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
+			distributeCDPeriod /= 2; // TODO: remove it in the future
+			if (distance < 200)
+				scheduleAt(simTime() + distributeCDPeriod, forwardEvt);
+			downloaderInfo->distributedOffset += relayApplBytesOnce;
+		}
+		else
+		{
+			dataMsg->setIsLast(true);
+			int lastPktAmount = downloaderInfo->cacheOffset->end - downloaderInfo->distributedOffset; // alias
+			int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
+			dataMsg->setBytesNum(lastPktAmount);
+			dataMsg->addBitLength(headerLength); // 8*totalLinkBytes
+			distributeCDPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
+			distributeCDPeriod /= 2; // TODO: remove it in the future
+			downloaderInfo->distributedOffset += lastPktAmount;
+		}
+		EV << "distribute carried downloader period is " << distributeCDPeriod.dbl() << "s.\n";
+		EV << "downloader [" << carriedDownloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << " bytes.\n";
+		dataMsg->setCurOffset(downloaderInfo->distributedOffset);
+		sendDelayedDown(dataMsg, distributeCDPeriod);
 		break;
 	}
 	case ContentClientMsgKinds::DATA_CONSUMPTION_EVT:
@@ -223,6 +280,7 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 
 	if (cellularMsg->getControlCode() == CellularMsgCC::DATA_PACKET_LAST) // it is the last data packet, indicating current segment downloading progress has finished
 	{
+		SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 		if (downloadingStatus.segmentNum > 1)
 		{
 			downloadingStatus.itD = downloadingStatus.segments.begin();
@@ -250,7 +308,6 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 				else
 					requestMsg->setEndOffset(downloadingStatus.totalContentSize);
 				requestMsg->addBitLength(cellularHeaderLength);
-				SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 				sendDirect(requestMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 				cellularDownloading = true;
 			}
@@ -261,7 +318,6 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 				responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
 				responseMsg->setDownloader(myAddr);
 				responseMsg->addBitLength(cellularHeaderLength);
-				SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 				sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 				cellularDownloading = false;
 			}
@@ -275,7 +331,6 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 			responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
 			responseMsg->setDownloader(myAddr);
 			responseMsg->addBitLength(cellularHeaderLength);
-			SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 			sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 			cellularDownloading = false;
 		}
@@ -286,15 +341,21 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 
 void ContentClient::onBeacon(BeaconMessage *beaconMsg)
 {
-	LAddress::L3Type senderAddr = beaconMsg->getSenderAddress(); // alias
-	bool isOld = neighbors.find(senderAddr) != neighbors.end();
+	LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
 
 	BaseWaveApplLayer::onBeacon(beaconMsg);
 
-	if (!isOld)
+	if (sender == carriedDownloader) // carrier come across downloader
 	{
-		if (downloaders.find(senderAddr) != downloaders.end())
-			downloaders[senderAddr]->myRole = RELAY; // role changes from carrier to relay because it becomes my neighbor
+		WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+		ASSERT( wsm != nullptr );
+		ContentMessage *encounterMsg = dynamic_cast<ContentMessage*>(wsm);
+
+		encounterMsg->setControlCode(ContentMsgCC::CARRIER_ENCOUNTER);
+		encounterMsg->setReceiver(carriedDownloader);
+		encounterMsg->setDownloader(carriedDownloader);
+
+		sendWSM(encounterMsg);
 	}
 }
 
@@ -388,6 +449,77 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::CARRIER_SELECTION:
 	{
+		if (contentMsg->getReceiver() == myAddr)
+		{
+			EV << "it is a carry request message aims to me, response it.\n";
+
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			ContentMessage *selectMsg = dynamic_cast<ContentMessage*>(wsm);
+
+			selectMsg->setControlCode(ContentMsgCC::CARRIER_SELECTION);
+			selectMsg->setReceiver(contentMsg->getSenderAddress());
+			selectMsg->setDownloader(downloader);
+
+			sendWSM(selectMsg);
+
+			EV << "    downloader [" << downloader << "] is a new downloader, insert its info.\n";
+			downloaderInfo = new DownloaderInfo(contentMsg->getContentSize());
+			downloaderInfo->myRole = CARRIER;
+			downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
+		}
+		else
+			EV << "it is a carry message aims to another node, ignore it.\n";
+		break;
+	}
+	case ContentMsgCC::CARRIER_ENCOUNTER:
+	{
+		if (downloader == myAddr)
+		{
+			EV << "I'm the downloader who encounter my carrier, report downloading status to it.\n";
+
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			ContentMessage *reportMsg = dynamic_cast<ContentMessage*>(wsm);
+
+			reportMsg->setControlCode(ContentMsgCC::CARRIER_ENCOUNTER);
+			reportMsg->setReceiver(contentMsg->getSenderAddress());
+			reportMsg->setDownloader(myAddr);
+			reportMsg->setReceivedOffset(downloadingStatus.availableOffset);
+
+			sendWSM(reportMsg);
+
+			if (cellularDownloading)
+			{
+				EV << "turn off cellular connection.\n";
+
+				CellularMessage *cellularMsg = new CellularMessage("cellular-control");
+				cellularMsg->setControlCode(CellularMsgCC::TRANSMISSION_ENDING);
+				cellularMsg->setDownloader(myAddr);
+				cellularMsg->addBitLength(cellularHeaderLength);
+				SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
+				sendDirect(cellularMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
+				cellularDownloading = false;
+			}
+		}
+		else if (contentMsg->getReceiver() == myAddr)
+		{
+			EV << "receiving report message from carried downloader.\n";
+
+			downloaderInfo = downloaders[downloader];
+			if (contentMsg->getReceivedOffset() < downloaderInfo->cacheOffset->end)
+			{
+				downloaderInfo->distributedOffset = contentMsg->getReceivedOffset();
+				scheduleAt(simTime(), forwardEvt);
+			}
+			else
+			{
+				EV << "carried downloader has received the whole file segment cached by me, do nothing.\n";
+				carriedDownloader = -1;
+			}
+		}
+		else
+			EV << "I'm not downloader who aimed by this carrier, ignore it.\n";
 		break;
 	}
 	case ContentMsgCC::DOWNLOADING_COMPLETED:
@@ -404,19 +536,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			{
 				EV << "I'm the downloader who need to report downloading status to RSU.\n";
 
-				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-				ASSERT( wsm != nullptr );
-				ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
-
-				responseMsg->setControlCode(ContentMsgCC::LINK_BREAK_DIRECT);
-				responseMsg->setDownloader(downloader);
-				responseMsg->setReceivedOffset(downloadingStatus.availableOffset);
-				NeighborItems &neighborItems = responseMsg->getNeighborInfo();
-				neighborItems.push_back(std::pair<Coord, Coord>(curPosition, curSpeed));
-				for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-					neighborItems.push_back(std::pair<Coord, Coord>(itN->second->pos, itN->second->speed));
-
-				sendWSM(responseMsg);
+				_reportDownloadingStatus(ContentMsgCC::LINK_BREAK_DIRECT);
 			}
 			else
 				EV << "I'm not the downloader who need to report downloading status to RSU, ignore it.\n";
@@ -433,20 +553,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			{
 				EV << "get notified that the link between relay and me will break soon, transfer available offset and neighbors' info to RSU.\n";
 
-				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-				ASSERT( wsm != nullptr );
-				ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
-
-				responseMsg->setControlCode(ContentMsgCC::LINK_BREAK_DR);
-				responseMsg->setReceiver(contentMsg->getSenderAddress());
-				responseMsg->setDownloader(downloader);
-				responseMsg->setReceivedOffset(downloadingStatus.availableOffset);
-				NeighborItems &neighborItems = responseMsg->getNeighborInfo();
-				neighborItems.push_back(std::pair<Coord, Coord>(curPosition, curSpeed));
-				for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-					neighborItems.push_back(std::pair<Coord, Coord>(itN->second->pos, itN->second->speed));
-
-				sendWSM(responseMsg);
+				_reportDownloadingStatus(ContentMsgCC::LINK_BREAK_DR);
 			}
 			else
 				EV << "it is a link break notification rebroadcast by relay, ignore it.\n";
@@ -473,20 +580,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			{
 				EV << "get notified that the link between relay and RSU will break soon, transfer available offset and neighbors' info to RSU.\n";
 
-				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-				ASSERT( wsm != nullptr );
-				ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
-
-				responseMsg->setControlCode(ContentMsgCC::LINK_BREAK_DR);
-				responseMsg->setReceiver(contentMsg->getSenderAddress());
-				responseMsg->setDownloader(downloader);
-				responseMsg->setReceivedOffset(downloadingStatus.availableOffset);
-				NeighborItems &neighborItems = responseMsg->getNeighborInfo();
-				neighborItems.push_back(std::pair<Coord, Coord>(curPosition, curSpeed));
-				for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-					neighborItems.push_back(std::pair<Coord, Coord>(itN->second->pos, itN->second->speed));
-
-				sendWSM(responseMsg);
+				_reportDownloadingStatus(ContentMsgCC::LINK_BREAK_RR);
 			}
 			else
 				EV << "it is a link break notification rebroadcast by relay, ignore it.\n";
@@ -494,6 +588,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 		else if (contentMsg->getReceiver() == myAddr)
 		{
 			ContentMessage *dupResponseMsg = new ContentMessage(*contentMsg);
+			dupResponseMsg->setSenderAddress(myAddr);
 			if (contentMsg->getReceivedOffset() == 0)
 			{
 				EV << "I'm the relay whose link with RSU will break soon, notify downloader to report its downloading status to RSU.\n";
@@ -503,7 +598,6 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			{
 				EV << "I'm the relay who rebroadcast this link break notification before, thus transmit it to RSU.\n";
 			}
-			dupResponseMsg->setSenderAddress(myAddr);
 			sendWSM(dupResponseMsg);
 		}
 		else if (downloaders.find(downloader) != downloaders.end() && downloaders[downloader]->myRole == RELAY)
@@ -514,10 +608,74 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::RELAY_DISCOVERY:
 	{
+		if (contentMsg->getReceiver() == myAddr)
+		{
+			EV << "I'm the vehicle who is assumed as a potential relay discovered by cooperative RSU.\n";
+
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			if (neighbors.find(downloader) != neighbors.end())
+			{
+				EV << "I'm still a neighbor of the target downloader, response yes to cooperative RSU.\n";
+
+				ContentMessage *queryMsg = dynamic_cast<ContentMessage*>(wsm);
+				queryMsg->setControlCode(ContentMsgCC::STATUS_QUERY);
+				queryMsg->setReceiver(downloader);
+				queryMsg->setDownloader(downloader);
+				sendWSM(queryMsg);
+			}
+			else
+			{
+				EV << "I'm not a neighbor of the target downloader anymore, response no to cooperative RSU.\n";
+
+				ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
+				responseMsg->setControlCode(ContentMsgCC::DISCOVERY_RESPONSE);
+				responseMsg->setReceiver(contentMsg->getSenderAddress());
+				responseMsg->setDownloader(downloader);
+				sendWSM(responseMsg);
+			}
+		}
 		break;
 	}
 	case ContentMsgCC::DISCOVERY_RESPONSE:
 	{
+		EV << "it is a discovery response message sent by another vehicle, ignore it.\n";
+		break;
+	}
+	case ContentMsgCC::STATUS_QUERY:
+	{
+		if (downloader == myAddr)
+		{
+			EV << "it is a downloading status query message aims to me, report my status to it.\n";
+
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			ContentMessage *reportMsg = dynamic_cast<ContentMessage*>(wsm);
+
+			reportMsg->setControlCode(ContentMsgCC::STATUS_QUERY);
+			reportMsg->setReceiver(contentMsg->getSenderAddress());
+			reportMsg->setDownloader(downloader);
+			reportMsg->setReceivedOffset(downloadingStatus.availableOffset);
+			reportMsg->setConsumedOffset(downloadingStatus.consumedOffset);
+			reportMsg->setConsumingRate(downloadingStatus.consumingRate);
+			reportMsg->setPosition(curPosition);
+			reportMsg->setSpeed(curSpeed);
+
+			sendWSM(reportMsg);
+		}
+		else if (contentMsg->getReceiver() == myAddr)
+		{
+			EV << "it is a downloading status report message aims to me, ignore it.\n";
+
+			ContentMessage *responseMsg = new ContentMessage(*contentMsg);
+			responseMsg->setControlCode(ContentMsgCC::DISCOVERY_RESPONSE);
+			responseMsg->setReceiver(myAddr); // RSU doesn't check this and other vehicles ignore this kind of control code, so it is safe
+			responseMsg->setDownloader(downloader);
+			responseMsg->getNeighbors().push_back(downloader);
+			sendWSM(responseMsg);
+		}
+		else
+			EV << "it is a downloading status query message which is unrelated to me, ignore it.\n";
 		break;
 	}
 	default:
@@ -672,6 +830,11 @@ void ContentClient::onData(DataMessage *dataMsg)
 			}
 			downloaderInfo->cacheOffset->end = dataMsg->getCurOffset();
 			EV << "current segment end offset updates to " << downloaderInfo->cacheOffset->end << " bytes.\n";
+			if (dataMsg->getIsLast())
+			{
+				EV << "receiving process is finished, start paying attention to downloader's beacon message.\n";
+				carriedDownloader = downloader;
+			}
 		}
 		else
 			EV << "I'm not the carrier this data message aimed at, ignore it.\n";
@@ -719,6 +882,37 @@ void ContentClient::callContent(int size)
 
 	scheduleAt(simTime() + requestTimeoutDuration, requestTimeoutEvt);
 	EV << "set request timeout timer, its duration is " << requestTimeoutDuration.dbl() << "s.\n";
+}
+
+void ContentClient::_prepareSchemeSwitch()
+{
+	int prevSlot = itSL->slot;
+	if (++itSL != schemeList.end()) // prepare to schedule self message schemeSwitchEvt
+	{
+		SimTime dispatchedSlotInterval(slotSpan*(itSL->slot - prevSlot), SIMTIME_MS);
+		schemeSwitchInterval = dispatchedSlotInterval - (simTime() - prevSlotStartTime);
+		EV << "prepare to switch to the scheme in slot " << itSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
+		scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
+	}
+}
+
+void ContentClient::_reportDownloadingStatus(int contentMsgCC)
+{
+	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+	ASSERT( wsm != nullptr );
+	ContentMessage *reportMsg = dynamic_cast<ContentMessage*>(wsm);
+
+	reportMsg->setControlCode(contentMsgCC);
+	reportMsg->setDownloader(myAddr);
+	reportMsg->setReceivedOffset(downloadingStatus.availableOffset);
+	reportMsg->setPosition(curPosition);
+	reportMsg->setSpeed(curSpeed);
+	NeighborItems &neighborItems = reportMsg->getNeighbors();
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+		if (itN->second->speed.x * curSpeed.x > 0) // only count same driving direction neighbors
+			neighborItems.push_back(itN->first);
+
+	sendWSM(reportMsg);
 }
 
 /////////////////////////    internal class implementations    /////////////////////////

@@ -110,7 +110,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 						EV << "send the last half-filled data packet because data fetch process has finished.\n";
 						CellularMessage *cellularMsg = new CellularMessage("data");
 						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
-						cellularMsg->setDownloader(itDL->first);\
+						cellularMsg->setDownloader(itDL->first);
 						int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
 						int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, wirelessHeaderLength/8, wirelessDataLength/8);
 						cellularMsg->addBitLength(8 * totalLinkBytes);

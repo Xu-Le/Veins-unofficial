@@ -64,6 +64,10 @@ private:
 	long targetVehicles(bool plusX, Coord xMin, Coord xMax, LAddress::L3Type& farthestOne);
 
 private:
+	Coord fromRoadhead;     ///< the tail of road where this RSU locate.
+	Coord toRoadhead;       ///< the head of road where this RSU locate.
+	Coord verticalPoint;    ///< the vertical point from RSU to the road center line.
+
 	simtime_t guidUsedTime;    ///< the maximum time from a GUID's allocated time to its recycled time.
 	std::string laneId;        ///< the lane this warning message aims to.
 

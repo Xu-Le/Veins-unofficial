@@ -37,6 +37,7 @@ public:
 	enum ContentRSUMsgKinds {
 		DISTRIBUTE_V_EVT = LAST_BASE_RSU_MESSAGE_KIND,
 		DISTRIBUTE_R_EVT,
+		DISTRIBUTE_C_EVT,
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
 		LAST_CONTENT_RSU_MESSAGE_KIND
@@ -72,25 +73,33 @@ private:
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg) override;
 
+	/** @name relay related methods. */
+	///@{
 	/** @brief calculate the proper data amount to prefetch from content server. */
 	SimTime obtainCooperativeScheme();
-	/** @brief predict vehicles' mobility in a short time according to the current mobility status of vehicles. */
-	void predictVehicleMobility(std::vector<std::vector<Coord> >& vehicleSpeed, std::vector<std::vector<Coord> >& vehiclePos);
 	/** @brief predict links' bandwidth between nodes in a short time according to the mobility information of vehicles. */
 	void predictLinkBandwidth();
-	/** @brief print links' bandwidth between nodes for debug purpose. */
-	void printLinkBandwidth();
+	/** @brief predict vehicles' mobility in a short time according to the current mobility status of vehicles. */
+	void _predictVehicleMobility(std::vector<std::vector<Coord> >& vehicleSpeed, std::vector<std::vector<Coord> >& vehiclePos);
+	/** @brief handle with transmission scheme switch preparation. */
+	void _prepareSchemeSwitch();
+	///@}
 
+	/** @name carrier related methods. */
+	///@{
+	/** @brief calculate which carrier it the best one to be selected for carry-and-forward. */
+	bool selectCarrier(LAddress::L3Type coDownloader);
 	/** @brief filling cooperative notification message, and then send it to neighbor RSU. */
 	void _sendCooperativeNotification(int downloader, ContentMessage *reportMsg);
+	///@}
 
 private:
 	/** @brief The class to store downloader's information. */
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0),
-				acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), distributedAt(SimTime::ZERO) {}
+		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0),
+			distributedROffset(0), acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0) {}
 
 		int totalContentSize;
 		int cacheStartOffset;
@@ -102,6 +111,19 @@ private:
 		int consumingRate;
 		int prefetchDataAmount;
 		SimTime distributedAt;
+	};
+	/** @brief The class to store co-downloader's information. */
+	class CoDownloaderInfo
+	{
+	public:
+		CoDownloaderInfo(Coord& _pos, Coord& _speed) : carrier(-1), transmissionAmount(-1), pos(_pos), speed(_speed) { neighbors.reserve(32); }
+
+		LAddress::L3Type carrier;
+		int transmissionAmount;
+		SimTime transmitAt;
+		Coord pos;
+		Coord speed;
+		std::vector<LAddress::L3Type> neighbors;
 	};
 
 	/** @name STAG related variables and containers. */
@@ -119,9 +141,17 @@ private:
 	std::list<LinkTuple> linkTuples;
 	///@}
 
+	/** @name relay related variables. */
+	///@{
 	int ackMsgNum; ///< record how many transmissions have finished to recalculate cooperative scheme again.
 	int activeSlotNum; ///< store the number of slot that actually transmit data.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
+	///@}
+
+	/** @name carrier related variables. */
+	///@{
+	bool noticeRelayEntering; ///< pay attention to the event that the neighbor of co-downloader enters RSU's communication range.
+	///@}
 
 	/** @name performance consideration. */
 	///@{
@@ -136,6 +166,7 @@ private:
 
 	cMessage *distributeVEvt; ///< self message used to periodically distribute data to vehicle.
 	cMessage *distributeREvt; ///< self message used to periodically distribute data to other RSU.
+	cMessage *distributeCEvt; ///< self message used to periodically distribute data to carrier.
 	cMessage *schemeSwitchEvt;    ///< self message used to handle with transmission scheme switch in different time slot.
 	cMessage *segmentAdvanceEvt;  ///< self message used to handle with segment advance in same time slot.
 
@@ -144,6 +175,8 @@ private:
 	SchemeItems schemeItemList; ///< describe how each vehicle transmit in each slot.
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< an iterator used to traverse container downloaders.
+	std::map<LAddress::L3Type, CoDownloaderInfo*> coDownloaders; ///< a map from an co-downloader to its mobility and neighbor information.
+	std::map<LAddress::L3Type, CoDownloaderInfo*>::iterator itCDL; ///< an iterator used to traverse container coDownloaders.
 };
 
 #endif /* __CONTENTRSU_H__ */

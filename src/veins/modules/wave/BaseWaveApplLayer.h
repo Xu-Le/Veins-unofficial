@@ -247,8 +247,8 @@ protected:
 	Veins::TraCICommandInterface *traci;
 	Veins::TraCICommandInterface::Vehicle *traciVehicle;
 	Veins::TraCICommandInterface::Lane *traciLane;
-	WaveAppToMac1609_4Interface *myMac;
 	Veins::AnnotationManager *annotations;
+	WaveAppToMac1609_4Interface *myMac;
 	///@}
 
 	static const simsignalwrap_t mobilityStateChangedSignal;

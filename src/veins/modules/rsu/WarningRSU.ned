@@ -25,6 +25,14 @@ simple WarningRSU extends BaseRSU
     @class(WarningRSU);
     @display("i=block/broadcast");
 
+	double fromRoadheadX;
+	double fromRoadheadY;
+	double fromRoadheadZ = default(0);
+
+	double toRoadheadX;
+	double toRoadheadY;
+	double toRoadheadZ = default(0);
+
 	double guidUsedTime = default(10s) @unit(s); // the maximum time from a GUID's allocated time to its recycled time
     string laneId; // the lane this warning message aims to
 

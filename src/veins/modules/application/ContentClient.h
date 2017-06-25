@@ -33,7 +33,10 @@
  *
  * @author Xu Le
  * @ingroup applLayer
- * @see BaseRoutingLayer
+ * @see BaseWaveApplLayer
+ * @see ContentRSU
+ * @see BaseStation
+ * @see ContentServer
  */
 class ContentClient : public BaseWaveApplLayer
 {
@@ -41,6 +44,7 @@ public:
 	/** @brief The message kinds routing layer uses. */
 	enum ContentClientMsgKinds {
 		RELAY_EVT = LAST_WAVE_APPL_MESSAGE_KIND,
+		FORWARD_EVT,
 		SCHEME_SWITCH_EVT,
 		DATA_CONSUMPTION_EVT,
 		REQUEST_TIMEOUT_EVT,
@@ -77,6 +81,11 @@ private:
 
 	/** @brief call a content request for certain size determined by contentPlanList. */
 	void callContent(int size) override;
+
+	/** @brief handle with transmission scheme switch preparation. */
+	void _prepareSchemeSwitch();
+	/** @brief filling downloading status report message, and then send it to RSU. */
+	void _reportDownloadingStatus(int contentMsgCC);
 
 private:
 	/** @brief Data consuming rate of some common video quality kinds. */
@@ -139,6 +148,7 @@ private:
 
 	bool startPlaying; ///< whether the vedio has started playing.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
+	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 
@@ -154,6 +164,7 @@ private:
 	SimTime interruptTimeoutDuration; ///< when the interrupt timer elapsed this duration, timeout event happens.
 
 	cMessage *relayEvt;            ///< self message used to handle with relay data packets to downloader.
+	cMessage *forwardEvt;          ///< self message used to handle with forward data packets to downloader.
 	cMessage *schemeSwitchEvt;     ///< self message used to handle with transmission scheme switch in different time slot.
 	cMessage *dataConsumptionEvt;  ///< self message used to handle with data consumption process after a slot elapsed.
 	cMessage *requestTimeoutEvt;   ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).

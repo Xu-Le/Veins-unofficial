@@ -20,8 +20,9 @@
 #define __CONTENTUTILS_H__
 
 #include "veins/base/utils/Coord.h"
+#include "veins/base/utils/SimpleAddress.h"
 
-typedef std::list<std::pair<Coord /* pos */, Coord /* speed */> > NeighborItems;
+typedef std::list<LAddress::L3Type> NeighborItems;
 
 /** Segment structure of data. */
 struct Segment
@@ -60,6 +61,11 @@ public:
 	 * @return total application layer bytes.
 	 */
 	static int calcLinkBytes(int applBytes, int headerLen, int dataLen);
+
+	/** @brief apply binary search to a sorted std::vector. */
+	static bool vectorSearch(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key);
+	/** @brief remove an element in std::vector. */
+	static void vectorRemove(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key);
 
 public:
 	static int rateTable[50]; ///< measured in kbps.

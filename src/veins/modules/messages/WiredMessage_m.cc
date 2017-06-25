@@ -200,7 +200,9 @@ void WiredMessage::copy(const WiredMessage& other)
     this->startOffset = other.startOffset;
     this->endOffset = other.endOffset;
     this->bytesNum = other.bytesNum;
-    this->neighborInfo = other.neighborInfo;
+    this->position = other.position;
+    this->speed = other.speed;
+    this->neighbors = other.neighbors;
 }
 
 void WiredMessage::parsimPack(omnetpp::cCommBuffer *b) const
@@ -213,7 +215,9 @@ void WiredMessage::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->startOffset);
     doParsimPacking(b,this->endOffset);
     doParsimPacking(b,this->bytesNum);
-    doParsimPacking(b,this->neighborInfo);
+    doParsimPacking(b,this->position);
+    doParsimPacking(b,this->speed);
+    doParsimPacking(b,this->neighbors);
 }
 
 void WiredMessage::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -226,7 +230,9 @@ void WiredMessage::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->startOffset);
     doParsimUnpacking(b,this->endOffset);
     doParsimUnpacking(b,this->bytesNum);
-    doParsimUnpacking(b,this->neighborInfo);
+    doParsimUnpacking(b,this->position);
+    doParsimUnpacking(b,this->speed);
+    doParsimUnpacking(b,this->neighbors);
 }
 
 int WiredMessage::getControlCode() const
@@ -299,14 +305,34 @@ void WiredMessage::setBytesNum(int bytesNum)
     this->bytesNum = bytesNum;
 }
 
-NeighborItems& WiredMessage::getNeighborInfo()
+Coord& WiredMessage::getPosition()
 {
-    return this->neighborInfo;
+    return this->position;
 }
 
-void WiredMessage::setNeighborInfo(const NeighborItems& neighborInfo)
+void WiredMessage::setPosition(const Coord& position)
 {
-    this->neighborInfo = neighborInfo;
+    this->position = position;
+}
+
+Coord& WiredMessage::getSpeed()
+{
+    return this->speed;
+}
+
+void WiredMessage::setSpeed(const Coord& speed)
+{
+    this->speed = speed;
+}
+
+NeighborItems& WiredMessage::getNeighbors()
+{
+    return this->neighbors;
+}
+
+void WiredMessage::setNeighbors(const NeighborItems& neighbors)
+{
+    this->neighbors = neighbors;
 }
 
 class WiredMessageDescriptor : public omnetpp::cClassDescriptor
@@ -373,7 +399,7 @@ const char *WiredMessageDescriptor::getProperty(const char *propertyname) const
 int WiredMessageDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 8+basedesc->getFieldCount() : 8;
+    return basedesc ? 10+basedesc->getFieldCount() : 10;
 }
 
 unsigned int WiredMessageDescriptor::getFieldTypeFlags(int field) const
@@ -393,8 +419,10 @@ unsigned int WiredMessageDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISCOMPOUND,
+        FD_ISCOMPOUND,
+        FD_ISCOMPOUND,
     };
-    return (field>=0 && field<8) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<10) ? fieldTypeFlags[field] : 0;
 }
 
 const char *WiredMessageDescriptor::getFieldName(int field) const
@@ -413,9 +441,11 @@ const char *WiredMessageDescriptor::getFieldName(int field) const
         "startOffset",
         "endOffset",
         "bytesNum",
-        "neighborInfo",
+        "position",
+        "speed",
+        "neighbors",
     };
-    return (field>=0 && field<8) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<10) ? fieldNames[field] : nullptr;
 }
 
 int WiredMessageDescriptor::findField(const char *fieldName) const
@@ -429,7 +459,9 @@ int WiredMessageDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='s' && strcmp(fieldName, "startOffset")==0) return base+4;
     if (fieldName[0]=='e' && strcmp(fieldName, "endOffset")==0) return base+5;
     if (fieldName[0]=='b' && strcmp(fieldName, "bytesNum")==0) return base+6;
-    if (fieldName[0]=='n' && strcmp(fieldName, "neighborInfo")==0) return base+7;
+    if (fieldName[0]=='p' && strcmp(fieldName, "position")==0) return base+7;
+    if (fieldName[0]=='s' && strcmp(fieldName, "speed")==0) return base+8;
+    if (fieldName[0]=='n' && strcmp(fieldName, "neighbors")==0) return base+9;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -449,9 +481,11 @@ const char *WiredMessageDescriptor::getFieldTypeString(int field) const
         "int",
         "int",
         "int",
+        "Coord",
+        "Coord",
         "NeighborItems",
     };
-    return (field>=0 && field<8) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<10) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **WiredMessageDescriptor::getFieldPropertyNames(int field) const
@@ -511,7 +545,9 @@ std::string WiredMessageDescriptor::getFieldValueAsString(void *object, int fiel
         case 4: return long2string(pp->getStartOffset());
         case 5: return long2string(pp->getEndOffset());
         case 6: return long2string(pp->getBytesNum());
-        case 7: {std::stringstream out; out << pp->getNeighborInfo(); return out.str();}
+        case 7: {std::stringstream out; out << pp->getPosition(); return out.str();}
+        case 8: {std::stringstream out; out << pp->getSpeed(); return out.str();}
+        case 9: {std::stringstream out; out << pp->getNeighbors(); return out.str();}
         default: return "";
     }
 }
@@ -546,7 +582,9 @@ const char *WiredMessageDescriptor::getFieldStructName(int field) const
         field -= basedesc->getFieldCount();
     }
     switch (field) {
-        case 7: return omnetpp::opp_typename(typeid(NeighborItems));
+        case 7: return omnetpp::opp_typename(typeid(Coord));
+        case 8: return omnetpp::opp_typename(typeid(Coord));
+        case 9: return omnetpp::opp_typename(typeid(NeighborItems));
         default: return nullptr;
     };
 }
@@ -561,7 +599,9 @@ void *WiredMessageDescriptor::getFieldStructValuePointer(void *object, int field
     }
     WiredMessage *pp = (WiredMessage *)object; (void)pp;
     switch (field) {
-        case 7: return (void *)(&pp->getNeighborInfo()); break;
+        case 7: return (void *)(&pp->getPosition()); break;
+        case 8: return (void *)(&pp->getSpeed()); break;
+        case 9: return (void *)(&pp->getNeighbors()); break;
         default: return nullptr;
     }
 }
