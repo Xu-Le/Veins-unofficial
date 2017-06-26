@@ -21,10 +21,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <vector>
-#include <list>
-#include <map>
-#include <algorithm>
 #include <utility>
 #include <time.h>
 #include "veins/modules/application/ContentUtils.h"
@@ -75,8 +71,6 @@ public:
 private:
 	LinkTuple& operator=(const LinkTuple&);
 };
-
-inline void vectorRemove(std::vector<int>& vec, const int key) { vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end()); }
 
 /** Adjacency list structure representing the graph. */
 class STAG

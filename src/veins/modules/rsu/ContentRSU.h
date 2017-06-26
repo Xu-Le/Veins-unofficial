@@ -81,6 +81,8 @@ private:
 	void predictLinkBandwidth();
 	/** @brief predict vehicles' mobility in a short time according to the current mobility status of vehicles. */
 	void _predictVehicleMobility(std::vector<std::vector<Coord> >& vehicleSpeed, std::vector<std::vector<Coord> >& vehiclePos);
+	/** @brief determine file segment offsets scheme in each time slot. */
+	void _determineSchemeOffsets(Segment *&schemeOffset, Segment *STAGOffset, Segment *lackOffset);
 	/** @brief handle with transmission scheme switch preparation. */
 	void _prepareSchemeSwitch();
 	///@}
@@ -98,8 +100,8 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0),
-			distributedROffset(0), acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0) {}
+		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0),
+				acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), _lackOffset(), lackOffset(&_lackOffset) {}
 
 		int totalContentSize;
 		int cacheStartOffset;
@@ -111,6 +113,8 @@ private:
 		int consumingRate;
 		int prefetchDataAmount;
 		SimTime distributedAt;
+		Segment _lackOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
+		Segment *lackOffset; ///< external variable, use lackOffset = lackOffset->next to iterate the segment list.
 	};
 	/** @brief The class to store co-downloader's information. */
 	class CoDownloaderInfo

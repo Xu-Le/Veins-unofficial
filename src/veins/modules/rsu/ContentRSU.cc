@@ -152,7 +152,7 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 		}
 		else
 		{
-			dataMsg->setIsLast(true);
+			dataMsg->setIsLast(itRSL->offset->next == NULL);
 			int lastPktAmount = itRSL->offset->end - itRSL->offset->begin; // alias
 			int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
 			dataMsg->setBytesNum(lastPktAmount);
@@ -248,10 +248,8 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 				{
 					dataMsg->setIsLast(false);
 					dataMsg->setBytesNum(distributeVApplBytesOnce);
-					// dataMsg->addBitLength(8*distributeVLinkBytesOnce);
-					dataMsg->addBitLength(headerLength);
+					dataMsg->addBitLength(headerLength); // 8*distributeVLinkBytesOnce
 					distributeCPeriod = SimTime(distributeVLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
-					distributeCPeriod /= 2; // TODO: remove it in the future
 					scheduleAt(simTime() + distributeCPeriod, distributeCEvt);
 					downloaderInfo->distributedOffset += distributeVApplBytesOnce;
 					coDownloaderInfo->transmitAt = simTime() + distributeCPeriod;
@@ -262,10 +260,8 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 					int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
 					int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
 					dataMsg->setBytesNum(lastPktAmount);
-					// dataMsg->addBitLength(8*totalLinkBytes);
-					dataMsg->addBitLength(headerLength);
+					dataMsg->addBitLength(headerLength); // 8*totalLinkBytes
 					distributeCPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
-					distributeCPeriod /= 2; // TODO: remove it in the future
 					downloaderInfo->distributedOffset += lastPktAmount;
 				}
 				EV << "distribute carrier period is " << distributeCPeriod.dbl() << "s.\n";
@@ -491,6 +487,8 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			// insert new record
 			EV << "    downloader [" << downloader << "] is a new downloader, insert its info.\n";
 			downloaderInfo = new DownloaderInfo(contentMsg->getContentSize(), contentMsg->getConsumingRate());
+			downloaderInfo->lackOffset->begin = 0;
+			downloaderInfo->lackOffset->end = contentMsg->getContentSize();
 			downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 
 			// response to the request vehicle
@@ -540,6 +538,8 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			downloaderInfo->remainingDataAmount = contentMsg->getReceivedOffset() - contentMsg->getConsumedOffset();
 			if (++ackMsgNum == activeSlotNum)
 			{
+				downloaderInfo->lackOffset->assign(&contentMsg->getLackOffset());
+
 				// use STAG approach to obtain the optimal cooperative transmission scheme again
 				SimTime calculatingTime = obtainCooperativeScheme(); // activeSlotNum reset inside
 				ackMsgNum = 0;
@@ -550,8 +550,7 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 				wiredMsg->setDownloader(downloader);
 				wiredMsg->setContentSize(downloaderInfo->totalContentSize);
 				wiredMsg->setStartOffset(downloaderInfo->cacheEndOffset);
-				wiredMsg->setEndOffset(downloaderInfo->acknowledgedOffset + downloaderInfo->prefetchDataAmount);
-				downloaderInfo->prefetchDataAmount -= downloaderInfo->cacheEndOffset - downloaderInfo->acknowledgedOffset;
+				wiredMsg->setEndOffset(downloaderInfo->cacheEndOffset + downloaderInfo->prefetchDataAmount);
 				EV << "prefetching " << downloaderInfo->prefetchDataAmount << " bytes from content server for it.\n";
 				wiredMsg->addBitLength(wiredHeaderLength + 160); // 5*sizeof(int) * 8
 				sendDelayed(wiredMsg, calculatingTime, wiredOut);
@@ -713,18 +712,35 @@ SimTime ContentRSU::obtainCooperativeScheme()
 		nodeIdMap[nodeId++] = itV->first;
 	// get prefetching data amount list from STAG
 	for (int d = 0; d < downloaderNum; ++d)
-		downloaders[nodeIdMap[downloaderArray[d]]]->prefetchDataAmount = graph.prefetchAmountTable[downloaderArray[d]];
+	{
+		DownloaderInfo *downloaderInfo = downloaders[nodeIdMap[downloaderArray[d]]]; // alias
+		downloaderInfo->prefetchDataAmount = graph.prefetchAmountTable[downloaderArray[d]];
+		// sum up length of all lack segments that have been cached, for there is no need to prefetch these segments
+		Segment *offsets = downloaderInfo->lackOffset; // alias
+		int cachedLackingAmount = 0;
+		while (offsets != nullptr && offsets->begin < downloaderInfo->cacheEndOffset)
+		{
+			cachedLackingAmount += std::min(offsets->end, downloaderInfo->cacheEndOffset) - offsets->begin;
+			offsets = offsets->next;
+		}
+		downloaderInfo->prefetchDataAmount -= cachedLackingAmount; // note: downloaderInfo->prefetchDataAmount might become 0 after -=
+	}
 	// get RSU self scheme list from STAG
 	for (k = 0; k < graph.fluxSchemeList[0].size(); ++k)
 	{
 		STAG::FluxScheme &fluxScheme = graph.fluxSchemeList[0][k]; // alias
 		rsuSchemeList.push_back(SchemeTuple(fluxScheme.slot, nodeIdMap[fluxScheme.dest], nodeIdMap[fluxScheme.downloader], fluxScheme.flow));
-		// calculate offset of distributed data in each slot
-		rsuSchemeList.back().offset->assign(&fluxScheme.segment);
-		rsuSchemeList.back().offset->begin += downloaders[nodeIdMap[fluxScheme.downloader]]->distributedOffset;
-		rsuSchemeList.back().offset->end += downloaders[nodeIdMap[fluxScheme.downloader]]->distributedOffset;
+		// calculate offsets of distributed data in each slot
+		_determineSchemeOffsets(rsuSchemeList.back().offset, &fluxScheme.segment, downloaders[nodeIdMap[fluxScheme.downloader]]->lackOffset);
+#if INFO_STAG
+		EV << "slot: " << rsuSchemeList.back().slot << ", receiver: " << rsuSchemeList.back().receiver << ", downloader: " << rsuSchemeList.back().downloader << ", offsets: ";
+		rsuSchemeList.back().offset->print();
+#endif
 	}
-	activeSlotNum = static_cast<int>(rsuSchemeList.size());
+	activeSlotNum = 0;
+	for (itRSL = rsuSchemeList.begin(); itRSL != rsuSchemeList.end(); ++itRSL)
+		if (itRSL->receiver == itRSL->downloader) // direct downloading
+			++activeSlotNum;
 	// get vehicles' scheme item list from STAG
 	for (nodeId = 1; nodeId < nodeNum; ++nodeId)
 	{
@@ -736,14 +752,17 @@ SimTime ContentRSU::obtainCooperativeScheme()
 				STAG::FluxScheme &fluxScheme = graph.fluxSchemeList[nodeId][k]; // alias
 				std::list<SchemeTuple> &schemeItem = schemeItemList[nodeIdMap[nodeId]]; // alias
 				schemeItem.push_back(SchemeTuple(fluxScheme.slot, nodeIdMap[fluxScheme.dest], nodeIdMap[fluxScheme.downloader], fluxScheme.flow));
-				// calculate offset of distributed data in each slot
-				schemeItem.back().offset->assign(&fluxScheme.segment);
-				schemeItem.back().offset->begin += downloaders[nodeIdMap[fluxScheme.downloader]]->distributedOffset;
-				schemeItem.back().offset->end += downloaders[nodeIdMap[fluxScheme.downloader]]->distributedOffset;
+				// calculate offsets of distributed data in each slot
+				_determineSchemeOffsets(schemeItem.back().offset, &fluxScheme.segment, downloaders[nodeIdMap[fluxScheme.downloader]]->lackOffset);
+#if INFO_STAG
+				EV << "slot: " << schemeItem.back().slot << ", receiver: " << schemeItem.back().receiver << ", downloader: " << schemeItem.back().downloader << ", offsets: ";
+				schemeItem.back().offset->print();
+#endif
 			}
 			activeSlotNum += static_cast<int>(graph.fluxSchemeList[nodeId].size());
 		}
 	}
+	EV << "active transmission slot number is " << activeSlotNum << std::endl;
 
 	graph.destruct();
 	linkTuples.clear();
@@ -752,7 +771,11 @@ SimTime ContentRSU::obtainCooperativeScheme()
 	remainingTable.clear();
 	playTable.clear();
 	demandingAmountTable.clear();
+#if __linux__
+	return SimTime(algorithmTimer.elapsed(), SIMTIME_US);
+#else
 	return SimTime(algorithmTimer.elapsed(), SIMTIME_MS);
+#endif
 }
 
 void ContentRSU::predictLinkBandwidth()
@@ -840,7 +863,14 @@ void ContentRSU::predictLinkBandwidth()
 		downloaderTable.insert(std::pair<int, int>(downloaderID, downloaderIdx));
 		remainingTable.insert(std::pair<int, int>(downloaderID, itDL->second->remainingDataAmount));
 		playTable.insert(std::pair<int, int>(downloaderID, itDL->second->consumingRate));
-		demandingAmountTable.insert(std::pair<int, int>(downloaderID, itDL->second->totalContentSize - itDL->second->distributedOffset));
+		Segment *offsets = itDL->second->lackOffset; // alias
+		int demandingAmount = 0;
+		while (offsets != nullptr)
+		{
+			demandingAmount += offsets->end - offsets->begin;
+			offsets = offsets->next;
+		}
+		demandingAmountTable.insert(std::pair<int, int>(downloaderID, demandingAmount));
 	}
 
 #if !DEBUG_STAG
@@ -861,7 +891,7 @@ void ContentRSU::predictLinkBandwidth()
 		}
 		fout << std::endl;
 
-		for (nodeId = 1; nodeId < nodeNum; ++nodeId)
+		for (nodeId = 0; nodeId < nodeNum; ++nodeId)
 		{
 			fout << nodeId;
 			for (int d = 0; d < downloaderIdx; ++d)
@@ -907,6 +937,45 @@ void ContentRSU::_predictVehicleMobility(std::vector<std::vector<Coord> >& vehic
 			vehiclePos[nodeId][j] = vehiclePos[nodeId][j-1] + vehicleSpeed[nodeId][0];
 }
 
+void ContentRSU::_determineSchemeOffsets(Segment *&schemeOffset, Segment *STAGOffset, Segment *lackOffset)
+{
+	Segment *storeSchemeOffset = schemeOffset; // store the head pointer of segment list
+	int passedOffset = 0;
+	while (true)
+	{
+		STAGOffset->begin -= passedOffset;
+		STAGOffset->end -= passedOffset;
+		while (STAGOffset->begin + lackOffset->begin >= lackOffset->end)
+		{
+			passedOffset += lackOffset->end - lackOffset->begin;
+			STAGOffset->begin -= lackOffset->end - lackOffset->begin;
+			STAGOffset->end -= lackOffset->end - lackOffset->begin;
+			lackOffset = lackOffset->next;
+		}
+		schemeOffset->begin = STAGOffset->begin + lackOffset->begin;
+		while (STAGOffset->end + lackOffset->begin > lackOffset->end)
+		{
+			schemeOffset->end = lackOffset->end;
+			schemeOffset->next = new Segment;
+			schemeOffset = schemeOffset->next;
+			passedOffset += lackOffset->end - lackOffset->begin;
+			STAGOffset->end -= lackOffset->end - lackOffset->begin;
+			lackOffset = lackOffset->next;
+			schemeOffset->begin = lackOffset->begin;
+		}
+		schemeOffset->end = STAGOffset->end + lackOffset->begin;
+		STAGOffset = STAGOffset->next;
+		if (STAGOffset != nullptr)
+		{
+			schemeOffset->next = new Segment;
+			schemeOffset = schemeOffset->next;
+		}
+		else
+			break;
+	}
+	schemeOffset = storeSchemeOffset;
+}
+
 void ContentRSU::_prepareSchemeSwitch()
 {
 	int prevSlot = itRSL->slot;
@@ -917,6 +986,8 @@ void ContentRSU::_prepareSchemeSwitch()
 		EV << "prepare to switch to the scheme in slot " << itRSL->slot << ", wait duration " << schemeSwitchInterval.dbl() << "s.\n";
 		scheduleAt(simTime() + schemeSwitchInterval, schemeSwitchEvt);
 	}
+	else
+		rsuSchemeList.clear();
 }
 
 bool ContentRSU::selectCarrier(LAddress::L3Type coDownloader)

@@ -63,8 +63,10 @@ public:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int s, int r) : totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
+		DownloaderInfo(int t, int s, int r) : transmissionActive(false), totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0),
+				distributedOffset(s), requiredEndOffset(r), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
 
+		bool transmissionActive;
 		int totalContentSize;
 		int cacheStartOffset;
 		int cacheEndOffset;

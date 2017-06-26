@@ -16,7 +16,6 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include <algorithm>
 #include "veins/modules/application/ContentUtils.h"
 
 int ContentUtils::rateTable[50] = { 5600, 5600, 5500, 5500, 5500, 5500, 5400, 5400, 5300, 5300,
@@ -25,24 +24,32 @@ int ContentUtils::rateTable[50] = { 5600, 5600, 5500, 5500, 5500, 5500, 5400, 54
 3400, 3000, 2600, 2100, 1600, 1150, 700, 550, 400, 400,
 350, 350, 300, 300, 300, 250, 250, 250, 200, 200 };
 
-Segment::Segment() : begin(-1), end(-1), next(NULL)
+Segment::Segment() : begin(-1), end(-1), next(nullptr)
 {
 
 }
 
 Segment::~Segment()
 {
-	if (next != NULL) // delete recursively
+	if (next != nullptr) // delete recursively
 		delete next;
+}
+
+Segment& Segment::operator=(const Segment& rhs)
+{
+	if (this == &rhs)
+		return *this;
+	assign(&rhs);
+	return *this;
 }
 
 void Segment::assign(const Segment *rhs)
 {
 	begin = rhs->begin;
 	end = rhs->end;
-	if (rhs->next != NULL) // assign recursively
+	if (rhs->next != nullptr) // assign recursively
 	{
-		next = new struct Segment;
+		next = new Segment;
 		next->assign(rhs->next);
 	}
 	else // reach the last segment
@@ -52,7 +59,7 @@ void Segment::assign(const Segment *rhs)
 void Segment::print()
 {
 	EV << '(' << begin << '-' << end << ") ";
-	if (next != NULL) // print recursively
+	if (next != nullptr) // print recursively
 		next->print();
 	else // reach the last segment
 		EV << "\n";
@@ -65,26 +72,5 @@ int ContentUtils::calcLinkBytes(int applBytes, int headerLen, int dataLen)
 	if ((lastPacketLength = applBytes % dataLen) != 0)
 		lastPacketLength += headerLen; // plus header length
 	return completePacketNum * (headerLen + dataLen) + lastPacketLength;
-}
-
-bool ContentUtils::vectorSearch(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key)
-{
-	int low = 0, high = static_cast<int>(vec.size())-1, mid = 0;
-	while (low <= high)
-	{
-		mid = low + ((high - low) >> 1);
-		if (key == vec[mid])
-			return true;
-		else if (key < vec[mid])
-			high = mid - 1;
-		else
-			low = mid + 1;
-	}
-	return false;
-}
-
-void ContentUtils::vectorRemove(std::vector<LAddress::L3Type>& vec, LAddress::L3Type key)
-{
-	vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end());
 }
 

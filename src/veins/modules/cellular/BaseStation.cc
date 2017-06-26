@@ -93,10 +93,14 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 				if (downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset > distributeApplBytesOnce) // has enough data to filling a cellular normal data packet
 				{
 					CellularMessage *cellularMsg = new CellularMessage("data");
-					cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
+					if (downloaderInfo->transmissionActive)
+						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
+					else
+						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
 					cellularMsg->setDownloader(itDL->first);
 					cellularMsg->addBitLength(8 * distributeLinkBytesOnce);
-					scheduleAt(simTime() + distributePeriod, distributeEvt);
+					if (downloaderInfo->transmissionActive)
+						scheduleAt(simTime() + distributePeriod, distributeEvt);
 					downloaderInfo->distributedOffset += distributeApplBytesOnce;
 					downloaderInfo->distributedAt = simTime();
 					EV << "downloader [" << itDL->first << "]'s distributed offset updated to " << downloaderInfo->distributedOffset << std::endl;
@@ -105,9 +109,13 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 				}
 				else if (downloaderInfo->cacheEndOffset > downloaderInfo->distributedOffset) // has data but not enough to filling a cellular normal data packet
 				{
-					if (downloaderInfo->cacheEndOffset == downloaderInfo->requiredEndOffset) // data fetch process has finished, thus send the last half-filled cellular data packet
+					 // data fetch process has finished or cellular connection is closed by downloader, thus send the last half-filled cellular data packet
+					if (downloaderInfo->cacheEndOffset == downloaderInfo->requiredEndOffset || !downloaderInfo->transmissionActive)
 					{
-						EV << "send the last half-filled data packet because data fetch process has finished.\n";
+						if (downloaderInfo->transmissionActive)
+							EV << "send the last half-filled data packet because data fetch process has finished.\n";
+						else
+							EV << "send the last half-filled data packet because cellular connection is closed by downloader.\n";
 						CellularMessage *cellularMsg = new CellularMessage("data");
 						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
 						cellularMsg->setDownloader(itDL->first);
@@ -186,6 +194,8 @@ void BaseStation::handleWirelessIncomingMsg(CellularMessage *cellularMsg)
 		wiredMsg->setDownloader(downloader);
 		wiredMsg->addBitLength(wiredHeaderLength);
 		sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
+		// set transmission inactive
+		downloaders[downloader]->transmissionActive = false;
 	}
 	else // (cellularMsg->getControlCode() == CellularMsgCC::DOWNLOADING_COMPLETING)
 	{
@@ -225,6 +235,7 @@ void BaseStation::handleWiredIncomingMsg(WiredMessage *wiredMsg)
 		cellularMsg->setDownloader(downloader);
 		cellularMsg->addBitLength(8 * distributeLinkBytesOnce);
 		scheduleAt(simTime() + distributePeriod, distributeEvt);
+		downloaderInfo->transmissionActive = true;
 		downloaderInfo->distributedOffset += distributeApplBytesOnce;
 		downloaderInfo->distributedAt = simTime();
 		cellularMsg->setCurOffset(downloaderInfo->distributedOffset);

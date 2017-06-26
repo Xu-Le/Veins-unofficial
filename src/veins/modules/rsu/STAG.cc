@@ -627,8 +627,8 @@ void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, 
 					decreasedFlow -= checkingArc->flow[j];
 					checkingArc->flow[j] = 0;
 					checkingArc->downloader[j] = -1;
-					vectorRemove(chosenLinks[j], checkingArc->arcID);
-					vectorRemove(chosenPaths[j], chosenPath);
+					ContentUtils::vectorRemove(chosenLinks[j], checkingArc->arcID);
+					ContentUtils::vectorRemove(chosenPaths[j], chosenPath);
 					__eraseChosenSlot(chosenSlots[chosenPath], j);
 				}
 				else // needn't to erase this slot, but need to adjust flow
@@ -652,8 +652,8 @@ void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, 
 					decreasedFlow -= checkingArc->flow[j];
 					checkingArc->flow[j] = 0;
 					checkingArc->downloader[j] = -1;
-					vectorRemove(chosenLinks[j], checkingArc->arcID);
-					vectorRemove(chosenPaths[j], chosenPath);
+					ContentUtils::vectorRemove(chosenLinks[j], checkingArc->arcID);
+					ContentUtils::vectorRemove(chosenPaths[j], chosenPath);
 					__eraseChosenSlot(chosenSlots[chosenPath], j);
 				}
 				else // needn't to erase this slot, but need to adjust flow
@@ -799,6 +799,9 @@ void STAG::_recordFluxScheme()
 		}
 		std::sort(sortReceivedSlot.begin(), sortReceivedSlot.end());
 		int accumulatedOffset = 0;
+#if INFO_STAG
+		EV << "arrival (slot,amount)[offset]:";
+#endif
 		for (k = 0; k < sortReceivedSlot.size(); ++k)
 		{
 			segmentOffsets[sortReceivedSlot[k].first].begin = accumulatedOffset;
@@ -806,9 +809,13 @@ void STAG::_recordFluxScheme()
 			accumulatedOffset += sortReceivedSlot[k].second;
 			segmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
 			dupSegmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
-			EV << '(' << sortReceivedSlot[k].first+1 << ',' << sortReceivedSlot[k].second << ")[" << segmentOffsets[sortReceivedSlot[k].first].begin << ',' << segmentOffsets[sortReceivedSlot[k].first].end << "] ";
+#if INFO_STAG
+			EV << " (" << sortReceivedSlot[k].first+1 << ',' << sortReceivedSlot[k].second << ")[" << segmentOffsets[sortReceivedSlot[k].first].begin << ',' << segmentOffsets[sortReceivedSlot[k].first].end << ']';
 		}
 		EV << "\n";
+#else
+		}
+#endif
 		prefetchAmountTable.insert(std::pair<int, int>(downloaderArray[downloaderIdx], accumulatedOffset));
 
 		// modify prefetching amount if necessary in order to avoid exceeding total content size
@@ -828,8 +835,8 @@ void STAG::_recordFluxScheme()
 				int segmentLength = sortReceivedSlot[sIdx].second; // alias
 				if (segmentLength <= decreasingAmount)
 				{
-					segmentOffsets.pop_back();
-					dupSegmentOffsets.pop_back();
+					segmentOffsets[slot_].begin = segmentOffsets[slot_].end = -1;
+					dupSegmentOffsets[slot_].begin = dupSegmentOffsets[slot_].end = -1;
 					decreasingAmount -= segmentLength;
 					if (arcPathList[path_].size() == 2) // direct download arc path
 						arcTable[arcPathList[path_][0]].flow[slot_] = 0;
@@ -858,8 +865,8 @@ void STAG::_recordFluxScheme()
 				}
 				else
 				{
-					segmentOffsets.back().end -= decreasingAmount;
-					dupSegmentOffsets.back().end -= decreasingAmount;
+					segmentOffsets[slot_].end -= decreasingAmount;
+					dupSegmentOffsets[slot_].end -= decreasingAmount;
 					if (arcPathList[path_].size() == 2) // direct download arc path
 					{
 						arcTable[arcPathList[path_][0]].flow[slot_] -= decreasingAmount;
@@ -916,7 +923,7 @@ void STAG::_recordFluxScheme()
 					narcSlotFlow.push_back(std::pair<int, int>(j, narc->flow[j]));
 			}
 			bool uncontinuousAppend = true;
-			struct Segment *mSeg = &segmentOffsets[marcSlotFlow[0].first], *nSeg = &dupSegmentOffsets[narcSlotFlow[0].first];
+			Segment *mSeg = &segmentOffsets[marcSlotFlow[0].first], *nSeg = &dupSegmentOffsets[narcSlotFlow[0].first];
 			for (size_t m = 0, n = 0; m < marcSlotFlow.size() && n < narcSlotFlow.size();)
 			{
 				int mflow = marcSlotFlow[m].second, nflow = narcSlotFlow[n].second; // alias
@@ -939,7 +946,7 @@ void STAG::_recordFluxScheme()
 					nSeg = &dupSegmentOffsets[narcSlotFlow[++n].first];
 					if (mSeg->end < nSeg->begin) // uncontinuous segment, append to next field
 					{
-						mSeg->next = new struct Segment;
+						mSeg->next = new Segment;
 						mSeg = mSeg->next;
 						uncontinuousAppend = true;
 					}

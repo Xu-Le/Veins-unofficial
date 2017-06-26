@@ -20,19 +20,19 @@
 #include "veins/modules/application/ContentUtils.h"
 
 enum ContentMsgCC {
-	CONTENT_REQUEST,
-	CONTENT_RESPONSE,
-	SCHEME_DISTRIBUTION,
-	ACKNOWLEDGEMENT,
-	CARRIER_SELECTION,
-	CARRIER_ENCOUNTER,
-	DOWNLOADING_COMPLETED,
-	LINK_BREAK_DIRECT,
-	LINK_BREAK_DR,
-	LINK_BREAK_RR,
-	RELAY_DISCOVERY,
-	DISCOVERY_RESPONSE,
-	STATUS_QUERY
+	CONTENT_REQUEST,       ///< content request;
+	CONTENT_RESPONSE,      ///< RSU's response to content request;
+	SCHEME_DISTRIBUTION,   ///< distribute current RSU's slot decision to relays;
+	ACKNOWLEDGEMENT,       ///< acknowledgement received offset to RSU and relay at the end of each slot;
+	CARRIER_SELECTION,     ///< selected to be carrier by the cooperative RSU;
+	CARRIER_ENCOUNTER,     ///< carrier encounter the downloader its carried data belongs to;
+	DOWNLOADING_COMPLETED, ///< downloading precess completion notification broadcast by downloader;
+	LINK_BREAK_DIRECT,     ///< link break notify - the communication link between downloader and RSU will break soon;
+	LINK_BREAK_DR,         ///< link break notify - the communication link between downloader and relay will break soon;
+	LINK_BREAK_RR,         ///< link break notify - the communication link between relay and RSU will break soon;
+	RELAY_DISCOVERY,       ///< cooperative RSU's discover notification sends to the first entering relay;
+	DISCOVERY_RESPONSE,    ///< the first entering relay response to cooperative RSU's discover notification;
+	STATUS_QUERY           ///< query downloading status of downloader.
 };
 
 class SchemeTuple
@@ -71,35 +71,22 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
 // }}
 
 /**
- * Class generated from <tt>ContentMessage.msg:80</tt> by nedtool.
+ * Class generated from <tt>ContentMessage.msg:81</tt> by nedtool.
  * <pre>
  * packet ContentMessage extends WaveShortMessage
  * {
- *     // @brief express which kind of control signaling message
- *     // 0: content request;
- *     // 1: RSU's response to content request;
- *     // 2: distribute current RSU's slot decision to relays;
- *     // 3: acknowledgement received offset to RSU and relay at the end of each slot;
- *     // 4: selected to be carrier by the cooperative RSU;
- *     // 5: carrier encounter the downloader its carried data belongs to;
- *     // 6: downloading precess completion notification broadcast by downloader;
- *     // 7: link break notify - the communication link between downloader and RSU will break soon;
- *     // 8: link break notify - the communication link between downloader and relay will break soon;
- *     // 9: link break notify - the communication link between relay and RSU will break soon;
- *     // 10: cooperative RSU's discover notification sends to the first entering relay;
- *     // 11: the first entering relay response to cooperative RSU's discover notification,
- *     // 12: query downloading status of downloader.
- *     int controlCode;
+ *     int controlCode; // express which kind of control signaling message, see enum ContentMsgCC.
  *     int receiver;    // identifier of receiver's application
  *     int downloader;  // which downloader this content message aims to
- *     int contentSize; // content size of request large-volume file
- *     int receivedOffset; // data amount received offset
- *     int consumedOffset; // data amount consumed offset
- *     int consumingRate;  // data amount consuming rate measured in Bytes each second
+ *     int contentSize; // content size of request large-volume file (controlCode: 0)
+ *     int receivedOffset; // data amount received offset (controlCode: 2,7,8,9)
+ *     int consumedOffset; // data amount consumed offset (controlCode: 2,7,8,9)
+ *     int consumingRate;  // data amount consuming rate measured in Bytes each second (controlCode: 0)
+ *     Segment lackOffset; // lacking data segment's offset (controlCode: 3)
  *     SchemeItems scheme; // transmitssion scheme each vehicle should obey (controlCode: 2)
- *     Coord position;  // position of the co-downloader
- *     Coord speed;     // speed of the co-downloader
- *     NeighborItems neighbors; // neighbors of the co-downloader
+ *     Coord position;  // position of the co-downloader (controlCode: 7,8,9)
+ *     Coord speed;     // speed of the co-downloader (controlCode: 7,8,9)
+ *     NeighborItems neighbors; // neighbors of the co-downloader (controlCode: 7,8,9)
  * }
  * </pre>
  */
@@ -113,6 +100,7 @@ class ContentMessage : public ::WaveShortMessage
     int receivedOffset;
     int consumedOffset;
     int consumingRate;
+    Segment lackOffset;
     SchemeItems scheme;
     Coord position;
     Coord speed;
@@ -149,6 +137,9 @@ class ContentMessage : public ::WaveShortMessage
     virtual void setConsumedOffset(int consumedOffset);
     virtual int getConsumingRate() const;
     virtual void setConsumingRate(int consumingRate);
+    virtual Segment& getLackOffset();
+    virtual const Segment& getLackOffset() const {return const_cast<ContentMessage*>(this)->getLackOffset();}
+    virtual void setLackOffset(const Segment& lackOffset);
     virtual SchemeItems& getScheme();
     virtual const SchemeItems& getScheme() const {return const_cast<ContentMessage*>(this)->getScheme();}
     virtual void setScheme(const SchemeItems& scheme);

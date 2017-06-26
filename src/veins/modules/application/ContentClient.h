@@ -46,6 +46,7 @@ public:
 		RELAY_EVT = LAST_WAVE_APPL_MESSAGE_KIND,
 		FORWARD_EVT,
 		SCHEME_SWITCH_EVT,
+		SEGMENT_ADVANCE_EVT,
 		DATA_CONSUMPTION_EVT,
 		REQUEST_TIMEOUT_EVT,
 		INTERRUPT_TIMEOUT_EVT
@@ -86,6 +87,8 @@ private:
 	void _prepareSchemeSwitch();
 	/** @brief filling downloading status report message, and then send it to RSU. */
 	void _reportDownloadingStatus(int contentMsgCC);
+	/** @brief cut off cellular connection, stop downloading data from cellular network. */
+	void _closeCellularConnection();
 
 private:
 	/** @brief Data consuming rate of some common video quality kinds. */
@@ -120,6 +123,7 @@ private:
 		void eraseSegment();
 		void insertSegment(int startOffset, int endOffset);
 		void unionSegment();
+		void lackSegment(Segment *lackOffsets);
 
 		int totalContentSize;
 		int availableOffset;
@@ -132,7 +136,7 @@ private:
 		SimTime consumingBeginAt; ///< statistic, the time consuming process began.
 		SimTime consumingEndAt;   ///< statistic, the time consuming process ended.
 		std::list<std::pair<int /* start offset */, int /* end offset */> > segments;
-		std::list<std::pair<int, int> >::iterator itS; // static iterator used to find.
+		std::list<std::pair<int, int> >::iterator itS; // static iterator used to read or find.
 		std::list<std::pair<int, int> >::iterator itD; // dynamic iterator used to insert or erase.
 
 	private:
@@ -166,6 +170,7 @@ private:
 	cMessage *relayEvt;            ///< self message used to handle with relay data packets to downloader.
 	cMessage *forwardEvt;          ///< self message used to handle with forward data packets to downloader.
 	cMessage *schemeSwitchEvt;     ///< self message used to handle with transmission scheme switch in different time slot.
+	cMessage *segmentAdvanceEvt;   ///< self message used to handle with segment advance in same time slot.
 	cMessage *dataConsumptionEvt;  ///< self message used to handle with data consumption process after a slot elapsed.
 	cMessage *requestTimeoutEvt;   ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
 	cMessage *interruptTimeoutEvt; ///< self message used to handle with download interrupt timeout event.
