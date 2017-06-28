@@ -29,7 +29,7 @@ import org.car2x.veins.nodes.RSU;
 network scenario extends Scenario
 {
 	parameters:
-		int numRSU = 3; // number of RSUs
+		int numRSU = 2; // number of RSUs
 
 	submodules:
 		BS: BaseStation {

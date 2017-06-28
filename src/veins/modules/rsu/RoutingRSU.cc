@@ -26,7 +26,7 @@ void RoutingRSU::initialize(int stage)
 
 	if (stage == 0)
 	{
-
+		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 	}
 }
 

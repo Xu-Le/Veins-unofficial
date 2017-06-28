@@ -1191,8 +1191,8 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 
 	if (setFlow)
 	{
-        memset(marc->flow, 0, slotNum*sizeof(int));
-        memset(narc->flow, 0, slotNum*sizeof(int));
+		memset(marc->flow, 0, slotNum*sizeof(int));
+		memset(narc->flow, 0, slotNum*sizeof(int));
 
 		for (i = 0; i < indicator; ++i)
 			marc->flow[chosenSlot[i]] = marc->bandwidth[chosenSlot[i]] - marcBandwidth[chosenSlot[i]];

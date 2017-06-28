@@ -100,8 +100,8 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0),
-				acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), _lackOffset(), lackOffset(&_lackOffset) {}
+		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0), acknowledgedOffset(0),
+				remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), notifiedLinkBreak(false), acknowledgedAt(SimTime::ZERO), _lackOffset(), lackOffset(&_lackOffset) {}
 
 		int totalContentSize;
 		int cacheStartOffset;
@@ -112,7 +112,9 @@ private:
 		int remainingDataAmount;
 		int consumingRate;
 		int prefetchDataAmount;
+		bool notifiedLinkBreak;
 		SimTime distributedAt;
+		SimTime acknowledgedAt;
 		Segment _lackOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
 		Segment *lackOffset; ///< external variable, use lackOffset = lackOffset->next to iterate the segment list.
 	};

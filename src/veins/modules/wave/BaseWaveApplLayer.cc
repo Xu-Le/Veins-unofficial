@@ -101,11 +101,10 @@ void BaseWaveApplLayer::initialize(int stage)
 		{
 			sendBeaconEvt = new cMessage("beacon evt", WaveApplMsgKinds::SEND_BEACON_EVT);
 			examineNeighborsEvt = new cMessage("examine neighbors evt", WaveApplMsgKinds::EXAMINE_NEIGHBORS_EVT);
-			forgetMemoryEvt = new cMessage("forget memory evt", WaveApplMsgKinds::FORGET_MEMORY_EVT);
+			forgetMemoryEvt = new cMessage("forget memory evt", WaveApplMsgKinds::FORGET_MEMORY_EVT); // derived classes schedule it
 			recycleGUIDEvt = new cMessage("recycle guid evt", WaveApplMsgKinds::RECYCLE_GUID_EVT);
 			scheduleAt(simTime() + offSet, sendBeaconEvt);
 			scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
-			scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 			if ( !routingPlanList.empty() )
 			{
 				callRoutingEvt = new cMessage("call routing evt", WaveApplMsgKinds::CALL_ROUTING_EVT);
@@ -153,14 +152,10 @@ void BaseWaveApplLayer::finish()
 	warningPlanList.clear();
 	contentPlanList.clear();
 	for (std::map<LAddress::L3Type, NeighborInfo*>::iterator iter = neighbors.begin(); iter != neighbors.end(); ++iter)
-	{
 		delete iter->second;
-	}
 	neighbors.clear();
 	for (std::map<int, WaveShortMessage*>::iterator iter = messageMemory.begin(); iter != messageMemory.end(); ++iter)
-	{
 		delete iter->second;
-	}
 	messageMemory.clear();
 
 	// delete handle self message
@@ -172,9 +167,7 @@ void BaseWaveApplLayer::finish()
 	cancelAndDelete(forgetMemoryEvt);
 	cancelAndDelete(recycleGUIDEvt);
 	for (std::map<simtime_t, PacketExpiredMessage*>::iterator iter = packetExpiresEvts.begin(); iter != packetExpiresEvts.end(); ++iter)
-	{
 		cancelAndDelete(iter->second);
-	}
 	packetExpiresEvts.clear();
 
 	findHost()->unsubscribe(mobilityStateChangedSignal, this);

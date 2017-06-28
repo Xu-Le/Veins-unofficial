@@ -40,6 +40,7 @@ void WarningRSU::initialize(int stage)
 		guidUsedTime = par("guidUsedTime").doubleValue();
 		laneId = par("laneId").stringValue();
 
+		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 		if (sendWarnings)
 		{
 			initializeWarningPlanList(par("warningPlan").xmlValue());

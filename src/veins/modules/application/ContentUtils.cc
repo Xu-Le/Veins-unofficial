@@ -58,7 +58,7 @@ void Segment::assign(const Segment *rhs)
 
 void Segment::print()
 {
-	EV << '(' << begin << '-' << end << ") ";
+	EV << '[' << begin << '-' << end << ") ";
 	if (next != nullptr) // print recursively
 		next->print();
 	else // reach the last segment

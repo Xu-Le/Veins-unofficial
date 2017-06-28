@@ -66,7 +66,7 @@
 	<ContentPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
 		<ContentPlan type="2">
-			<parameter name="simtime" type="double" value="34.1"/>
+			<parameter name="simtime" type="double" value="38.1"/>
 			<parameter name="size" type="int" value="5120"/>
 		</ContentPlan>
 		<ContentPlan type="9">

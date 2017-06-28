@@ -64,7 +64,7 @@ public:
 
 private:
 	/** @brief Called every time a message arrives. */
-	void handleSelfMsg(omnetpp::cMessage *msg) override;
+	void handleSelfMsg(cMessage *msg) override;
 
 	/** @brief Handle wireless cellular incoming messages. */
 	void handleCellularMsg(CellularMessage *cellularMsg) override;
@@ -83,10 +83,16 @@ private:
 	/** @brief call a content request for certain size determined by contentPlanList. */
 	void callContent(int size) override;
 
+	/** @brief relay or carrier cache data segment for downloader. */
+	void _cacheDataSegment(const int downloader, const int startOffset, const int endOffset);
+	/** @brief delete cached data segment that has been acknowledged by downloader and reset pointer DownloaderInfo->cacheOffset. */
+	void _adjustCachedSegment();
 	/** @brief handle with transmission scheme switch preparation. */
 	void _prepareSchemeSwitch();
+	/** @brief correct planned transmission offset determined by RSU according to current cached segments. */
+	void _correctPlannedOffset();
 	/** @brief filling downloading status report message, and then send it to RSU. */
-	void _reportDownloadingStatus(int contentMsgCC);
+	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver);
 	/** @brief cut off cellular connection, stop downloading data from cellular network. */
 	void _closeCellularConnection();
 
@@ -103,12 +109,14 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t) : myRole(STRANGER), totalContentSize(t), distributedOffset(0), acknowledgedOffset(0), _cacheOffset(), cacheOffset(&_cacheOffset) {}
+		DownloaderInfo(int t) : myRole(STRANGER), totalContentSize(t), distributedOffset(0), acknowledgedOffset(0),
+				notifiedLinkBreak(false), _cacheOffset(), cacheOffset(&_cacheOffset) {}
 
 		int myRole;
 		int totalContentSize;
 		int distributedOffset;
 		int acknowledgedOffset;
+		bool notifiedLinkBreak;
 		SimTime distributedAt;
 		Segment _cacheOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
 		Segment *cacheOffset; ///< external variable, use cacheOffset = cacheOffset->next to iterate the segment list.
