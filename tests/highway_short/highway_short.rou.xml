@@ -1,0 +1,112 @@
+<routes>
+	<vType id="CarA" accel="2.6" decel="5.9" sigma="0.5" length="5" minGap="3.5" maxSpeed="18.0"/>
+	<vType id="CarB" accel="2.7" decel="6.3" sigma="0.5" length="5" minGap="3.5" maxSpeed="20.0"/>
+	<vType id="CarC" accel="2.5" decel="6.1" sigma="0.5" length="5" minGap="3.5" maxSpeed="21.0"/>
+	<vType id="CarD" accel="2.7" decel="6.4" sigma="0.5" length="5" minGap="3.5" maxSpeed="22.0"/>
+	<vType id="CarE" accel="2.9" decel="6.2" sigma="0.5" length="5" minGap="3.5" maxSpeed="23.0"/>
+	<vType id="CarF" accel="2.8" decel="6.6" sigma="0.5" length="5" minGap="3.5" maxSpeed="24.0"/>
+	<vType id="CarG" accel="2.9" decel="6.8" sigma="0.5" length="5" minGap="3.5" maxSpeed="25.0"/>
+	<route id="route0" edges="E1 E2"></route>
+	<route id="route1" edges="-E2 -E1"></route>
+	<!-- CarA: "0,0,1"=blue; CarB: "0,1,0"=green; CarC: "0,1,1"=cyan; CarD: "1,0,0"=red; CarE: "1,0,1"=magenta; CarF: "1,1,0"=yellow; CarG: "1,1,1"=white -->
+	<vehicle id="veh00" type="CarF" route="route0" depart="0" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh01" type="CarG" route="route0" depart="2" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh02" type="CarD" route="route0" depart="5" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh03" type="CarC" route="route0" depart="6" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh04" type="CarD" route="route0" depart="9" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh05" type="CarD" route="route1" depart="10" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh06" type="CarC" route="route0" depart="11" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh07" type="CarD" route="route1" depart="13" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh08" type="CarE" route="route1" depart="15" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh09" type="CarC" route="route1" depart="17" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh10" type="CarE" route="route0" depart="20" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh11" type="CarC" route="route1" depart="22" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh12" type="CarD" route="route0" depart="22" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh13" type="CarB" route="route1" depart="23" departSpeed="12" color="0,1,0"/>
+	<vehicle id="veh14" type="CarC" route="route0" depart="24" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh15" type="CarC" route="route1" depart="29" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh16" type="CarD" route="route1" depart="33" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh17" type="CarC" route="route0" depart="33" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh18" type="CarB" route="route0" depart="35" departSpeed="12" color="0,1,0"/>
+	<vehicle id="veh19" type="CarD" route="route1" depart="38" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh20" type="CarA" route="route0" depart="38" departSpeed="12" color="0,0,1"/>
+	<vehicle id="veh21" type="CarD" route="route1" depart="41" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh22" type="CarD" route="route1" depart="43" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh23" type="CarE" route="route1" depart="51" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh24" type="CarF" route="route0" depart="67" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh25" type="CarG" route="route0" depart="77" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh26" type="CarE" route="route0" depart="79" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh27" type="CarG" route="route1" depart="79" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh28" type="CarC" route="route0" depart="83" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh29" type="CarD" route="route0" depart="87" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh30" type="CarE" route="route1" depart="87" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh31" type="CarC" route="route0" depart="90" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh32" type="CarD" route="route1" depart="93" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh33" type="CarE" route="route1" depart="95" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh34" type="CarC" route="route1" depart="98" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh35" type="CarE" route="route0" depart="100" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh36" type="CarC" route="route1" depart="102" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh37" type="CarD" route="route0" depart="102" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh38" type="CarC" route="route1" depart="103" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh39" type="CarC" route="route0" depart="104" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh40" type="CarC" route="route1" depart="107" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh41" type="CarD" route="route1" depart="111" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh42" type="CarD" route="route0" depart="112" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh43" type="CarC" route="route0" depart="114" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh44" type="CarD" route="route1" depart="114" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh45" type="CarE" route="route0" depart="120" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh46" type="CarD" route="route1" depart="120" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh47" type="CarD" route="route1" depart="122" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh48" type="CarE" route="route1" depart="125" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh49" type="CarF" route="route0" depart="126" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh50" type="CarF" route="route0" depart="130" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh51" type="CarG" route="route1" depart="142" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh52" type="CarD" route="route0" depart="145" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh53" type="CarC" route="route0" depart="146" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh54" type="CarD" route="route0" depart="149" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh55" type="CarF" route="route1" depart="150" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh56" type="CarC" route="route0" depart="151" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh57" type="CarE" route="route1" depart="153" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh58" type="CarE" route="route1" depart="155" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh59" type="CarC" route="route1" depart="157" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh60" type="CarE" route="route0" depart="160" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh61" type="CarD" route="route1" depart="162" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh62" type="CarD" route="route0" depart="162" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh63" type="CarB" route="route1" depart="163" departSpeed="12" color="0,1,0"/>
+	<vehicle id="veh64" type="CarC" route="route0" depart="164" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh65" type="CarC" route="route1" depart="169" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh66" type="CarD" route="route1" depart="173" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh67" type="CarC" route="route0" depart="173" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh68" type="CarB" route="route0" depart="175" departSpeed="12" color="0,1,0"/>
+	<vehicle id="veh69" type="CarD" route="route1" depart="178" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh70" type="CarA" route="route0" depart="178" departSpeed="12" color="0,0,1"/>
+	<vehicle id="veh71" type="CarD" route="route1" depart="181" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh72" type="CarD" route="route1" depart="183" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh73" type="CarD" route="route1" depart="188" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh74" type="CarF" route="route0" depart="207" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh75" type="CarG" route="route0" depart="213" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh76" type="CarE" route="route0" depart="215" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh77" type="CarG" route="route1" depart="215" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh78" type="CarC" route="route0" depart="223" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh79" type="CarD" route="route0" depart="227" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh80" type="CarE" route="route1" depart="227" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh81" type="CarC" route="route0" depart="230" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh82" type="CarD" route="route1" depart="233" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh83" type="CarE" route="route1" depart="235" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh84" type="CarC" route="route1" depart="238" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh85" type="CarE" route="route0" depart="240" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh86" type="CarC" route="route1" depart="242" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh87" type="CarD" route="route0" depart="242" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh88" type="CarC" route="route1" depart="243" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh89" type="CarC" route="route0" depart="244" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh90" type="CarC" route="route1" depart="247" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh91" type="CarD" route="route1" depart="251" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh92" type="CarD" route="route0" depart="252" departSpeed="12" color="1,0,0"/>
+	<vehicle id="veh93" type="CarC" route="route0" depart="254" departSpeed="12" color="0,1,1"/>
+	<vehicle id="veh94" type="CarE" route="route1" depart="254" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh95" type="CarE" route="route0" depart="261" departSpeed="12" color="1,0,1"/>
+	<vehicle id="veh96" type="CarF" route="route0" depart="267" departSpeed="12" color="1,1,0"/>
+	<vehicle id="veh97" type="CarG" route="route1" depart="267" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh98" type="CarG" route="route1" depart="269" departSpeed="12" color="1,1,1"/>
+	<vehicle id="veh99" type="CarE" route="route0" depart="270" departSpeed="12" color="1,0,1"/>
+</routes>

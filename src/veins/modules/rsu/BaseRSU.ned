@@ -29,6 +29,9 @@ simple BaseRSU extends BaseApplLayer
 	double positionY;
 	double positionZ;
 
+	int westDistance; // distance between self and west neighbor RSU
+	int eastDistance; // distance between self and east neighbor RSU
+
 	bool sendWarnings = default(true);  // whether this RSU is at work
 	bool helpRoutings = default(false); // whether this RSU will help vehicle rebroadcast routing messages.
 	bool sendContents = default(false); // whether this RSU should send data

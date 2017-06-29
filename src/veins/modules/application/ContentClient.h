@@ -160,6 +160,7 @@ private:
 
 	bool startPlaying; ///< whether the vedio has started playing.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
+	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.

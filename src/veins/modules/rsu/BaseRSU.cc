@@ -30,6 +30,8 @@ void BaseRSU::initialize(int stage)
 		westOut = findGate("westOut");
 		eastIn = findGate("eastIn");
 		eastOut = findGate("eastOut");
+		westDist = par("westDistance").longValue();
+		eastDist = par("eastDistance").longValue();
 		wiredHeaderLength = par("wiredHeaderLength").longValue();
 
 		myAddr += RSU_ADDRESS_OFFSET;

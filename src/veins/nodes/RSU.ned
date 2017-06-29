@@ -28,48 +28,52 @@ import org.car2x.veins.modules.rsu.ContentRSU;
 
 module RSU
 {
-    parameters:
-        double posX; // x size of the area the nodes are in (in meters)
-        double posY; // y size of the area the nodes are in (in meters)
-        double posZ; // z size of the area the nodes are in (in meters)
-        string nicType = default("Nic80211p"); // type of network interface card
-        
-    gates:
-        input veinswiredIn;   // transmit data to appl module
-        output veinswiredOut; // receive data from appl module
-        input veinswestIn;   // transmit data to appl module
-        output veinswestOut; // receive data from appl module
-        input veinseastIn;   // transmit data to appl module
-        output veinseastOut; // receive data from appl module
-        input veinsradioIn @directIn; // gate for sendDirect
-        
-    submodules:
-        appl: ContentRSU {
-            parameters:
-                positionX = posX;
-                positionY = posY;
-                positionZ = posZ;
-                @display("p=60,50");
-        }
+	parameters:
+		double posX; // x size of the area the nodes are in (in meters)
+		double posY; // y size of the area the nodes are in (in meters)
+		double posZ; // z size of the area the nodes are in (in meters)
+		int westDist; // distance between this RSU and its west neighbor RSU (in meters)
+		int eastDist; // distance between this RSU and its east neighbor RSU (in meters)
+		string nicType = default("Nic80211p"); // type of network interface card
 
-        nic: <nicType> like org.car2x.veins.modules.nic.INic80211p {
-            parameters:
-                @display("p=60,166");
-        }
+	gates:
+		input veinswiredIn;   // transmit data to appl module
+		output veinswiredOut; // receive data from appl module
+		input veinswestIn;   // transmit data to appl module
+		output veinswestOut; // receive data from appl module
+		input veinseastIn;   // transmit data to appl module
+		output veinseastOut; // receive data from appl module
+		input veinsradioIn @directIn; // gate for sendDirect
 
-        mobility: BaseMobility {
-            parameters:
-                @display("p=130,166;i=block/cogwheel");
-                x = posX;
-                y = posY;
-                z = posZ;
-        }
-        
-    connections:
-        nic.upperLayerOut --> appl.lowerLayerIn;
-        nic.upperLayerIn <-- appl.lowerLayerOut;
-        nic.upperControlOut --> appl.lowerControlIn;
-        nic.upperControlIn <-- appl.lowerControlOut;
+	submodules:
+		appl: ContentRSU {
+		parameters:
+				positionX = posX;
+				positionY = posY;
+				positionZ = posZ;
+				westDistance = westDist;
+				eastDistance = eastDist;
+				@display("p=60,50");
+		}
+
+		nic: <nicType> like org.car2x.veins.modules.nic.INic80211p {
+			parameters:
+			@display("p=60,166");
+		}
+
+		mobility: BaseMobility {
+			parameters:
+			@display("p=130,166;i=block/cogwheel");
+				x = posX;
+				y = posY;
+				z = posZ;
+		}
+
+	connections:
+		nic.upperLayerOut --> appl.lowerLayerIn;
+		nic.upperLayerIn <-- appl.lowerLayerOut;
+		nic.upperControlOut --> appl.lowerControlIn;
+		nic.upperControlIn <-- appl.lowerControlOut;
 
 		veinswiredIn --> appl.wiredIn;
 		veinswiredOut <-- appl.wiredOut;
@@ -77,5 +81,5 @@ module RSU
 		veinswestOut <-- appl.westOut;
 		veinseastIn --> appl.eastIn;
 		veinseastOut <-- appl.eastOut;
-        veinsradioIn --> nic.radioIn;
+		veinsradioIn --> nic.radioIn;
 }

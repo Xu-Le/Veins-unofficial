@@ -40,6 +40,7 @@ public:
 		DISTRIBUTE_C_EVT,
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
+		LOOK_FOR_CARRIER_EVT,
 		LAST_CONTENT_RSU_MESSAGE_KIND
 	};
 
@@ -85,6 +86,8 @@ private:
 	void _determineSchemeOffsets(Segment *&schemeOffset, Segment *STAGOffset, Segment *lackOffset);
 	/** @brief handle with transmission scheme switch preparation. */
 	void _prepareSchemeSwitch();
+	/** @brief send prefetch request to the content server. */
+	void _sendPrefetchRequest(const LAddress::L3Type downloader, const int startOffset, const int endOffset, const SimTime calculatingTime);
 	///@}
 
 	/** @name carrier related methods. */
@@ -92,7 +95,7 @@ private:
 	/** @brief calculate which carrier it the best one to be selected for carry-and-forward. */
 	bool selectCarrier(LAddress::L3Type coDownloader);
 	/** @brief filling cooperative notification message, and then send it to neighbor RSU. */
-	void _sendCooperativeNotification(int downloader, ContentMessage *reportMsg);
+	void _sendCooperativeNotification(const LAddress::L3Type downloader, ContentMessage *reportMsg);
 	///@}
 
 private:
@@ -122,11 +125,13 @@ private:
 	class CoDownloaderInfo
 	{
 	public:
-		CoDownloaderInfo(Coord& _pos, Coord& _speed) : carrier(-1), transmissionAmount(-1), pos(_pos), speed(_speed) { neighbors.reserve(32); }
+		CoDownloaderInfo(Coord& _pos, Coord& _speed) : carrier(-1), transmissionAmount(-1), tryingLookForTimes(0), pos(_pos), speed(_speed) { neighbors.reserve(32); }
 
 		LAddress::L3Type carrier;
 		int transmissionAmount;
+		int tryingLookForTimes;
 		SimTime transmitAt;
+		SimTime lookForAt;
 		Coord pos;
 		Coord speed;
 		std::vector<LAddress::L3Type> neighbors;
@@ -168,13 +173,15 @@ private:
 	SimTime distributeVPeriod;    ///< period to handle self message distributeVEvt.
 	SimTime distributeRPeriod;    ///< period to handle self message distributeREvt.
 	SimTime schemeSwitchInterval; ///< interval from current time to the time schemeSwitchEvt happens(this interval is time-varying).
+	SimTime lookForCarrierPeriod; ///< period to handle self message lookForCarrierEvt.
 	///@}
 
 	cMessage *distributeVEvt; ///< self message used to periodically distribute data to vehicle.
 	cMessage *distributeREvt; ///< self message used to periodically distribute data to other RSU.
 	cMessage *distributeCEvt; ///< self message used to periodically distribute data to carrier.
-	cMessage *schemeSwitchEvt;    ///< self message used to handle with transmission scheme switch in different time slot.
-	cMessage *segmentAdvanceEvt;  ///< self message used to handle with segment advance in same time slot.
+	cMessage *schemeSwitchEvt;   ///< self message used to handle with transmission scheme switch in different time slot.
+	cMessage *segmentAdvanceEvt; ///< self message used to handle with segment advance in same time slot.
+	cMessage *lookForCarrierEvt; ///< self message used to handle with looking for carrier periodically if there is no proper carrier before.
 
 	std::list<SchemeTuple> rsuSchemeList; ///< describe how this RSU transmit in each slot.
 	std::list<SchemeTuple>::iterator itRSL; ///< an iterator used to iterate container rsuSchemeList.

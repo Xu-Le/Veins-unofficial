@@ -138,6 +138,8 @@ protected:
 	int eastIn;     ///< receive packets from east neighbor RSU.
 	int eastOut;    ///< send packets to east neighbor RSU.
 	///@}
+	int westDist;   ///< distance between self and west neighbor RSU.
+	int eastDist;   ///< distance between self and east neighbor RSU.
 	int wiredHeaderLength; ///< length of the IP packet header.
 
 	bool helpRoutings; ///< whether this RSU will help vehicle rebroadcast routing messages.

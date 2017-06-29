@@ -44,9 +44,7 @@ void ContentServer::initialize(int stage)
 		distributeBSApplBytesOnce = 1000 * 1472; // UDP/IP header length is 28 bytes
 		distributeRSUPeriod = SimTime(8 * distributeRSULinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 		distributeBSPeriod = SimTime(8 * distributeBSLinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
-		// distributeRSUPeriod += SimTime(1, SIMTIME_NS); // ensure when handle with self message to send the next packet, the previous packet has arrived at RSU
-		// distributeBSPeriod += SimTime(1, SIMTIME_NS); // ensure when handle with self message to send the next packet, the previous packet has arrived at BS
-		EV << "distribute period for RSU is " << distributeRSUPeriod.dbl() << ", for BS is " << distributeBSPeriod.dbl() << std::endl;
+		EV << "distribute period for RSU is " << distributeRSUPeriod.dbl() << "s, for BS is " << distributeBSPeriod.dbl() << "s.\n";
 
 		distributeRSUEvt = new cMessage("distribute rsu evt", SelfMsgKinds::DISTRIBUTE_RSU_EVT);
 		distributeBSEvt = new cMessage("distribute bs evt", SelfMsgKinds::DISTRIBUTE_BS_EVT);

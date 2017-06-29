@@ -58,20 +58,25 @@ private:
 	/** @brief Handle wired incoming messages. */
 	void handleWiredIncomingMsg(WiredMessage *wiredMsg);
 
+	/** @brief fetch proper amount data from the content server for distributing in a short time. */
+	void _sendFetchingRequest(const LAddress::L3Type downloader, const int curFetchStartOffset);
+
 public:
 	/** @brief The class to store downloader's information. */
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int s, int r) : transmissionActive(false), totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0),
-				distributedOffset(s), requiredEndOffset(r), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
+		DownloaderInfo(int t, int s, int r) : transmissionActive(false), fetchingActive(false), totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0),
+				distributedOffset(s), requiredEndOffset(r), curFetchEndOffset(0), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
 
 		bool transmissionActive;
+		bool fetchingActive;
 		int totalContentSize;
 		int cacheStartOffset;
 		int cacheEndOffset;
 		int distributedOffset;
 		int requiredEndOffset;
+		int curFetchEndOffset;
 		SimTime distributedAt;
 		cGate *correspondingGate;
 	};
@@ -90,6 +95,7 @@ public:
 
 	/** @name performance consideration. */
 	///@{
+	int fetchApplBytesOnce; ///< how many bytes measured in application layer to prefetch from content server once.
 	int distributeLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
 	int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
 	SimTime distributePeriod;  ///< period to handle self message distributeEvt.
