@@ -47,9 +47,12 @@ public:
 		FORWARD_EVT,
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
+		REPORT_STATUS_EVT,
 		DATA_CONSUMPTION_EVT,
 		REQUEST_TIMEOUT_EVT,
-		INTERRUPT_TIMEOUT_EVT
+		INTERRUPT_TIMEOUT_EVT,
+		LINK_BROKEN_EVT,
+		LAST_CONTENT_CLIENT_MESSAGE_KIND
 	};
 
 	/** @name constructor, destructor. */
@@ -160,8 +163,10 @@ private:
 
 	bool startPlaying; ///< whether the vedio has started playing.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
+	bool waitingDistribution; ///< whether is waiting for RSU's downloading service.
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
+	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 
@@ -180,9 +185,11 @@ private:
 	cMessage *forwardEvt;          ///< self message used to handle with forward data packets to downloader.
 	cMessage *schemeSwitchEvt;     ///< self message used to handle with transmission scheme switch in different time slot.
 	cMessage *segmentAdvanceEvt;   ///< self message used to handle with segment advance in same time slot.
+	cMessage *reportStatusEvt;     ///< self message used to handle with report downloading status to RSU.
 	cMessage *dataConsumptionEvt;  ///< self message used to handle with data consumption process after a slot elapsed.
 	cMessage *requestTimeoutEvt;   ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
 	cMessage *interruptTimeoutEvt; ///< self message used to handle with download interrupt timeout event.
+	cMessage *linkBrokenEvt;       ///< self message used to handle with communication link broken event.
 
 	DownloadingInfo downloadingStatus; ///< store self downloading status information.
 	std::list<SchemeTuple> schemeList; ///< describe how this vehicle transmit in each slot.

@@ -40,7 +40,9 @@ public:
 		DISTRIBUTE_C_EVT,
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
+		PREFETCH_REQUEST_EVT,
 		LOOK_FOR_CARRIER_EVT,
+		LINK_BROKEN_EVT,
 		LAST_CONTENT_RSU_MESSAGE_KIND
 	};
 
@@ -87,7 +89,9 @@ private:
 	/** @brief handle with transmission scheme switch preparation. */
 	void _prepareSchemeSwitch();
 	/** @brief send prefetch request to the content server. */
-	void _sendPrefetchRequest(const LAddress::L3Type downloader, const int startOffset, const int endOffset, const SimTime calculatingTime);
+	void _sendPrefetchRequest(const LAddress::L3Type downloader, const int startOffset, const int endOffset);
+	/** @brief broadcast transmission scheme to relays. */
+	void _broadcastTransmissionScheme();
 	///@}
 
 	/** @name carrier related methods. */
@@ -104,7 +108,8 @@ private:
 	{
 	public:
 		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0), acknowledgedOffset(0),
-				remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), notifiedLinkBreak(false), acknowledgedAt(SimTime::ZERO), _lackOffset(), lackOffset(&_lackOffset) {}
+				remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), notifiedLinkBreak(false), sentCoNotification(false),
+				distributedAt(), acknowledgedAt(), _lackOffset(), lackOffset(&_lackOffset) {}
 
 		int totalContentSize;
 		int cacheStartOffset;
@@ -116,6 +121,7 @@ private:
 		int consumingRate;
 		int prefetchDataAmount;
 		bool notifiedLinkBreak;
+		bool sentCoNotification;
 		SimTime distributedAt;
 		SimTime acknowledgedAt;
 		Segment _lackOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
@@ -156,13 +162,19 @@ private:
 	///@{
 	int ackMsgNum; ///< record how many transmissions have finished to recalculate cooperative scheme again.
 	int activeSlotNum; ///< store the number of slot that actually transmit data.
+	int prefetchCompletedNum;  ///< the number of downloaders whose prefetch process has completed.
+	int prefetchNecessaryNum;  ///< the number of downloaders who need to prefetch data.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
+	SimTime executeSTAGNextAt; ///< store the time when to execute the next time.
+	bool distributionActive;   ///< whether is providing downloading service currently.
 	///@}
 
 	/** @name carrier related variables. */
 	///@{
 	bool noticeRelayEntering; ///< pay attention to the event that the neighbor of co-downloader enters RSU's communication range.
 	///@}
+
+	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
 
 	/** @name performance consideration. */
 	///@{
@@ -172,17 +184,24 @@ private:
 	int distributeRApplBytesOnce; ///< how many bytes measured in application layer to distribute to other RSU once in transmission.
 	SimTime distributeVPeriod;    ///< period to handle self message distributeVEvt.
 	SimTime distributeRPeriod;    ///< period to handle self message distributeREvt.
+	///@}
+
 	SimTime schemeSwitchInterval; ///< interval from current time to the time schemeSwitchEvt happens(this interval is time-varying).
 	SimTime lookForCarrierPeriod; ///< period to handle self message lookForCarrierEvt.
-	///@}
+	SimTime wiredTxDuration;  ///< transmission delay of a wired packet.
 
 	cMessage *distributeVEvt; ///< self message used to periodically distribute data to vehicle.
 	cMessage *distributeREvt; ///< self message used to periodically distribute data to other RSU.
 	cMessage *distributeCEvt; ///< self message used to periodically distribute data to carrier.
-	cMessage *schemeSwitchEvt;   ///< self message used to handle with transmission scheme switch in different time slot.
-	cMessage *segmentAdvanceEvt; ///< self message used to handle with segment advance in same time slot.
-	cMessage *lookForCarrierEvt; ///< self message used to handle with looking for carrier periodically if there is no proper carrier before.
+	cMessage *schemeSwitchEvt;    ///< self message used to handle with transmission scheme switch in different time slot.
+	cMessage *segmentAdvanceEvt;  ///< self message used to handle with segment advance in same time slot.
+	cMessage *prefetchRequestEvt; ///< self message used to handle with when to send the prefetch request.
+	cMessage *lookForCarrierEvt;  ///< self message used to handle with looking for carrier periodically if there is no proper carrier before.
+	cMessage *linkBrokenEvt;  ///< self message used to handle with communication link broken event.
 
+	cQueue prefetchMsgQueue; ///< the queue of prefetch messages.
+
+	DownloaderItems activeDownloaders; ///< downloaders who are contained in current transmission scheme.
 	std::list<SchemeTuple> rsuSchemeList; ///< describe how this RSU transmit in each slot.
 	std::list<SchemeTuple>::iterator itRSL; ///< an iterator used to iterate container rsuSchemeList.
 	SchemeItems schemeItemList; ///< describe how each vehicle transmit in each slot.

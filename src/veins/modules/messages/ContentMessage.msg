@@ -24,16 +24,18 @@ enum ContentMsgCC {
 	CONTENT_REQUEST,       ///< content request;
 	CONTENT_RESPONSE,      ///< RSU's response to content request;
 	SCHEME_DISTRIBUTION,   ///< distribute current RSU's slot decision to relays;
-	ACKNOWLEDGEMENT,       ///< acknowledgement received offset to RSU and relay at the end of each slot;
+	ACKNOWLEDGEMENT,       ///< acknowledgment received offset to RSU and relay at the end of each slot;
 	CARRIER_SELECTION,     ///< selected to be carrier by the cooperative RSU;
 	CARRIER_ENCOUNTER,     ///< carrier encounter the downloader its carried data belongs to;
-	DOWNLOADING_COMPLETED, ///< downloading precess completion notification broadcast by downloader;
+	DOWNLOADING_COMPLETED, ///< downloading process completion notification broadcast by downloader;
 	LINK_BREAK_DIRECT,     ///< link break notify - the communication link between downloader and RSU will break soon;
 	LINK_BREAK_DR,         ///< link break notify - the communication link between downloader and relay will break soon;
 	LINK_BREAK_RR,         ///< link break notify - the communication link between relay and RSU will break soon;
+	LINK_BROKEN_DR,        ///< link broken notify - the communication link between downloader and relay has broken already;
 	RELAY_DISCOVERY,       ///< cooperative RSU's discover notification sends to the first entering relay;
 	DISCOVERY_RESPONSE,    ///< the first entering relay response to cooperative RSU's discover notification;
-	STATUS_QUERY           ///< query downloading status of downloader.
+	STATUS_QUERY,          ///< query downloading status of downloader,
+	STATUS_REPORT          ///< report downloading status to RSU (used only in multi-downloader scenarios).
 };
 
 class SchemeTuple
@@ -75,20 +77,23 @@ class WaveShortMessage;
 class noncobject Coord;
 class noncobject Segment;
 class noncobject NeighborItems;
+class noncobject DownloaderItems;
 class noncobject SchemeItems;
 
 packet ContentMessage extends WaveShortMessage
 {
 	int controlCode; // express which kind of control signaling message, see enum ContentMsgCC.
-	int receiver;    // identifier of receiver's application
-	int downloader;  // which downloader this content message aims to
+	long receiver;    // identifier of receiver's application
+	long downloader;  // which downloader this content message aims to
 	int contentSize; // content size of request large-volume file (controlCode: 0)
 	int receivedOffset; // data amount received offset (controlCode: 2,7,8,9)
 	int consumedOffset; // data amount consumed offset (controlCode: 2,7,8,9)
 	int consumingRate;  // data amount consuming rate measured in Bytes each second (controlCode: 0)
+	simtime_t reportAt; // RSU tells downloader when to report its downloading status (controlCode: 1)
 	Segment lackOffset; // lacking data segment's offset (controlCode: 3)
-	SchemeItems scheme; // transmitssion scheme each vehicle should obey (controlCode: 2)
+	SchemeItems scheme; // transmission scheme each vehicle should obey (controlCode: 2)
 	Coord position;  // position of the co-downloader (controlCode: 7,8,9)
 	Coord speed;     // speed of the co-downloader (controlCode: 7,8,9)
 	NeighborItems neighbors; // neighbors of the co-downloader (controlCode: 7,8,9)
+	DownloaderItems downloaders; // downloader list in transmission scheme distribution message (controlCode: 2)
 }

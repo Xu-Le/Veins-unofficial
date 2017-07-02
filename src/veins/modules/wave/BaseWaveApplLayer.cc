@@ -364,7 +364,9 @@ WaveShortMessage* BaseWaveApplLayer::prepareWSM(std::string name, int dataLength
 		return wsm;
 	}
 
-	wsm->addBitLength(headerLength + dataLength);
+	wsm->addBitLength(headerLength);
+	if (name != "data")
+		wsm->addBitLength(dataLength);
 
 	if (channel == type_CCH)
 		wsm->setChannelNumber(Channels::CCH);

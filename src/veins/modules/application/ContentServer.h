@@ -19,6 +19,7 @@
 #ifndef __CONTENTSERVER_H__
 #define __CONTENTSERVER_H__
 
+#include <queue>
 #include <omnetpp/csimplemodule.h>
 #include "veins/base/utils/SimpleAddress.h"
 #include "veins/modules/messages/WiredMessage_m.h"
@@ -69,7 +70,7 @@ private:
 		int distributedOffset;
 		int requiredEndOffset;
 		int rsuIndex;
-		omnetpp::SimTime distributedAt;
+		SimTime distributedAt;
 	};
 
 	int rsuNum; ///< number of RSUs in current scenario.
@@ -82,18 +83,20 @@ private:
 	///@}
 	int headerLength; ///< header length of the wired UDP/IP packet in bits.
 
+	std::vector<std::queue<LAddress::L3Type, std::list<LAddress::L3Type> > > activeDownloaderQs; ///< RSUs' queue of downloaders which are currently fetching data.
+
 	/** @name performance consideration. */
 	///@{
 	int distributeRSULinkBytesOnce; ///< how many bytes measured in link layer to distribute to RSU once in transmission.
 	int distributeBSLinkBytesOnce;  ///< how many bytes measured in link layer to distribute to BS once in transmission.
 	int distributeRSUApplBytesOnce; ///< how many bytes measured in application layer to distribute to RSU once in transmission.
 	int distributeBSApplBytesOnce;  ///< how many bytes measured in application layer to distribute to BS once in transmission.
-	omnetpp::SimTime distributeRSUPeriod; ///< period to handle self message prefetchEvt.
-	omnetpp::SimTime distributeBSPeriod;  ///< period to handle self message distributeEvt.
+	SimTime distributeRSUPeriod; ///< period to handle self message prefetchEvt.
+	SimTime distributeBSPeriod;  ///< period to handle self message distributeEvt.
 	///@}
 
-	omnetpp::cMessage *distributeRSUEvt;  ///< self message used to periodically distribute data to RSU.
-	omnetpp::cMessage *distributeBSEvt;   ///< self message used to periodically distribute data to BS.
+	cMessage *distributeRSUEvt;  ///< self message used to periodically distribute data to RSU.
+	cMessage *distributeBSEvt;   ///< self message used to periodically distribute data to BS.
 
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.

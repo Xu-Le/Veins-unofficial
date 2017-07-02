@@ -18,23 +18,18 @@
 
 cplusplus {{
 enum CellularMsgCC {
-	TRANSMISSION_STARTING,
-	TRANSMISSION_ENDING,
-	DATA_PACKET_NORMAL,
-	DATA_PACKET_LAST,
-	DOWNLOADING_COMPLETING
+	TRANSMISSION_STARTING, ///< request to start transmission;
+	TRANSMISSION_ENDING,   ///< request to end transmission;
+	DATA_PACKET_NORMAL,    ///< normal data packet transmission;
+	DATA_PACKET_LAST,      ///< last data packet transmission;
+	DOWNLOADING_COMPLETING ///< downloading process completion notification
 };
 }}
 
 packet CellularMessage
 {
-	// @brief express which kind of control signaling message.
-	// 0: request to start transmission;
-	// 1: request to end transmission;
-	// 2: normal data packet transmission;
-	// 3: last data packet transmission;
-	int controlCode;
-	int downloader;  // identifier of downloader's application
+	int controlCode; // express which kind of control signaling message, see enum CellularMsgCC
+	long downloader; // identifier of downloader's application
 	int contentSize; // content size of requested large volume file
 	int curOffset;   // current content offset of the data this packet contains
 	int startOffset; // start offset position of this content

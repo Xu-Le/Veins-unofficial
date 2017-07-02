@@ -24,6 +24,7 @@
 #include "veins/base/utils/SimpleAddress.h"
 
 typedef std::list<LAddress::L3Type> NeighborItems;
+typedef std::list<std::pair<LAddress::L3Type, Coord /* speed */> > DownloaderItems;
 
 /** Segment structure of data. */
 class Segment

@@ -20,13 +20,13 @@ cplusplus {{
 #include "veins/modules/application/ContentUtils.h"
 
 enum WiredMsgCC {
-	START_TRANSMISSION,
-	END_TRANSMISSION,
-	NORMAL_DATA_PACKET,
-	LAST_DATA_PACKET,
-	COMPLETE_DOWNLOADING,
-	COOPERATIVE_NOTIFICATION,
-	COOPERATIVE_ACKNOWLEDGEMENT
+	START_TRANSMISSION,         ///< request to start transmission;
+	END_TRANSMISSION,           ///< request to end transmission;
+	NORMAL_DATA_PACKET,         ///< normal data packet transmission;
+	LAST_DATA_PACKET,           ///< last data packet transmission;
+	COMPLETE_DOWNLOADING,       ///< downloading process completion notification
+	COOPERATIVE_NOTIFICATION,   ///< notify neighbor RSU to participate in downloading process
+	COOPERATIVE_ACKNOWLEDGEMENT ///< acknowledgment to neighbor RSU's cooperative notification
 };
 }}
 
@@ -35,15 +35,8 @@ class noncobject NeighborItems;
 
 packet WiredMessage
 {
-	// @brief express which kind of control signaling message.
-	// 0: request to start transmission;
-	// 1: request to end transmission;
-	// 2: normal data packet transmission;
-	// 3: last data packet transmission;
-	// 4: downloading process completion notification;
-	// 5: notify neighbor RSU to participate in downloading process.
-	int controlCode;
-	int downloader;  // identifier of downloader's application
+	int controlCode; // express which kind of control signaling message, see enum WiredMsgCC
+	long downloader; // identifier of downloader's application
 	int contentSize; // content size of requested large volume file
 	int curOffset;   // current content offset of the data this packet contains
 	int startOffset; // start offset position of this content

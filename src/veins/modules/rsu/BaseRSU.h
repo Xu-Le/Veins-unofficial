@@ -122,10 +122,12 @@ protected:
 	class VehicleInfo
 	{
 	public:
-		VehicleInfo(Coord& p, Coord& s, simtime_t ra) : pos(p), speed(s), receivedAt(ra) {}
+		VehicleInfo(Coord& p, Coord& s, simtime_t ra) : pos(p), speed(s), prevPos(), prevSpeed(), receivedAt(ra) {}
 
 		Coord pos;   ///< current position of the vehicle.
 		Coord speed; ///< current speed of the vehicle.
+		Coord prevPos;   ///< previous position of the vehicle.
+		Coord prevSpeed; ///< previous speed of the vehicle.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the vehicle.
 	};
 

@@ -25,8 +25,8 @@ class WaveShortMessage;
 packet DataMessage extends WaveShortMessage
 {
 	bool isLast;     // whether it is the last data packet
-	int receiver;    // identifier of receiver's application
-	int downloader;  // identifier of downloader's application
+	long receiver;   // identifier of receiver's application
+	long downloader; // identifier of downloader's application
 	int curOffset;   // current content offset of the data this packet contains
 	int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
 }

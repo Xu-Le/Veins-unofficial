@@ -33,14 +33,15 @@ void ContentServer::initialize(int stage)
 		{
 			rsuIn[i] = findGate("rsuIn", i);
 			rsuOut[i] = findGate("rsuOut", i);
+			activeDownloaderQs.push_back(std::queue<LAddress::L3Type, std::list<LAddress::L3Type> >());
 		}
 		cellularIn = findGate("cellularIn");
 		cellularOut = findGate("cellularOut");
 		headerLength = par("headerLength").longValue();
 
-		distributeRSULinkBytesOnce = 1000 * 1500; // MTU is 1500 bytes, distributeRSULinkPacketsOnce == 1000
+		distributeRSULinkBytesOnce = 500 * 1500; // MTU is 1500 bytes, distributeRSULinkPacketsOnce == 500
 		distributeBSLinkBytesOnce = 1000 * 1500; // MTU is 1500 bytes, distributeBSLinkPacketsOnce == 1000
-		distributeRSUApplBytesOnce = 1000 * 1472; // UDP/IP header length is 28 bytes
+		distributeRSUApplBytesOnce = 500 * 1472; // UDP/IP header length is 28 bytes
 		distributeBSApplBytesOnce = 1000 * 1472; // UDP/IP header length is 28 bytes
 		distributeRSUPeriod = SimTime(8 * distributeRSULinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 		distributeBSPeriod = SimTime(8 * distributeBSLinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
@@ -64,6 +65,7 @@ void ContentServer::finish()
 	cancelAndDelete(distributeRSUEvt);
 	cancelAndDelete(distributeBSEvt);
 
+	activeDownloaderQs.clear();
 	delete []rsuIn;
 	delete []rsuOut;
 
@@ -110,7 +112,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 		for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
 		{
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
-			if (downloaderInfo->distributedAt == simTime() - distributeRSUPeriod) // self message aims to this downloader
+			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
 			{
 				WiredMessage *dataMsg = new WiredMessage("data");
 				dataMsg->setDownloader(itDL->first);
@@ -119,9 +121,9 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
 					dataMsg->setBytesNum(distributeRSUApplBytesOnce);
 					dataMsg->addBitLength(8*distributeRSULinkBytesOnce);
-					scheduleAt(simTime() + distributeRSUPeriod, distributeRSUEvt);
 					downloaderInfo->distributedOffset += distributeRSUApplBytesOnce;
-					downloaderInfo->distributedAt = simTime();
+					downloaderInfo->distributedAt = simTime() + distributeRSUPeriod;
+					scheduleAt(downloaderInfo->distributedAt, distributeRSUEvt);
 				}
 				else
 				{
@@ -131,6 +133,14 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->setBytesNum(lastPktAmount);
 					dataMsg->addBitLength(8*totalLinkBytes);
 					downloaderInfo->distributedOffset = downloaderInfo->requiredEndOffset;
+					std::queue<LAddress::L3Type, std::list<LAddress::L3Type> > &activeQ = activeDownloaderQs[downloaderInfo->rsuIndex];
+					activeQ.pop();
+					if (!activeQ.empty())
+					{
+						SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
+						downloaders[activeQ.front()]->distributedAt = simTime() + transmissionDelay;
+						scheduleAt(simTime() + transmissionDelay, distributeRSUEvt);
+					}
 				}
 				EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
 				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
@@ -145,7 +155,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 		for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
 		{
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
-			if (downloaderInfo->distributedAt == simTime() - distributeBSPeriod) // self message aims to this downloader
+			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
 			{
 				WiredMessage *dataMsg = new WiredMessage("data");
 				dataMsg->setDownloader(itDL->first);
@@ -154,9 +164,9 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
 					dataMsg->setBytesNum(distributeBSApplBytesOnce);
 					dataMsg->addBitLength(8*distributeBSLinkBytesOnce);
-					scheduleAt(simTime() + distributeBSPeriod, distributeBSEvt);
 					downloaderInfo->distributedOffset += distributeBSApplBytesOnce;
-					downloaderInfo->distributedAt = simTime();
+					downloaderInfo->distributedAt = simTime() + distributeBSPeriod;
+					scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
 				}
 				else
 				{
@@ -207,35 +217,22 @@ void ContentServer::handleRSUIncomingMsg(WiredMessage *rsuMsg, int rsuIdx)
 		}
 		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
 
-		WiredMessage *dataMsg = new WiredMessage("data");
-		dataMsg->setDownloader(downloader);
-		if (rsuMsg->getEndOffset() - rsuMsg->getStartOffset() > distributeRSUApplBytesOnce)
+		downloaderInfo->rsuIndex = rsuIdx;
+		if (activeDownloaderQs[rsuIdx].empty())
 		{
-			dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
-			dataMsg->setBytesNum(distributeRSUApplBytesOnce);
-			dataMsg->addBitLength(8*distributeRSULinkBytesOnce);
-			scheduleAt(simTime() + distributeRSUPeriod, distributeRSUEvt);
-			downloaderInfo->distributedOffset += distributeRSUApplBytesOnce;
-			downloaderInfo->distributedAt = simTime();
-			downloaderInfo->rsuIndex = rsuIdx;
+			EV << "active downloader queue is empty, start distribution now.\n";
+			downloaderInfo->distributedAt = simTime() + SimTime((headerLength + 160)*10, SIMTIME_NS);
+			scheduleAt(downloaderInfo->distributedAt, distributeRSUEvt);
 		}
 		else
-		{
-			dataMsg->setControlCode(WiredMsgCC::LAST_DATA_PACKET);
-			int totalLinkBytes = ContentUtils::calcLinkBytes(rsuMsg->getEndOffset() - rsuMsg->getStartOffset(), 28, 1472);
-			dataMsg->setBytesNum(rsuMsg->getEndOffset() - rsuMsg->getStartOffset());
-			dataMsg->addBitLength(8*totalLinkBytes);
-			downloaderInfo->distributedOffset = rsuMsg->getEndOffset();
-		}
-		EV << "downloader [" << downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
-		dataMsg->setCurOffset(downloaderInfo->distributedOffset);
-		sendDelayed(dataMsg, SimTime::ZERO, "rsuOut", rsuIdx);
+			EV << "active downloader queue is not empty, wait other downloaders' distribution to finish.\n";
+		activeDownloaderQs[rsuIdx].push(downloader);
 	}
 	else if (rsuMsg->getControlCode() == WiredMsgCC::END_TRANSMISSION)
 	{
 		EV << "it is a end transmission message.\n";
-		if (distributeRSUEvt->isScheduled())
-			cancelEvent(distributeRSUEvt);
+		// if (distributeRSUEvt->isScheduled())
+		//	cancelEvent(distributeRSUEvt);
 	}
 	else // (rsuMsg->getControlCode() == WiredMsgCC::COMPLETE_DOWNLOADING)
 	{
@@ -272,28 +269,8 @@ void ContentServer::handleLTEIncomingMsg(WiredMessage *lteMsg)
 		}
 		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
 
-		WiredMessage *dataMsg = new WiredMessage("data");
-		dataMsg->setDownloader(downloader);
-		if (lteMsg->getEndOffset() - lteMsg->getStartOffset() > distributeBSApplBytesOnce)
-		{
-			dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
-			dataMsg->setBytesNum(distributeBSApplBytesOnce);
-			dataMsg->addBitLength(8*distributeBSLinkBytesOnce);
-			scheduleAt(simTime() + distributeBSPeriod, distributeBSEvt);
-			downloaderInfo->distributedOffset += distributeBSApplBytesOnce;
-			downloaderInfo->distributedAt = simTime();
-		}
-		else
-		{
-			dataMsg->setControlCode(WiredMsgCC::LAST_DATA_PACKET);
-			int totalLinkBytes = ContentUtils::calcLinkBytes(lteMsg->getEndOffset() - lteMsg->getStartOffset(), 28, 1472);
-			dataMsg->setBytesNum(lteMsg->getEndOffset() - lteMsg->getStartOffset());
-			dataMsg->addBitLength(8*totalLinkBytes);
-			downloaderInfo->distributedOffset = lteMsg->getEndOffset();
-		}
-		EV << "downloader [" << downloader << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
-		dataMsg->setCurOffset(downloaderInfo->distributedOffset);
-		sendDelayed(dataMsg, SimTime::ZERO, cellularOut);
+		downloaderInfo->distributedAt = simTime();
+		scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
 	}
 	else if (lteMsg->getControlCode() == WiredMsgCC::END_TRANSMISSION)
 	{

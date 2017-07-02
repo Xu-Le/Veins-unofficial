@@ -211,7 +211,9 @@ WaveShortMessage* BaseRSU::prepareWSM(std::string name, int dataLength, t_channe
 		return wsm;
 	}
 
-	wsm->addBitLength(headerLength + dataLength);
+	wsm->addBitLength(headerLength);
+	if (name != "data")
+		wsm->addBitLength(dataLength);
 
 	if (channel == type_CCH)
 		wsm->setChannelNumber(Channels::CCH);
@@ -297,6 +299,8 @@ void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
 	{
 		EV << "    sender [" << sender << "] is an old vehicle, update its info.\n";
 		vehicleInfo = vehicles[sender];
+		vehicleInfo->prevPos = vehicleInfo->pos;
+		vehicleInfo->prevSpeed = vehicleInfo->speed;
 		vehicleInfo->pos = beaconMsg->getSenderPos();
 		vehicleInfo->speed = beaconMsg->getSenderSpeed();
 		vehicleInfo->receivedAt = simTime();

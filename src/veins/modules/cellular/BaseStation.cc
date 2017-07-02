@@ -128,7 +128,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 					if (downloaderInfo->cacheEndOffset == downloaderInfo->requiredEndOffset || !downloaderInfo->transmissionActive)
 					{
 						if (downloaderInfo->transmissionActive)
-							EV << "send the last half-filled data packet because data fetch process has finished.\n";
+							EV << "send the last half-filled data packet because data fetching process has finished.\n";
 						else
 							EV << "send the last half-filled data packet because cellular connection is closed by downloader.\n";
 
@@ -258,6 +258,22 @@ void BaseStation::handleWiredIncomingMsg(WiredMessage *wiredMsg)
 		cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
 		EV << "downloader [" << downloader << "]'s distributed offset updated to " << downloaderInfo->distributedOffset << std::endl;
 		sendDirect(cellularMsg, SimTime::ZERO, distributePeriod, downloaderInfo->correspondingGate);
+	}
+	else if (downloaderInfo->cacheEndOffset == downloaderInfo->requiredEndOffset && !distributeEvt->isScheduled())
+	{
+		EV << "send the last half-filled data packet because data fetching process has finished.\n";
+
+		CellularMessage *cellularMsg = new CellularMessage("data");
+		cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
+		cellularMsg->setDownloader(downloader);
+		int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
+		int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, wirelessHeaderLength/8, wirelessDataLength/8);
+		cellularMsg->addBitLength(8 * totalLinkBytes);
+		downloaderInfo->distributedOffset = downloaderInfo->cacheEndOffset;
+		cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
+		EV << "downloader [" << downloader << "]'s distributed offset updated to " << downloaderInfo->distributedOffset << std::endl;
+		SimTime transmissionDelay((totalLinkBytes*1000)/(wirelessBitsRate/1000) * 8, SIMTIME_US);
+		sendDirect(cellularMsg, SimTime::ZERO, transmissionDelay, downloaderInfo->correspondingGate);
 	}
 	delete wiredMsg;
 	wiredMsg = nullptr;
