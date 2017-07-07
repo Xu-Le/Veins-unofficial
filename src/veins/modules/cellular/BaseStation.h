@@ -21,6 +21,7 @@
 
 #include <omnetpp/csimplemodule.h>
 #include "veins/base/utils/SimpleAddress.h"
+#include "veins/modules/application/ContentStatisticCollector.h"
 #include "veins/modules/messages/CellularMessage_m.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 
@@ -66,11 +67,12 @@ public:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int s, int r) : transmissionActive(false), fetchingActive(false), totalContentSize(t), cacheStartOffset(s), cacheEndOffset(0),
-				distributedOffset(s), requiredEndOffset(r), curFetchEndOffset(0), distributedAt(SimTime::ZERO), correspondingGate(nullptr) {}
+		DownloaderInfo(int t, int s, int r) : transmissionActive(false), fetchingActive(false), closingWhileFetching(false), totalContentSize(t), cacheStartOffset(s),
+				cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), curFetchEndOffset(0), distributedAt(), correspondingGate(nullptr) {}
 
 		bool transmissionActive;
 		bool fetchingActive;
+		bool closingWhileFetching;
 		int totalContentSize;
 		int cacheStartOffset;
 		int cacheEndOffset;

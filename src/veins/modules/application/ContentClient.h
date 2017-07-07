@@ -20,7 +20,6 @@
 #define __CONTENTCLIENT_H__
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
-#include "veins/modules/application/ContentStatisticCollector.h"
 
 #define STRANGER      1
 #define RELAY         2
@@ -102,11 +101,12 @@ private:
 private:
 	/** @brief Data consuming rate of some common video quality kinds. */
 	enum VideoQuailty {
-		_QCIF = 38400, // 38KB/s
-		_CIF = 102400, // 100KB/s
-		_VGA = 230400, // 225KB/s
-		_720P = 448000, // 438KB/s
-		_1080P = 1088000 // 1063KB/s
+		_QCIF = 30720, // 240kbps
+		_CIF = 89600,  // 700kbps
+		_VGA = 217600, // 1700kbps
+		_480P = 230400,  // 1800kbps
+		_720P = 448000,  // 3500kbps
+		_1080P = 1088000 // 8500kbps
 	};
 	/** @brief The class to store other downloader's information. */
 	class DownloaderInfo
@@ -135,13 +135,13 @@ private:
 		void insertSegment(int startOffset, int endOffset);
 		void unionSegment();
 		void lackSegment(Segment *lackOffsets);
+		double getInterruptedTime();
 
 		int totalContentSize;
 		int availableOffset;
 		int consumedOffset;
 		int consumingRate;
 		int segmentNum;
-		SimTime interruptAt;
 		SimTime requestAt;  ///< statistic, the time made the content request.
 		SimTime completeAt; ///< statistic, the time completed the downloading process.
 		SimTime consumingBeginAt; ///< statistic, the time consuming process began.
@@ -161,7 +161,7 @@ private:
 	int cellularHeaderLength; ///< length of the cellular packet header measured in bits.
 	int cellularBitsRate; ///< data transmission rate measured in bps of cellular radio.
 
-	bool startPlaying; ///< whether the vedio has started playing.
+	bool startConsuming; ///< whether the consuming process has started.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
 	bool waitingDistribution; ///< whether is waiting for RSU's downloading service.
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.

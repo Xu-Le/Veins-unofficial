@@ -114,7 +114,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
 			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
 			{
-				WiredMessage *dataMsg = new WiredMessage("data");
+				WiredMessage *dataMsg = new WiredMessage("data", WiredMsgCC::NORMAL_DATA_PACKET);
 				dataMsg->setDownloader(itDL->first);
 				if (downloaderInfo->requiredEndOffset - downloaderInfo->distributedOffset > distributeRSUApplBytesOnce)
 				{
@@ -157,7 +157,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
 			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
 			{
-				WiredMessage *dataMsg = new WiredMessage("data");
+				WiredMessage *dataMsg = new WiredMessage("data", WiredMsgCC::NORMAL_DATA_PACKET);
 				dataMsg->setDownloader(itDL->first);
 				if (downloaderInfo->requiredEndOffset - downloaderInfo->distributedOffset > distributeBSApplBytesOnce)
 				{

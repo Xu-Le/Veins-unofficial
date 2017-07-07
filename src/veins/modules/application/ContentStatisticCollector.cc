@@ -22,9 +22,12 @@
 Define_Module(ContentStatisticCollector);
 
 long ContentStatisticCollector::globalContentRequests = 0;
-long ContentStatisticCollector::globalParticipatingRSUNum = 0;
-double ContentStatisticCollector::globalDSRCFlux = 0.0;
+long ContentStatisticCollector::globalContentSize = 0;
+double ContentStatisticCollector::globalDirectFlux = 0.0;
+double ContentStatisticCollector::globalRelayFlux = 0.0;
+double ContentStatisticCollector::globalCarryFlux = 0.0;
 double ContentStatisticCollector::globalCellularFlux = 0.0;
+double ContentStatisticCollector::globalStorageAmount = 0.0;
 double ContentStatisticCollector::globalConsumingTime = 0.0;
 double ContentStatisticCollector::globalDownloadingTime = 0.0;
 double ContentStatisticCollector::globalInterruptedTime = 0.0;
@@ -44,24 +47,39 @@ void ContentStatisticCollector::finish()
 
 	// record statistics
 	recordScalar("globalContentRequests", globalContentRequests);
-	recordScalar("globalParticipatingRSUNum", globalParticipatingRSUNum);
-	recordScalar("globalDSRCFlux", globalDSRCFlux);
+	recordScalar("globalContentSize", globalContentSize);
+	recordScalar("globalDirectFlux", globalDirectFlux);
+	recordScalar("globalRelayFlux", globalRelayFlux);
+	recordScalar("globalCarryFlux", globalCarryFlux);
 	recordScalar("globalCellularFlux", globalCellularFlux);
+	recordScalar("globalStorageAmount", globalStorageAmount);
+	recordScalar("globalConsumingTime", globalConsumingTime);
 	recordScalar("globalDownloadingTime", globalDownloadingTime);
 	recordScalar("globalInterruptedTime", globalInterruptedTime);
 
-	if (globalDSRCFlux + globalCellularFlux < 1e-6)
-		globalDSRCFlux = globalCellularFlux = 1.0;
+	double globalTotalFlux = globalDirectFlux + globalRelayFlux + globalCarryFlux + globalCellularFlux;
+	if (globalTotalFlux < 1e-6)
+		globalTotalFlux = 1.0;
 	if (globalConsumingTime < 1e-6)
 		globalConsumingTime = 1.0;
 	if (globalContentRequests == 0)
 		globalContentRequests = 1;
 
-	double DSRCFluxRatio = globalDSRCFlux / (globalDSRCFlux + globalCellularFlux);
+	double averageDownloadingRate = globalContentSize / globalDownloadingTime / 128.0; // measured in kbps
+	double directFluxRatio = globalDirectFlux / globalTotalFlux;
+	double relayFluxRatio = globalRelayFlux / globalTotalFlux;
+	double carryFluxRatio = globalCarryFlux / globalTotalFlux;
+	double cellularFluxRatio = globalCellularFlux / globalTotalFlux;
+	double redundantStorageRatio = globalStorageAmount / globalContentSize - 1.0;
 	double interruptedTimeRatio = globalInterruptedTime / globalConsumingTime;
 	double averageConsumptionStartingDelay = globalConsumptionStartingDelay / globalContentRequests;
 
-	recordScalar("DSRCFluxRatio", DSRCFluxRatio);
+	recordScalar("averageDownloadingRate", averageDownloadingRate);
+	recordScalar("directFluxRatio", directFluxRatio);
+	recordScalar("relayFluxRatio", relayFluxRatio);
+	recordScalar("carryFluxRatio", carryFluxRatio);
+	recordScalar("cellularFluxRatio", cellularFluxRatio);
+	recordScalar("redundantStorageRatio", redundantStorageRatio);
 	recordScalar("interruptedTimeRatio", interruptedTimeRatio);
 	recordScalar("averageConsumptionStartingDelay", averageConsumptionStartingDelay);
 
@@ -73,8 +91,9 @@ void ContentStatisticCollector::finish()
 	}
 	else
 	{
-		fout << globalContentRequests << ',' << globalParticipatingRSUNum << ',' << globalDSRCFlux << ',' << globalCellularFlux << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
-		fout << DSRCFluxRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;
+		fout << globalContentRequests << ',' << globalContentSize << ',' << globalConsumingTime << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
+		fout << averageDownloadingRate << ',' << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << ',' << cellularFluxRatio << ',';
+		fout << redundantStorageRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;
 	}
 	fout.close();
 

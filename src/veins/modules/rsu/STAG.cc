@@ -523,6 +523,8 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 									alternativeFlow += collisionArc->bandwidth[j] - collisionArc->flow[j];
 						}
 					}
+					if (std::find(chosenPaths[m].begin(), chosenPaths[m].end(), i) != chosenPaths[m].end() && std::find(chosenPaths[n].begin(), chosenPaths[n].end(), i) != chosenPaths[n].end())
+						alternativeFlow = -99999;
 					if (maxAlternativeFlow < alternativeFlow)
 					{
 						maxAlternativeFlow = alternativeFlow;

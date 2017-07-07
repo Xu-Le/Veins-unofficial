@@ -42,9 +42,12 @@ public:
 
 public:
 	static long globalContentRequests; ///< accumulated content request number in the whole simulation.
-	static long globalParticipatingRSUNum; ///< accumulated number of RSUs participated in the cooperative downloading process.
-	static double globalDSRCFlux; ///< accumulated amount of flux produced by DSRC approach.
-	static double globalCellularFlux; ///< accumulated amount of flux produced by cellular approach.
+	static long globalContentSize;  ///< accumulated content size measured in bytes in the whole simulation.
+	static double globalDirectFlux; ///< accumulated amount of flux measured in bytes produced by direct downloading approach.
+	static double globalRelayFlux;  ///< accumulated amount of flux measured in bytes produced by relay approach.
+	static double globalCarryFlux;  ///< accumulated amount of flux measured in bytes produced by carry-and-forward approach.
+	static double globalCellularFlux;  ///< accumulated amount of flux measured in bytes produced by cellular approach.
+	static double globalStorageAmount; ///< accumulated storage amount measured in bytes in all nodes, it is used to calculate redundant data amount.
 	static double globalConsumingTime; ///< accumulated total time cost in data consuming process.
 	static double globalDownloadingTime; ///< accumulated total time cost in cooperative downloading process.
 	static double globalInterruptedTime; ///< accumulated interrupted time in cooperative downloading process.

@@ -205,6 +205,7 @@ private:
 	std::list<SchemeTuple> rsuSchemeList; ///< describe how this RSU transmit in each slot.
 	std::list<SchemeTuple>::iterator itRSL; ///< an iterator used to iterate container rsuSchemeList.
 	SchemeItems schemeItemList; ///< describe how each vehicle transmit in each slot.
+	std::map<LAddress::L3Type, LAddress::L3Type> relays; ///< a map from a relay's identifier to its downloader's identifier.
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< an iterator used to traverse container downloaders.
 	std::map<LAddress::L3Type, CoDownloaderInfo*> coDownloaders; ///< a map from an co-downloader to its mobility and neighbor information.

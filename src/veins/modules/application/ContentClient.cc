@@ -33,7 +33,7 @@ void ContentClient::initialize(int stage)
 		cellularHeaderLength = baseStation->wirelessHeaderLength;
 		cellularBitsRate = baseStation->wirelessBitsRate;
 
-		startPlaying = false;
+		startConsuming = false;
 		cellularDownloading = false;
 		waitingDistribution = false;
 		encounteredDownloader = false;
@@ -137,11 +137,13 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 		dataMsg->setDownloader(itSL->downloader);
 		DownloaderInfo *downloaderInfo = downloaders[itSL->downloader];
 		// estimate transmission rate between self and downloader only taking relative distance into consideration
-		int distance = RoutingUtils::_length(curPosition, neighbors[itSL->receiver]->pos);
+		Coord &receiverPos = neighbors[itSL->receiver]->pos;
+		Coord &receiverSpeed = neighbors[itSL->receiver]->speed;
+		int distance = RoutingUtils::_length(curPosition, receiverPos);
 		ASSERT( distance < 250 );
 		int estimatedRate = ContentUtils::rateTable[distance/5];
 		EV << "estimated rate between myself and receiver [" << itSL->receiver << "] is " << 128*estimatedRate << " bytes per second.\n";
-		if (distance >= 200 && !downloaderInfo->notifiedLinkBreak)
+		if (distance > 200 && !downloaderInfo->notifiedLinkBreak && curSpeed.x*receiverSpeed.x > 0 && (curPosition.x - receiverPos.x)*curSpeed.x < 0)
 		{
 			EV << "the communication link between downloader and relay will break soon, notify downloader to report its downloading status to RSU.\n";
 			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
@@ -149,7 +151,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
 
 			notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_DR);
-			notifyMsg->setReceiver(itSL->downloader);
+			notifyMsg->setReceiver(itSL->receiver);
 			notifyMsg->setDownloader(itSL->downloader);
 
 			sendWSM(notifyMsg);
@@ -161,6 +163,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			dataMsg->setIsLast(false);
 			dataMsg->setBytesNum(relayApplBytesOnce);
 			// dataMsg->addBitLength(8*relayLinkBytesOnce);
+			ContentStatisticCollector::globalRelayFlux += relayApplBytesOnce;
 			relayPeriod = SimTime(relayLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
 			EV << "relay period is " << relayPeriod.dbl() << "s.\n";
 			if (simTime() + relayPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
@@ -191,6 +194,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
 			dataMsg->setBytesNum(lastPktAmount);
 			// dataMsg->addBitLength(8*totalLinkBytes);
+			ContentStatisticCollector::globalRelayFlux += lastPktAmount;
 			relayPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
 			EV << "relay period is " << relayPeriod.dbl() << "s.\n";
 			if (simTime() + relayPeriod - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
@@ -245,6 +249,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			dataMsg->setIsLast(endTransmission); // due to their opposite direction moving, it is 200 not 225
 			dataMsg->setBytesNum(relayApplBytesOnce);
 			// dataMsg->addBitLength(8*relayLinkBytesOnce);
+			ContentStatisticCollector::globalCarryFlux += relayApplBytesOnce;
 			distributeCDPeriod = SimTime(relayLinkBytesOnce*1024/estimatedRate*8, SIMTIME_US);
 			if (!endTransmission)
 				scheduleAt(simTime() + distributeCDPeriod, forwardEvt);
@@ -257,6 +262,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, headerLength/8, dataLengthBits/8);
 			dataMsg->setBytesNum(lastPktAmount);
 			// dataMsg->addBitLength(8*totalLinkBytes);
+			ContentStatisticCollector::globalCarryFlux += lastPktAmount;
 			distributeCDPeriod = SimTime(totalLinkBytes*1024/estimatedRate*8, SIMTIME_US);
 			downloaderInfo->distributedOffset += lastPktAmount;
 		}
@@ -291,16 +297,17 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 	}
 	case ContentClientMsgKinds::DATA_CONSUMPTION_EVT:
 	{
+		double sinceInterrupt = 0.0;
 		if (downloadingStatus.availableOffset - downloadingStatus.consumedOffset >= downloadingStatus.consumingRate)
 			downloadingStatus.consumedOffset += downloadingStatus.consumingRate;
 		else
 		{
+			sinceInterrupt = 1.0 - static_cast<double>(downloadingStatus.availableOffset-downloadingStatus.consumedOffset) / downloadingStatus.consumingRate;
 			if (downloadingStatus.availableOffset < downloadingStatus.totalContentSize) // set the interruption timer, fetch data through cellular approach if timeout
 			{
 				if (!cellularDownloading && !interruptTimeoutEvt->isScheduled())
 				{
-					double correctedTimeoutDuration = interruptTimeoutDuration.dbl() -
-							static_cast<double>(downloadingStatus.availableOffset-downloadingStatus.consumedOffset)/downloadingStatus.consumingRate;
+					double correctedTimeoutDuration = interruptTimeoutDuration.dbl() - sinceInterrupt;
 					scheduleAt(simTime() + correctedTimeoutDuration, interruptTimeoutEvt);
 					EV << "set interrupt timeout timer, its duration is " << correctedTimeoutDuration << "s.\n";
 				}
@@ -313,9 +320,9 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			scheduleAt(simTime() + SimTime(slotSpan, SIMTIME_MS), dataConsumptionEvt);
 		else // consuming process has finished, record statistic
 		{
-			downloadingStatus.consumingEndAt = simTime();
-			double totalInterruptedTime = downloadingStatus.consumingEndAt.dbl() - downloadingStatus.requestAt.dbl()
-					- downloadingStatus.totalContentSize/downloadingStatus.consumingRate - CACHE_TIME_BEFORE_PLAY;
+			startConsuming = false;
+			downloadingStatus.consumingEndAt = simTime() - sinceInterrupt;
+			double totalInterruptedTime = downloadingStatus.getInterruptedTime();
 			EV << "consuming process has finished, total interrupt time in consuming process is " << totalInterruptedTime << "s.\n";
 			ContentStatisticCollector::globalConsumingTime += downloadingStatus.consumingEndAt.dbl() - downloadingStatus.consumingBeginAt.dbl();
 			ContentStatisticCollector::globalInterruptedTime += totalInterruptedTime;
@@ -330,12 +337,9 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 	case ContentClientMsgKinds::INTERRUPT_TIMEOUT_EVT:
 	{
 		if (isInterruptTimeoutEvt)
-		{
 			EV << "data consuming process interruption is timeout, now fetching data from cellular network.\n";
-			ContentStatisticCollector::globalInterruptedTime += interruptTimeoutDuration.dbl();
-		}
 
-		CellularMessage *cellularMsg = new CellularMessage("cellular-open");
+		CellularMessage *cellularMsg = new CellularMessage("open", CellularMsgCC::TRANSMISSION_STARTING);
 		cellularMsg->setControlCode(CellularMsgCC::TRANSMISSION_STARTING);
 		cellularMsg->setDownloader(myAddr);
 		cellularMsg->setContentSize(downloadingStatus.totalContentSize);
@@ -380,10 +384,29 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 	ASSERT( cellularMsg->getControlCode() == CellularMsgCC::DATA_PACKET_NORMAL || cellularMsg->getControlCode() == CellularMsgCC::DATA_PACKET_LAST );
 	ASSERT( cellularMsg->getDownloader() == myAddr ); // sendDirect() ensure this being always true
 
+	if (downloadingStatus.availableOffset >= cellularMsg->getCurOffset())
+	{
+		EV << "current order of data is fully backward, expected start offset is " << downloadingStatus.availableOffset
+				<< " whereas actual end offset is " << cellularMsg->getCurOffset() << ", ignore it.\n";
+		delete cellularMsg;
+		cellularMsg = nullptr;
+		return;
+	}
+
 	downloadingStatus.availableOffset = cellularMsg->getCurOffset();
-	EV << "available offset updates to " << downloadingStatus.availableOffset << " bytes.\n";
 	downloadingStatus.itS = downloadingStatus.segments.begin();
 	downloadingStatus.itS->second = downloadingStatus.availableOffset;
+	EV << "available offset updates to " << downloadingStatus.availableOffset << " bytes.\n";
+
+	// check whether the vedio play starting condition is satisfied
+	if (!startConsuming && downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate)
+	{
+		EV << "cached data amount is enough, start consuming process.\n";
+		startConsuming = true;
+		downloadingStatus.consumingBeginAt = simTime();
+		ContentStatisticCollector::globalConsumptionStartingDelay += downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl();
+		scheduleAt(simTime(), dataConsumptionEvt);
+	}
 
 	if (cellularMsg->getControlCode() == CellularMsgCC::DATA_PACKET_LAST) // it is the last data packet, indicating current segment downloading progress has finished
 	{
@@ -402,7 +425,7 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 			{
 				EV << "downloading process has not finished, continue to fetch data from cellular network.\n";
 
-				CellularMessage *requestMsg = new CellularMessage("cellular-open");
+				CellularMessage *requestMsg = new CellularMessage("open", CellularMsgCC::TRANSMISSION_STARTING);
 				requestMsg->setControlCode(CellularMsgCC::TRANSMISSION_STARTING);
 				requestMsg->setDownloader(myAddr);
 				requestMsg->setContentSize(downloadingStatus.totalContentSize);
@@ -421,23 +444,29 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 			else
 			{
 				EV << "downloading process has finished, response a message to base station.\n";
-				CellularMessage *responseMsg = new CellularMessage("cellular-close");
+				CellularMessage *responseMsg = new CellularMessage("completion", CellularMsgCC::DOWNLOADING_COMPLETING);
 				responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
 				responseMsg->setDownloader(myAddr);
 				responseMsg->addBitLength(cellularHeaderLength);
 				sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 				cellularDownloading = false;
+				// record statistic
+				downloadingStatus.completeAt = simTime();
+				ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
 			}
 		}
 		else if (downloadingStatus.availableOffset == downloadingStatus.totalContentSize)
 		{
 			EV << "downloading process has finished, response a message to base station.\n";
-			CellularMessage *responseMsg = new CellularMessage("cellular-close");
+			CellularMessage *responseMsg = new CellularMessage("completion", CellularMsgCC::DOWNLOADING_COMPLETING);
 			responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
 			responseMsg->setDownloader(myAddr);
 			responseMsg->addBitLength(cellularHeaderLength);
 			sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 			cellularDownloading = false;
+			// record statistic
+			downloadingStatus.completeAt = simTime();
+			ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
 		}
 	}
 	delete cellularMsg;
@@ -446,9 +475,30 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 
 void ContentClient::onBeacon(BeaconMessage *beaconMsg)
 {
+	BaseWaveApplLayer::onBeacon(beaconMsg);
+
 	LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
 
-	BaseWaveApplLayer::onBeacon(beaconMsg);
+	/*
+	if (!downloaders.empty() && (itDL = downloaders.find(sender)) != downloaders.end() && itDL->second->notifiedLinkBreak == false)
+	{
+		if (itDL->second->myRole == RELAY && RoutingUtils::_length(curPosition, beaconMsg->getSenderPos()) > 200.0)
+		{
+			EV << "the communication link between downloader and relay will break soon, notify downloader to report its downloading status to RSU.\n";
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
+
+			notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_DR);
+			notifyMsg->setReceiver(sender);
+			notifyMsg->setDownloader(sender);
+
+			sendWSM(notifyMsg);
+
+			itDL->second->notifiedLinkBreak = true;
+		}
+	}
+	*/
 
 	if (sender == carriedDownloader && encounteredDownloader == false) // carrier come across downloader
 	{
@@ -506,6 +556,8 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			{
 				EV << "RSU is distributing data to another downloader, report my downloading status at " << contentMsg->getReportAt().dbl() << "s.\n";
 				scheduleAt(contentMsg->getReportAt(), reportStatusEvt);
+				if (contentMsg->getReportAt() - simTime() < SimTime(4, SIMTIME_S))
+					cancelEvent(requestTimeoutEvt);
 			}
 		}
 		else
@@ -522,13 +574,16 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			if (itDLI->first != myAddr)
 			{
 				acceptSchemeItems = true;
-				if ( downloaders.find(itDLI->first) != downloaders.end() ) // update old record
-					EV << "    downloader [" << itDLI->first << "] is an old downloader, do nothing.\n";
+				if ((itDL = downloaders.find(itDLI->first)) != downloaders.end()) // update old record
+				{
+					EV << "    downloader [" << itDLI->first << "] is an old downloader, update its info.\n";
+					itDL->second->myRole = (itDLI->second.x * curSpeed.x > 0 && neighbors.find(itDLI->first) == neighbors.end()) ? STRANGER : RELAY;
+				}
 				else // insert new record
 				{
 					EV << "    downloader [" << itDLI->first << "] is a new downloader, insert its info.\n";
 					downloaderInfo = new DownloaderInfo(contentMsg->getContentSize());
-					downloaderInfo->myRole = (neighbors.find(itDLI->first) == neighbors.end() && itDLI->second.x * curSpeed.x > 0) ? STRANGER : RELAY;
+					downloaderInfo->myRole = (itDLI->second.x * curSpeed.x > 0 && neighbors.find(itDLI->first) == neighbors.end()) ? STRANGER : RELAY;
 					downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(itDLI->first, downloaderInfo));
 				}
 			}
@@ -565,7 +620,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			EV << "downloader [" << downloader << "]'s acknowledged offset updates to " << contentMsg->getReceivedOffset() << std::endl;
 			downloaders[downloader]->acknowledgedOffset = contentMsg->getReceivedOffset();
 			// help to rebroadcast acknowledge message, for downloader might has driven away RSU's communication area
-			if (simTime() - prevSlotStartTime < SimTime(3*slotSpan/2, SIMTIME_MS))
+			if (simTime() - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
 			{
 				EV << "I am the relay in the last slot, thus help to rebroadcast acknowledge message.\n";
 				ContentMessage *dupAckMsg = new ContentMessage(*contentMsg);
@@ -745,7 +800,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 
 			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
 			ASSERT( wsm != nullptr );
-			if (neighbors.find(downloader) != neighbors.end())
+			if ((itN = neighbors.find(downloader)) != neighbors.end() && RoutingUtils::_length(curPosition, itN->second->pos) < 225.0)
 			{
 				EV << "I'm still a neighbor of the target downloader, response yes to cooperative RSU.\n";
 
@@ -864,12 +919,14 @@ void ContentClient::onData(DataMessage *dataMsg)
 						<< " whereas actual start offset is " << dataStartOffset << ", end offset is " << dataEndOffset << ", ignore it.\n";
 			}
 		}
-		if (interruptTimeoutEvt->isScheduled() && downloadingStatus.availableOffset - downloadingStatus.consumedOffset >= downloadingStatus.consumingRate)
+		if (downloadingStatus.availableOffset > downloadingStatus.consumedOffset)
 		{
-			SimTime sinceInterrupt = simTime() - interruptTimeoutEvt->getSendingTime();
-			ContentStatisticCollector::globalInterruptedTime += sinceInterrupt.dbl();
-			EV << "cached data is adequate again, cancel the interrupt timer which elapsed " << sinceInterrupt.dbl() << "s.\n";
-			cancelEvent(interruptTimeoutEvt);
+			if (downloadingStatus.availableOffset - downloadingStatus.consumedOffset >= downloadingStatus.consumingRate && interruptTimeoutEvt->isScheduled())
+			{
+				SimTime sinceInterrupt = simTime() - interruptTimeoutEvt->getSendingTime();
+				EV << "cached data is adequate again, cancel the interrupt timer which elapsed " << sinceInterrupt.dbl() << "s.\n";
+				cancelEvent(interruptTimeoutEvt);
+			}
 
 			_closeCellularConnection();
 		}
@@ -878,13 +935,13 @@ void ContentClient::onData(DataMessage *dataMsg)
 		{
 			// check whether the vedio play starting condition is satisified, note this judgement is checked
 			// when a transmission process has just finish for offsets synchronous computation purpose
-			if (downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate && !startPlaying)
+			if (!startConsuming && downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate)
 			{
 				EV << "cached data amount is enough, start consuming process.\n";
-				startPlaying = true;
+				startConsuming = true;
 				downloadingStatus.consumingBeginAt = simTime();
 				ContentStatisticCollector::globalConsumptionStartingDelay += downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl();
-				scheduleAt(simTime() + SimTime(slotSpan, SIMTIME_MS), dataConsumptionEvt);
+				scheduleAt(simTime(), dataConsumptionEvt);
 			}
 
 			if (downloadingStatus.availableOffset < downloadingStatus.totalContentSize)
@@ -942,7 +999,7 @@ void ContentClient::onData(DataMessage *dataMsg)
 		{
 			EV << "I'm the relay this data message aimed at, cooperative cache data for downloader [" << dataMsg->getDownloader() << "].\n";
 
-			_cacheDataSegment(downloader, dataMsg->getCurOffset() - dataMsg->getBytesNum(), dataMsg->getCurOffset());
+			_cacheDataSegment(downloader, dataStartOffset, dataEndOffset);
 		}
 		else
 			EV << "I'm not the relay this data message aimed at, ignore it.\n";
@@ -954,7 +1011,7 @@ void ContentClient::onData(DataMessage *dataMsg)
 		{
 			EV << "I'm the carrier this data message aimed at, cooperative cache data for downloader [" << dataMsg->getDownloader() << "].\n";
 
-			_cacheDataSegment(downloader, dataMsg->getCurOffset() - dataMsg->getBytesNum(), dataMsg->getCurOffset());
+			_cacheDataSegment(downloader, dataStartOffset, dataEndOffset);
 
 			if (dataMsg->getIsLast())
 			{
@@ -978,6 +1035,12 @@ void ContentClient::onData(DataMessage *dataMsg)
 
 void ContentClient::callContent(int size)
 {
+	if (downloadingStatus.consumedOffset < downloadingStatus.totalContentSize)
+	{
+		EV_WARN << "haven't finished the previous consuming process, cancel this content request.\n";
+		return;
+	}
+
 	// create message by factory method
 	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
 	ASSERT( wsm != nullptr );
@@ -991,7 +1054,7 @@ void ContentClient::callContent(int size)
 
 	downloadingStatus.reset();
 	downloadingStatus.totalContentSize = size;
-	downloadingStatus.consumingRate = VideoQuailty::_VGA;
+	downloadingStatus.consumingRate = VideoQuailty::_480P;
 	downloadingStatus.requestAt = simTime();
 	ASSERT( downloadingStatus.totalContentSize > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate );
 
@@ -1004,6 +1067,7 @@ void ContentClient::callContent(int size)
 
 	sendWSM(contentMessage);
 	++ContentStatisticCollector::globalContentRequests;
+	ContentStatisticCollector::globalContentSize += size;
 
 	scheduleAt(simTime() + requestTimeoutDuration, requestTimeoutEvt);
 	EV << "set request timeout timer, its duration is " << requestTimeoutDuration.dbl() << "s.\n";
@@ -1026,6 +1090,7 @@ void ContentClient::_cacheDataSegment(const int downloader, const int startOffse
 	}
 	ASSERT( downloaderInfo->cacheOffset->begin < endOffset );
 	downloaderInfo->cacheOffset->end = endOffset;
+	ContentStatisticCollector::globalStorageAmount += endOffset - startOffset;
 	EV << "current segment end offset updates to " << downloaderInfo->cacheOffset->end << " bytes.\n";
 }
 
@@ -1173,7 +1238,7 @@ void ContentClient::_closeCellularConnection()
 	{
 		EV << "close cellular connection.\n";
 
-		CellularMessage *cellularMsg = new CellularMessage("cellular-close");
+		CellularMessage *cellularMsg = new CellularMessage("close", CellularMsgCC::TRANSMISSION_ENDING);
 		cellularMsg->setControlCode(CellularMsgCC::TRANSMISSION_ENDING);
 		cellularMsg->setDownloader(myAddr);
 		cellularMsg->addBitLength(cellularHeaderLength);
@@ -1187,7 +1252,6 @@ void ContentClient::_closeCellularConnection()
 void ContentClient::DownloadingInfo::reset()
 {
 	totalContentSize = availableOffset = consumedOffset = consumingRate = 0;
-	interruptAt = SimTime::ZERO;
 	consumingEndAt = consumingBeginAt = completeAt = requestAt = SimTime::ZERO;
 	segments.clear();
 	segments.push_back(std::pair<int, int>(0, 0));
@@ -1293,3 +1357,7 @@ void ContentClient::DownloadingInfo::lackSegment(Segment *lackOffsets)
 	delete ackOffsets;
 }
 
+double ContentClient::DownloadingInfo::getInterruptedTime()
+{
+	return consumingEndAt.dbl() - consumingBeginAt.dbl() - static_cast<double>(totalContentSize)/consumingRate;
+}
