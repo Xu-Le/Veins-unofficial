@@ -238,7 +238,11 @@ void ContentServer::handleRSUIncomingMsg(WiredMessage *rsuMsg, int rsuIdx)
 	{
 		EV << "it is a complete downloading message.\n";
 		// release resources corresponding to this downloader
-		downloaders.erase(downloader);
+		if ((itDL = downloaders.find(downloader)) != downloaders.end())
+		{
+			delete itDL->second;
+			downloaders.erase(itDL);
+		}
 	}
 }
 
@@ -282,6 +286,10 @@ void ContentServer::handleLTEIncomingMsg(WiredMessage *lteMsg)
 	{
 		EV << "it is a complete downloading message.\n";
 		// release resources corresponding to this downloader
-		downloaders.erase(downloader);
+		if ((itDL = downloaders.find(downloader)) != downloaders.end())
+		{
+			delete itDL->second;
+			downloaders.erase(itDL);
+		}
 	}
 }

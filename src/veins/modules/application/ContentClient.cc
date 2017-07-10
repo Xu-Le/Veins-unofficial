@@ -38,6 +38,8 @@ void ContentClient::initialize(int stage)
 		waitingDistribution = false;
 		encounteredDownloader = false;
 		carriedDownloader = -1;
+		brokenDownloader = -1;
+		rebroadcastDownloader = -1;
 
 		slotSpan = par("slotSpan").longValue();
 		prevSlotStartTime = SimTime::ZERO;
@@ -60,6 +62,7 @@ void ContentClient::initialize(int stage)
 		interruptTimeoutEvt = new cMessage("interrupt timeout evt", ContentClientMsgKinds::INTERRUPT_TIMEOUT_EVT);
 		interruptTimeoutEvt->setSchedulingPriority(1); // ensure data consumption event scheduled first to avoid rescheduling interrupt timeout event
 		linkBrokenEvt = new cMessage("link broken evt", ContentClientMsgKinds::LINK_BROKEN_EVT);
+		rebroadcastBeaconEvt = new cMessage("rebroadcast beacon evt", ContentClientMsgKinds::REBROADCAST_BEACON_EVT);
 	}
 }
 
@@ -78,6 +81,7 @@ void ContentClient::finish()
 	cancelAndDelete(requestTimeoutEvt);
 	cancelAndDelete(interruptTimeoutEvt);
 	cancelAndDelete(linkBrokenEvt);
+	cancelAndDelete(rebroadcastBeaconEvt);
 
 	BaseWaveApplLayer::finish();
 }
@@ -93,7 +97,7 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 		if (downloaders.find(itSL->downloader) == downloaders.end())
 		{
 			EV << "communication link with this downloader has broken, skip current planned scheme.\n";
-			_prepareSchemeSwitch();
+			schemeList.clear();
 			return;
 		}
 
@@ -128,6 +132,12 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			}
 			return;
 		}
+		if ((itN = neighbors.find(itSL->receiver)) == neighbors.end())
+		{
+			EV << "receiver [" << itSL->receiver << "] is disconnected.\n";
+			_prepareSchemeSwitch();
+			return;
+		}
 
 		WaveShortMessage *wsm = prepareWSM("data", dataLengthBits, dataOnSch ? t_channel::type_SCH : t_channel::type_CCH, dataPriority, -1);
 		ASSERT( wsm != nullptr );
@@ -137,8 +147,8 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 		dataMsg->setDownloader(itSL->downloader);
 		DownloaderInfo *downloaderInfo = downloaders[itSL->downloader];
 		// estimate transmission rate between self and downloader only taking relative distance into consideration
-		Coord &receiverPos = neighbors[itSL->receiver]->pos;
-		Coord &receiverSpeed = neighbors[itSL->receiver]->speed;
+		Coord &receiverPos = itN->second->pos;
+		Coord &receiverSpeed = itN->second->speed;
 		int distance = RoutingUtils::_length(curPosition, receiverPos);
 		ASSERT( distance < 250 );
 		int estimatedRate = ContentUtils::rateTable[distance/5];
@@ -369,7 +379,16 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 
 		sendWSM(notifyMsg);
 
-		downloaders.erase(brokenDownloader);
+		if ((itDL = downloaders.find(brokenDownloader)) != downloaders.end())
+		{
+			delete itDL->second;
+			downloaders.erase(itDL);
+		}
+		break;
+	}
+	case ContentClientMsgKinds::REBROADCAST_BEACON_EVT:
+	{
+		rebroadcastDownloader = -1;
 		break;
 	}
 	default:
@@ -410,7 +429,6 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 
 	if (cellularMsg->getControlCode() == CellularMsgCC::DATA_PACKET_LAST) // it is the last data packet, indicating current segment downloading progress has finished
 	{
-		SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 		if (downloadingStatus.segmentNum > 1)
 		{
 			downloadingStatus.itD = downloadingStatus.segments.begin();
@@ -438,35 +456,22 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 				else
 					requestMsg->setEndOffset(downloadingStatus.totalContentSize);
 				requestMsg->addBitLength(cellularHeaderLength);
+				SimTime transmissionDelay(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US);
 				sendDirect(requestMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 				cellularDownloading = true;
 			}
 			else
 			{
 				EV << "downloading process has finished, response a message to base station.\n";
-				CellularMessage *responseMsg = new CellularMessage("completion", CellularMsgCC::DOWNLOADING_COMPLETING);
-				responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
-				responseMsg->setDownloader(myAddr);
-				responseMsg->addBitLength(cellularHeaderLength);
-				sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
-				cellularDownloading = false;
-				// record statistic
-				downloadingStatus.completeAt = simTime();
-				ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
+
+				_notifyDownloadingCompletion();
 			}
 		}
 		else if (downloadingStatus.availableOffset == downloadingStatus.totalContentSize)
 		{
 			EV << "downloading process has finished, response a message to base station.\n";
-			CellularMessage *responseMsg = new CellularMessage("completion", CellularMsgCC::DOWNLOADING_COMPLETING);
-			responseMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
-			responseMsg->setDownloader(myAddr);
-			responseMsg->addBitLength(cellularHeaderLength);
-			sendDirect(responseMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
-			cellularDownloading = false;
-			// record statistic
-			downloadingStatus.completeAt = simTime();
-			ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
+
+			_notifyDownloadingCompletion();
 		}
 	}
 	delete cellularMsg;
@@ -513,6 +518,20 @@ void ContentClient::onBeacon(BeaconMessage *beaconMsg)
 		encounterMsg->setDownloader(carriedDownloader);
 
 		sendWSM(encounterMsg);
+	}
+
+	if (sender == rebroadcastDownloader)
+	{
+		WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+		ASSERT( wsm != nullptr );
+		ContentMessage *rebroadcastMsg = dynamic_cast<ContentMessage*>(wsm);
+
+		rebroadcastMsg->setControlCode(ContentMsgCC::REBROADCAST_BEACON);
+		rebroadcastMsg->setDownloader(sender);
+		rebroadcastMsg->setPosition(beaconMsg->getSenderPos());
+		rebroadcastMsg->setSpeed(beaconMsg->getSenderSpeed());
+
+		sendWSM(rebroadcastMsg);
 	}
 }
 
@@ -698,7 +717,11 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 	case ContentMsgCC::DOWNLOADING_COMPLETED:
 	{
 		EV << "    downloader [" << downloader << "]'s downloading process has completed, erase its info.\n";
-		downloaders.erase(downloader);
+		if ((itDL = downloaders.find(downloader)) != downloaders.end())
+		{
+			delete itDL->second;
+			downloaders.erase(itDL);
+		}
 		// help to rebroadcast completion message, for downloader might has driven away RSU's communication area
 		if (simTime() - prevSlotStartTime < SimTime(3*slotSpan/2, SIMTIME_MS))
 		{
@@ -792,6 +815,16 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 		EV << "it is a link broken notification sent by another relay, ignore it.\n";
 		break;
 	}
+	case ContentMsgCC::DOWNLOADER_DISCOVERY:
+	{
+		if (downloader == myAddr)
+		{
+			EV << "I'm the downloader discovered by cooperative RSU, report my status to it.\n";
+
+			_reportDownloadingStatus2(ContentMsgCC::DISCOVERY_RESPONSE, contentMsg->getSenderAddress());
+		}
+		break;
+	}
 	case ContentMsgCC::RELAY_DISCOVERY:
 	{
 		if (contentMsg->getReceiver() == myAddr)
@@ -834,24 +867,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 		{
 			EV << "it is a downloading status query message aims to me, report my status to it.\n";
 
-			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-			ASSERT( wsm != nullptr );
-			ContentMessage *reportMsg = dynamic_cast<ContentMessage*>(wsm);
-
-			reportMsg->setControlCode(ContentMsgCC::STATUS_QUERY);
-			reportMsg->setReceiver(contentMsg->getSenderAddress());
-			reportMsg->setDownloader(downloader);
-			reportMsg->setReceivedOffset(downloadingStatus.availableOffset);
-			reportMsg->setConsumedOffset(downloadingStatus.consumedOffset);
-			reportMsg->setConsumingRate(downloadingStatus.consumingRate);
-			EV << "consumed offset: " << downloadingStatus.consumedOffset << ", available offsets: ";
-			downloadingStatus.lackSegment(&reportMsg->getLackOffset());
-			EV << "lacking offsets: ";
-			reportMsg->getLackOffset().print();
-			reportMsg->setPosition(curPosition);
-			reportMsg->setSpeed(curSpeed);
-
-			sendWSM(reportMsg);
+			_reportDownloadingStatus2(ContentMsgCC::STATUS_QUERY, contentMsg->getSenderAddress());
 		}
 		else if (contentMsg->getReceiver() == myAddr)
 		{
@@ -861,9 +877,16 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			responseMsg->setSenderAddress(myAddr);
 			responseMsg->setControlCode(ContentMsgCC::DISCOVERY_RESPONSE);
 			responseMsg->setReceiver(myAddr); // RSU doesn't check this and other vehicles ignore this kind of control code, so it is safe
-			responseMsg->setDownloader(downloader);
-			responseMsg->getNeighbors().push_back(downloader);
 			sendWSM(responseMsg);
+
+			if (contentMsg->getReceivedOffset() < contentMsg->getContentSize())
+			{
+				rebroadcastDownloader = downloader;
+				if (!rebroadcastBeaconEvt->isScheduled())
+					scheduleAt(simTime() + SimTime(5, SIMTIME_S), rebroadcastBeaconEvt);
+			}
+			else
+				EV << "    downloader [" << downloader << "]'s downloading process has completed, don't rebroadcast its beacon message.\n";
 		}
 		else
 			EV << "it is a downloading status query message which is unrelated to me, ignore it.\n";
@@ -872,6 +895,11 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 	case ContentMsgCC::STATUS_REPORT:
 	{
 		EV << "it is a downloading status report message aims to RSU, ignore it.\n";
+		break;
+	}
+	case ContentMsgCC::REBROADCAST_BEACON:
+	{
+		EV << "it is a rebroadcast beacon message aims to RSU, ignore it.\n";
 		break;
 	}
 	default:
@@ -968,18 +996,8 @@ void ContentClient::onData(DataMessage *dataMsg)
 		if (downloadingStatus.availableOffset == downloadingStatus.totalContentSize)
 		{
 			EV << "downloading process has finished, response an completion message.\n";
-			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-			ASSERT( wsm != nullptr );
-			ContentMessage *completionMsg = dynamic_cast<ContentMessage*>(wsm);
 
-			completionMsg->setControlCode(ContentMsgCC::DOWNLOADING_COMPLETED);
-			completionMsg->setDownloader(downloader);
-
-			sendWSM(completionMsg);
-
-			// record statistic
-			downloadingStatus.completeAt = simTime();
-			ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
+			_notifyDownloadingCompletion();
 		}
 		return;
 	}
@@ -1017,6 +1035,7 @@ void ContentClient::onData(DataMessage *dataMsg)
 			{
 				EV << "receiving process is finished, start paying attention to downloader's beacon message.\n";
 				carriedDownloader = downloader;
+				encounteredDownloader = false;
 			}
 		}
 		else
@@ -1076,6 +1095,8 @@ void ContentClient::callContent(int size)
 void ContentClient::_cacheDataSegment(const int downloader, const int startOffset, const int endOffset)
 {
 	DownloaderInfo *downloaderInfo = downloaders[downloader];
+	if (endOffset < downloaderInfo->cacheOffset->end)
+		return;
 	if (downloaderInfo->cacheOffset->begin == -1) // only the first received segment meets this condition
 	{
 		downloaderInfo->cacheOffset->begin = startOffset;
@@ -1088,7 +1109,6 @@ void ContentClient::_cacheDataSegment(const int downloader, const int startOffse
 		downloaderInfo->cacheOffset->begin = startOffset;
 		EV << "receiving an advanced segment, its start offset is " << downloaderInfo->cacheOffset->begin << " bytes.\n";
 	}
-	ASSERT( downloaderInfo->cacheOffset->begin < endOffset );
 	downloaderInfo->cacheOffset->end = endOffset;
 	ContentStatisticCollector::globalStorageAmount += endOffset - startOffset;
 	EV << "current segment end offset updates to " << downloaderInfo->cacheOffset->end << " bytes.\n";
@@ -1232,6 +1252,30 @@ void ContentClient::_reportDownloadingStatus(const int contentMsgCC, const LAddr
 	sendWSM(reportMsg);
 }
 
+void ContentClient::_reportDownloadingStatus2(const int contentMsgCC, const LAddress::L3Type receiver)
+{
+	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+	ASSERT( wsm != nullptr );
+	ContentMessage *reportMsg = dynamic_cast<ContentMessage*>(wsm);
+
+	reportMsg->setControlCode(contentMsgCC);
+	reportMsg->setReceiver(receiver);
+	reportMsg->setDownloader(myAddr);
+	reportMsg->setContentSize(downloadingStatus.totalContentSize);
+	reportMsg->setReceivedOffset(downloadingStatus.availableOffset);
+	reportMsg->setConsumedOffset(downloadingStatus.consumedOffset);
+	reportMsg->setConsumingRate(downloadingStatus.consumingRate);
+	EV << "consumed offset: " << downloadingStatus.consumedOffset << ", available offsets: ";
+	downloadingStatus.lackSegment(&reportMsg->getLackOffset());
+	EV << "lacking offsets: ";
+	reportMsg->getLackOffset().print();
+	reportMsg->setPosition(curPosition);
+	reportMsg->setSpeed(curSpeed);
+	reportMsg->getNeighbors().push_back(myAddr);
+
+	sendWSM(reportMsg);
+}
+
 void ContentClient::_closeCellularConnection()
 {
 	if (cellularDownloading)
@@ -1246,6 +1290,35 @@ void ContentClient::_closeCellularConnection()
 		sendDirect(cellularMsg, SimTime::ZERO, transmissionDelay, baseStationGate);
 		cellularDownloading = false; // calling _closeCellularConnection() more than once is safe
 	}
+}
+
+void ContentClient::_notifyDownloadingCompletion()
+{
+	cancelEvent(interruptTimeoutEvt);
+
+	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+	ASSERT( wsm != nullptr );
+	ContentMessage *completionMsg = dynamic_cast<ContentMessage*>(wsm);
+
+	completionMsg->setControlCode(ContentMsgCC::DOWNLOADING_COMPLETED);
+	completionMsg->setReceiver(LAddress::L3BROADCAST());
+	completionMsg->setDownloader(myAddr);
+
+	sendWSM(completionMsg);
+
+	if (cellularDownloading)
+	{
+		CellularMessage *notifyMsg = new CellularMessage("completion", CellularMsgCC::DOWNLOADING_COMPLETING);
+		notifyMsg->setControlCode(CellularMsgCC::DOWNLOADING_COMPLETING);
+		notifyMsg->setDownloader(myAddr);
+		notifyMsg->addBitLength(cellularHeaderLength);
+		sendDirect(notifyMsg, SimTime::ZERO, SimTime(1000*cellularHeaderLength/(cellularBitsRate/1000), SIMTIME_US), baseStationGate);
+		cellularDownloading = false;
+	}
+
+	// record statistic
+	downloadingStatus.completeAt = simTime();
+	ContentStatisticCollector::globalDownloadingTime += downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl();
 }
 
 /////////////////////////    internal class implementations    /////////////////////////

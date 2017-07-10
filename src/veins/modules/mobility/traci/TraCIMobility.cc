@@ -127,7 +127,7 @@ void TraCIMobility::finish()
 {
 	statistics.stopTime = simTime();
 
-	statistics.recordScalars(*this);
+	// statistics.recordScalars(*this);
 
 	cancelAndDelete(startAccidentMsg);
 	cancelAndDelete(stopAccidentMsg);

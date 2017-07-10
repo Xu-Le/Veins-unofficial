@@ -102,6 +102,9 @@ private:
 	void _sendCooperativeNotification(const LAddress::L3Type downloader, ContentMessage *reportMsg);
 	///@}
 
+	/** @brief erase the downloader safely to avoid memory leak. */
+	void __eraseDownloader(const LAddress::L3Type downloader);
+
 private:
 	/** @brief The class to store downloader's information. */
 	class DownloaderInfo
@@ -171,6 +174,7 @@ private:
 
 	/** @name carrier related variables. */
 	///@{
+	bool noticeDownloaderEntering; ///< pay attention to the event that the co-downloader enters RSU's communication range.
 	bool noticeRelayEntering; ///< pay attention to the event that the neighbor of co-downloader enters RSU's communication range.
 	///@}
 

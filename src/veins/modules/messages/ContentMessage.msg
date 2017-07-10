@@ -32,10 +32,12 @@ enum ContentMsgCC {
 	LINK_BREAK_DR,         ///< link break notify - the communication link between downloader and relay will break soon;
 	LINK_BREAK_RR,         ///< link break notify - the communication link between relay and RSU will break soon;
 	LINK_BROKEN_DR,        ///< link broken notify - the communication link between downloader and relay has broken already;
+	DOWNLOADER_DISCOVERY,  ///< cooperative RSU's discover notification sends to the entering co-downloader;
 	RELAY_DISCOVERY,       ///< cooperative RSU's discover notification sends to the first entering relay;
 	DISCOVERY_RESPONSE,    ///< the first entering relay response to cooperative RSU's discover notification;
 	STATUS_QUERY,          ///< query downloading status of downloader,
-	STATUS_REPORT          ///< report downloading status to RSU (used only in multi-downloader scenarios).
+	STATUS_REPORT,         ///< report downloading status to RSU (used only in multi-downloader scenarios);
+	REBROADCAST_BEACON     ///< rebroadcast co-downloader's beacon message to ensure co-RSU knows the latest position of the co-downloader.
 };
 
 class SchemeTuple
@@ -45,7 +47,7 @@ public:
 	SchemeTuple(int s, int r, int d, int a) : slot(s), receiver(r), downloader(d), amount(a), _offset(), offset(&_offset) {}
 	SchemeTuple(const SchemeTuple& rhs) : slot(rhs.slot), receiver(rhs.receiver), downloader(rhs.downloader), amount(rhs.amount)
 	{
-		_offset.assign(&rhs._offset);
+		_offset = rhs._offset;
 		offset = &_offset;
 	}
 
@@ -57,7 +59,7 @@ public:
 		receiver = rhs.receiver;
 		downloader = rhs.downloader;
 		amount = rhs.amount;
-		_offset.assign(&rhs._offset);
+		_offset = rhs._offset;
 		offset = &_offset;
 		return *this;
 	}

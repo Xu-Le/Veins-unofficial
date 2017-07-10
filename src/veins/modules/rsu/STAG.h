@@ -115,7 +115,8 @@ public:
 		struct Arc *lastArc;  ///< last out degree arc of this node.
 	};
 
-	STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable, std::map<int, int>& _demandingAmountTable);
+	STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray,
+			std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable, std::map<int, int>& _demandingAmountTable);
 	~STAG();
 
 	/** @name regular methods of STAG. */
@@ -178,6 +179,7 @@ public:
 	public:
 		FluxScheme() : slot(-1), dest(-1), downloader(-1), flow(-1), segment() {}
 		FluxScheme(int s, int r, int d, int a) : slot(s), dest(r), downloader(d), flow(a), segment() {}
+		FluxScheme(const FluxScheme& rhs) : slot(rhs.slot), dest(rhs.dest), downloader(rhs.downloader), flow(rhs.flow) { segment = rhs.segment; }
 
 		FluxScheme& operator=(const FluxScheme& rhs)
 		{
@@ -187,7 +189,7 @@ public:
 			dest = rhs.dest;
 			downloader = rhs.downloader;
 			flow = rhs.flow;
-			segment.assign(&rhs.segment);
+			segment = rhs.segment;
 			return *this;
 		}
 

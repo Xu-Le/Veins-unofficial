@@ -29,9 +29,15 @@ import org.car2x.veins.nodes.RSU;
 network scenario extends Scenario
 {
 	parameters:
-		int numRSU = 2; // number of RSUs
+		int numRSU = 5; // number of RSUs
 
 	submodules:
+		warningCollector: WarningStatisticCollector {
+			@display("p=600,24");
+		}
+		contentCollector: ContentStatisticCollector {
+		    @display("p=750,24");
+		}
 		BS: BaseStation {
 			@display("p=900,24");
 		}
@@ -45,12 +51,6 @@ network scenario extends Scenario
 		}
 		dummyRSU: DummyRSU {
 		    @display("p=$posX,$posY");
-		}
-		warningCollector: WarningStatisticCollector {
-			@display("p=600,24");
-		}
-		contentCollector: ContentStatisticCollector {
-		    @display("p=750,24");
 		}
 
 	connections:

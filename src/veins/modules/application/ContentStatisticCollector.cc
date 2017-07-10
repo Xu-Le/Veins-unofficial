@@ -38,7 +38,15 @@ void ContentStatisticCollector::initialize(int stage)
 	cComponent::initialize(stage);
 
 	if (stage == 0)
+	{
 		EV << "ContentStatisticCollector::initialize() called.\n";
+
+		srand(1);
+		slotNum = par("slotNum").longValue();
+		contentSize = par("contentSize").longValue();
+		contentQuality = par("contentQuality").longValue();
+		cellularRate = par("cellularRate").longValue();
+	}
 }
 
 void ContentStatisticCollector::finish()
@@ -91,6 +99,7 @@ void ContentStatisticCollector::finish()
 	}
 	else
 	{
+		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << cellularRate << ',';
 		fout << globalContentRequests << ',' << globalContentSize << ',' << globalConsumingTime << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
 		fout << averageDownloadingRate << ',' << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << ',' << cellularFluxRatio << ',';
 		fout << redundantStorageRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;

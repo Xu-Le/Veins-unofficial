@@ -229,7 +229,11 @@ void BaseStation::handleWirelessIncomingMsg(CellularMessage *cellularMsg)
 		wiredMsg->addBitLength(wiredHeaderLength);
 		sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
 		// release ourself resources corresponding to this downloader
-		downloaders.erase(downloader);
+		if ((itDL = downloaders.find(downloader)) != downloaders.end())
+		{
+			delete itDL->second;
+			downloaders.erase(itDL);
+		}
 	}
 	delete cellularMsg;
 	cellularMsg = nullptr;

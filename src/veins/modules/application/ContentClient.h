@@ -51,6 +51,7 @@ public:
 		REQUEST_TIMEOUT_EVT,
 		INTERRUPT_TIMEOUT_EVT,
 		LINK_BROKEN_EVT,
+		REBROADCAST_BEACON_EVT,
 		LAST_CONTENT_CLIENT_MESSAGE_KIND
 	};
 
@@ -95,8 +96,12 @@ private:
 	void _correctPlannedOffset();
 	/** @brief filling downloading status report message, and then send it to RSU. */
 	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver);
+	/** @brief filling downloading status report message, and then send it to RSU. */
+	void _reportDownloadingStatus2(const int contentMsgCC, const LAddress::L3Type receiver);
 	/** @brief cut off cellular connection, stop downloading data from cellular network. */
 	void _closeCellularConnection();
+	/** @brief notify base station, RSUs and other vehicles that downloading process has completed. */
+	void _notifyDownloadingCompletion();
 
 private:
 	/** @brief Data consuming rate of some common video quality kinds. */
@@ -167,6 +172,7 @@ private:
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
+	LAddress::L3Type rebroadcastDownloader; ///< the downloader whose beacon message should be rebroadcast.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 
@@ -181,15 +187,16 @@ private:
 	SimTime requestTimeoutDuration;   ///< when the request timer elapsed this duration, timeout event happens.
 	SimTime interruptTimeoutDuration; ///< when the interrupt timer elapsed this duration, timeout event happens.
 
-	cMessage *relayEvt;            ///< self message used to handle with relay data packets to downloader.
-	cMessage *forwardEvt;          ///< self message used to handle with forward data packets to downloader.
-	cMessage *schemeSwitchEvt;     ///< self message used to handle with transmission scheme switch in different time slot.
-	cMessage *segmentAdvanceEvt;   ///< self message used to handle with segment advance in same time slot.
-	cMessage *reportStatusEvt;     ///< self message used to handle with report downloading status to RSU.
-	cMessage *dataConsumptionEvt;  ///< self message used to handle with data consumption process after a slot elapsed.
-	cMessage *requestTimeoutEvt;   ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
-	cMessage *interruptTimeoutEvt; ///< self message used to handle with download interrupt timeout event.
-	cMessage *linkBrokenEvt;       ///< self message used to handle with communication link broken event.
+	cMessage *relayEvt;             ///< self message used to handle with relay data packets to downloader.
+	cMessage *forwardEvt;           ///< self message used to handle with forward data packets to downloader.
+	cMessage *schemeSwitchEvt;      ///< self message used to handle with transmission scheme switch in different time slot.
+	cMessage *segmentAdvanceEvt;    ///< self message used to handle with segment advance in same time slot.
+	cMessage *reportStatusEvt;      ///< self message used to handle with report downloading status to RSU.
+	cMessage *dataConsumptionEvt;   ///< self message used to handle with data consumption process after a slot elapsed.
+	cMessage *requestTimeoutEvt;    ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
+	cMessage *interruptTimeoutEvt;  ///< self message used to handle with download interrupt timeout event.
+	cMessage *linkBrokenEvt;        ///< self message used to handle with communication link broken event.
+	cMessage *rebroadcastBeaconEvt; ///< self message used to handle with rebroadcast downloader's beacon message(ensure cooperative RSU knows the position of the co-downloader).
 
 	DownloadingInfo downloadingStatus; ///< store self downloading status information.
 	std::list<SchemeTuple> schemeList; ///< describe how this vehicle transmit in each slot.

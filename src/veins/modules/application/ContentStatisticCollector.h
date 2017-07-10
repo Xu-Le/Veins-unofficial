@@ -40,6 +40,12 @@ public:
 	void initialize(int stage) override;
 	void finish() override;
 
+private:
+	int slotNum;        ///< predication slot number used by ContentRSU.
+	int contentSize;    ///< total content size required by ContentClient.
+	int contentQuality; ///< content consuming rate of ContentClient.
+	int cellularRate;   ///< average cellular downloading rate in the simulation.
+
 public:
 	static long globalContentRequests; ///< accumulated content request number in the whole simulation.
 	static long globalContentSize;  ///< accumulated content size measured in bytes in the whole simulation.

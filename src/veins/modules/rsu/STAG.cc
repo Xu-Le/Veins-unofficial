@@ -908,7 +908,7 @@ void STAG::_recordFluxScheme()
 				if (parc->flow[j] > 0)
 				{
 					fluxSchemeList[parc->srcID].push_back(FluxScheme(j+1, parc->dstID, parc->downloader[j], parc->flow[j]));
-					fluxSchemeList[parc->srcID].back().segment.assign(&segmentOffsets[j]);
+					fluxSchemeList[parc->srcID].back().segment = segmentOffsets[j];
 					fluxSchemeList[parc->srcID].back().segment.print();
 				}
 			}
@@ -924,6 +924,8 @@ void STAG::_recordFluxScheme()
 				if (narc->flow[j] > 0)
 					narcSlotFlow.push_back(std::pair<int, int>(j, narc->flow[j]));
 			}
+			if (marcSlotFlow.empty() || narcSlotFlow.empty())
+				continue;
 			bool uncontinuousAppend = true;
 			Segment *mSeg = &segmentOffsets[marcSlotFlow[0].first], *nSeg = &dupSegmentOffsets[narcSlotFlow[0].first];
 			for (size_t m = 0, n = 0; m < marcSlotFlow.size() && n < narcSlotFlow.size();)
@@ -973,13 +975,13 @@ void STAG::_recordFluxScheme()
 				if (marc->flow[j] > 0)
 				{
 					fluxSchemeList[marc->srcID].push_back(FluxScheme(j+1, marc->dstID, marc->downloader[j], marc->flow[j]));
-					fluxSchemeList[marc->srcID].back().segment.assign(&segmentOffsets[j]);
+					fluxSchemeList[marc->srcID].back().segment = segmentOffsets[j];
 					fluxSchemeList[marc->srcID].back().segment.print();
 				}
 				if (narc->flow[j] > 0)
 				{
 					fluxSchemeList[narc->srcID].push_back(FluxScheme(j+1, narc->dstID, narc->downloader[j], narc->flow[j]));
-					fluxSchemeList[narc->srcID].back().segment.assign(&segmentOffsets[j]);
+					fluxSchemeList[narc->srcID].back().segment = segmentOffsets[j];
 					fluxSchemeList[narc->srcID].back().segment.print();
 				}
 			}

@@ -39,8 +39,15 @@ Segment& Segment::operator=(const Segment& rhs)
 {
 	if (this == &rhs)
 		return *this;
+	clear();
 	assign(&rhs);
 	return *this;
+}
+
+void Segment::clear()
+{
+	if (next != nullptr) // delete recursively
+		delete next;
 }
 
 void Segment::assign(const Segment *rhs)

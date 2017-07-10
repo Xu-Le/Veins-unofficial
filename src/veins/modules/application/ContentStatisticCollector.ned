@@ -22,5 +22,10 @@ simple ContentStatisticCollector
 {
 	@class(ContentStatisticCollector);
 	@display("i=abstract/db");
+
+	int slotNum = default(8);
+	int contentSize = default(20MB) @unit(MB);
+	int contentQuality = default(1800kbps) @unit(kbps);
+	int cellularRate = default(4000kbps) @unit(kbps);
 }
 

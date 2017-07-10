@@ -66,6 +66,7 @@ void BaseRSU::initialize(int stage)
 
 		examineVehiclesEvt = new cMessage("examine vehicles evt", RSUMessageKinds::EXAMINE_VEHICLES_EVT);
 		forgetMemoryEvt = new cMessage("forget memory evt", RSUMessageKinds::FORGET_MEMORY_EVT); // derived classes schedule it
+		scheduleAt(simTime() + dblrand()*examineVehiclesInterval, examineVehiclesEvt);
 	}
 }
 

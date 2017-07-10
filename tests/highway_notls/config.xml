@@ -65,17 +65,45 @@
 	</WarningPlans>
 	<ContentPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<ContentPlan type="2">
-			<parameter name="simtime" type="double" value="38.1"/>
-			<parameter name="size" type="int" value="5120"/>
+		<ContentPlan type="7">
+			<parameter name="simtime" type="double" value="100.1"/>
+			<parameter name="size" type="int" value="20480"/>
 		</ContentPlan>
-		<ContentPlan type="9">
+		<ContentPlan type="34">
+			<parameter name="simtime" type="double" value="120.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="63">
 			<parameter name="simtime" type="double" value="200.1"/>
 			<parameter name="size" type="int" value="20480"/>
 		</ContentPlan>
-		<ContentPlan type="15">
+		<ContentPlan type="75">
 			<parameter name="simtime" type="double" value="300.1"/>
-			<parameter name="size" type="int" value="40960"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="137">
+			<parameter name="simtime" type="double" value="400.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="140">
+			<parameter name="simtime" type="double" value="500.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="211">
+			<parameter name="simtime" type="double" value="600.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="243">
+			<parameter name="simtime" type="double" value="700.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="287">
+			<parameter name="simtime" type="double" value="800.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="318">
+			<parameter name="simtime" type="double" value="900.1"/>
+			<parameter name="size" type="int" value="20480"/>
 		</ContentPlan>
 	</ContentPlans>
 </root>

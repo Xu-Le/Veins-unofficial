@@ -35,6 +35,7 @@ public:
 
 	Segment& operator=(const Segment& rhs);
 
+	void clear();
 	void assign(const Segment *rhs);
 	void print();
 
