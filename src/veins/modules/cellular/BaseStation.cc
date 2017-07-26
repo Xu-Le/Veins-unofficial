@@ -41,9 +41,10 @@ void BaseStation::initialize(int stage)
 		distributeApplBytesOnce = 20 * wirelessDataLength / 8;
 		distributePeriod = SimTime(8 * distributeLinkBytesOnce * 10 * 25, SIMTIME_NS); // 100Mbps TD-LTE downlink channel, 10 is obtained by 1e9 / 100 / 1e6
 		EV << "distribute period is " << distributePeriod.dbl() << "s.\n";
+		wiredTxDuration = SimTime((wiredHeaderLength + 160) * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 
-		distributeEvt = new cMessage("distribute evt", SelfMsgKinds::DISTRIBUTE_EVT);
-		distributeEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at vehicle
+		fetchRequestEvt = new cMessage("fetch request evt", SelfMsgKinds::FETCH_REQUEST_EVT);
+		fetchRequestEvt->setSchedulingPriority(1); // ensure when to send the next packet, the previous packet has arrived at content server
 		rootModule = cSimulation::getActiveSimulation()->getSystemModule();
 	}
 	else
@@ -56,7 +57,13 @@ void BaseStation::finish()
 {
 	EV << "BaseStation::finish() called.\n";
 
-	cancelAndDelete(distributeEvt);
+	for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
+	{
+		cancelAndDelete(itDL->second->distributeEvt);
+		delete itDL->second;
+	}
+	downloaders.clear();
+	cancelAndDelete(fetchRequestEvt);
 
 	cComponent::finish();
 }
@@ -119,7 +126,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 					ContentStatisticCollector::globalCellularFlux += distributeApplBytesOnce;
 					downloaderInfo->distributedOffset += distributeApplBytesOnce;
 					if (downloaderInfo->transmissionActive)
-						scheduleAt(downloaderInfo->distributedAt, distributeEvt);
+						scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
 					EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << ".\n";
 					cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
 					sendDirect(cellularMsg, SimTime::ZERO, distributePeriod, downloaderInfo->correspondingGate);
@@ -150,17 +157,26 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 					else // data fetch process has not finished, thus don't send half-filled cellular data packet
 					{
 						EV << "don't send half-filled data packet because data fetch process has not finished, wait a moment.\n";
-						scheduleAt(downloaderInfo->distributedAt, distributeEvt);
+						scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
 					}
 				}
 				else
 				{
 					EV << "there is no data to send currently, check later.\n";
-					scheduleAt(downloaderInfo->distributedAt, distributeEvt);
+					scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
 				}
 				break;
 			}
 		}
+		break;
+	}
+	case SelfMsgKinds::FETCH_REQUEST_EVT:
+	{
+		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(fetchMsgQueue.pop());
+		sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
+		EV << "send downloader [" << wiredMsg->getDownloader() << "]'s fetching request to content server.\n";
+		if (fetchMsgQueue.getLength() > 0)
+			scheduleAt(simTime() + wiredTxDuration, fetchRequestEvt);
 		break;
 	}
 	default:
@@ -231,6 +247,7 @@ void BaseStation::handleWirelessIncomingMsg(CellularMessage *cellularMsg)
 		// release ourself resources corresponding to this downloader
 		if ((itDL = downloaders.find(downloader)) != downloaders.end())
 		{
+			cancelAndDelete(itDL->second->distributeEvt);
 			delete itDL->second;
 			downloaders.erase(itDL);
 		}
@@ -249,11 +266,11 @@ void BaseStation::handleWiredIncomingMsg(WiredMessage *wiredMsg)
 	ContentStatisticCollector::globalStorageAmount += wiredMsg->getBytesNum();
 	EV << "downloader [" << downloader << "]'s cache end offset updates to " << downloaderInfo->cacheEndOffset << " bytes.\n";
 
-	if (!distributeEvt->isScheduled())
+	if (!downloaderInfo->distributeEvt->isScheduled())
 	{
 		downloaderInfo->transmissionActive = !downloaderInfo->closingWhileFetching;
 		downloaderInfo->distributedAt = simTime();
-		scheduleAt(downloaderInfo->distributedAt, distributeEvt);
+		scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
 	}
 
 	if (wiredMsg->getControlCode() == WiredMsgCC::LAST_DATA_PACKET) // it is the last data packet, indicating data fetching progress has finished
@@ -277,8 +294,18 @@ void BaseStation::_sendFetchingRequest(const LAddress::L3Type downloader, const 
 	wiredMsg->setContentSize(downloaderInfo->totalContentSize);
 	wiredMsg->setStartOffset(curFetchStartOffset);
 	wiredMsg->setEndOffset(downloaderInfo->curFetchEndOffset);
-	wiredMsg->addBitLength(wiredHeaderLength);
-	sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
+	wiredMsg->addBitLength(wiredHeaderLength + 160); // 5*sizeof(int) * 8
+	fetchMsgQueue.insert(wiredMsg);
+	if (!fetchRequestEvt->isScheduled())
+		scheduleAt(simTime(), fetchRequestEvt);
 
 	downloaderInfo->fetchingActive = true;
+}
+
+/////////////////////////    internal class implementations    /////////////////////////
+BaseStation::DownloaderInfo::DownloaderInfo(int t, int s, int r) : transmissionActive(false), fetchingActive(false), closingWhileFetching(false), totalContentSize(t),
+		cacheStartOffset(s), cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), curFetchEndOffset(0), distributedAt(), correspondingGate(nullptr)
+{
+	distributeEvt = new cMessage("distribute evt", SelfMsgKinds::DISTRIBUTE_EVT);
+	distributeEvt->setSchedulingPriority(1); // ensure when to send the next packet, the previous packet has arrived at vehicle
 }

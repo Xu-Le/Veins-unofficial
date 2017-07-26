@@ -87,6 +87,12 @@ public:
 	}
 	/** @brief remove an element in std::vector<T>. */
 	template <typename T>
+	static bool vectorFind(std::vector<T>& vec, const T key)
+	{
+		return std::find(vec.begin(), vec.end(), key) != vec.end();
+	}
+	/** @brief remove an element in std::vector<T>. */
+	template <typename T>
 	static void vectorRemove(std::vector<T>& vec, const T key)
 	{
 		vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end());

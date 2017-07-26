@@ -19,7 +19,6 @@
 #ifndef __CONTENTSERVER_H__
 #define __CONTENTSERVER_H__
 
-#include <queue>
 #include <omnetpp/csimplemodule.h>
 #include "veins/base/utils/SimpleAddress.h"
 #include "veins/modules/messages/WiredMessage_m.h"
@@ -28,6 +27,10 @@
  * @brief File Content Server.
  *
  * @author Xu Le
+ * @ingroup applLayer
+ * @see BaseStation
+ * @see ContentRSU
+ * @see SimpleContentRSU
  */
 class ContentServer : public ::omnetpp::cSimpleModule
 {
@@ -46,7 +49,9 @@ private:
 	/** @brief The self message kinds. */
 	enum SelfMsgKinds {
 		DISTRIBUTE_RSU_EVT,
-		DISTRIBUTE_BS_EVT
+		DISTRIBUTE_BS_EVT,
+		POP_QUEUE_RSU_EVT,
+		POP_QUEUE_BS_EVT
 	};
 
 	/** @brief Called every time a message arrives. */
@@ -83,7 +88,8 @@ private:
 	///@}
 	int headerLength; ///< header length of the wired UDP/IP packet in bits.
 
-	std::vector<std::queue<LAddress::L3Type, std::list<LAddress::L3Type> > > activeDownloaderQs; ///< RSUs' queue of downloaders which are currently fetching data.
+	std::vector<std::list<LAddress::L3Type> > prefetchingQs; ///< RSUs' queue of downloaders who are prefetching data currently.
+	std::list<LAddress::L3Type> fetchingQ; ///< BS's queue of downloaders who are fetching data currently.
 
 	/** @name performance consideration. */
 	///@{
@@ -95,8 +101,10 @@ private:
 	SimTime distributeBSPeriod;  ///< period to handle self message distributeEvt.
 	///@}
 
-	cMessage *distributeRSUEvt;  ///< self message used to periodically distribute data to RSU.
-	cMessage *distributeBSEvt;   ///< self message used to periodically distribute data to BS.
+	std::vector<cMessage*> distributeRSUEvts; ///< self message used to periodically distribute data to RSU.
+	cMessage *distributeBSEvt; ///< self message used to periodically distribute data to BS.
+	std::vector<cMessage*> popQueueRSUEvts;   ///< self message used to pop prefetchingQs[rsuIdx] at the certain time.
+	cMessage *popQueueBSEvt;   ///< self message used to pop fetchingQ at the certain time(ensure the correctness of judgment fetchingQ.empty() in handleLTEIncomingMsg()).
 
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.

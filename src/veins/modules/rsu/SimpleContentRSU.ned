@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@ package org.car2x.veins.modules.rsu;
 
 import org.car2x.veins.modules.rsu.BaseRSU;
 
-simple RoutingRSU extends BaseRSU
+simple SimpleContentRSU extends BaseRSU
 {
-	@class(RoutingRSU);
-	@display("i=block/routing");
+	@class(SimpleContentRSU);
+	@display("i=block/buffer2");
 }

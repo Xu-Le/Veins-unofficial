@@ -161,13 +161,14 @@ private:
 	/** @name micro internal functions used by maximum flow algorithm. */
 	///@{
 	int __calcAlternativeFlow(const int curPath, const int m, const int n, const bool setFlow = false);
+	int __calcDecreasedFlow(const int curPath, const int m, const int n);
 	int __calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&marc, struct Arc *&narc, const bool setFlow);
 	void __printNodeStorage();
 	void __printChannelStatus();
 	void __printChosenSlots();
 	void __printChosenSlot(std::vector<int>& vec);
 	void __eraseChosenSlot(std::vector<int>& vec, const int slot);
-	void __insertChosenSlot(std::vector<int>& vec, const int slot, bool frontArc = false);
+	void __insertChosenSlot(std::vector<int>& vec, const int slot, const bool firstArc);
 	void __eraseUnchosenArcPath();
 	bool __isCollision(struct Arc *parc, struct Arc *qarc, const int slot);
 	///@}

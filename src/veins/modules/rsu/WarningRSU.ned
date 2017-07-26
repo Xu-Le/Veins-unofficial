@@ -22,8 +22,8 @@ import org.car2x.veins.modules.rsu.BaseRSU;
 
 simple WarningRSU extends BaseRSU
 {
-    @class(WarningRSU);
-    @display("i=block/broadcast");
+	@class(WarningRSU);
+	@display("i=block/broadcast");
 
 	double fromRoadheadX;
 	double fromRoadheadY;
@@ -34,7 +34,7 @@ simple WarningRSU extends BaseRSU
 	double toRoadheadZ = default(0);
 
 	double guidUsedTime = default(10s) @unit(s); // the maximum time from a GUID's allocated time to its recycled time
-    string laneId; // the lane this warning message aims to
+	string laneId; // the lane this warning message aims to
 
-    xml warningPlan;
+	xml warningPlan;
 }

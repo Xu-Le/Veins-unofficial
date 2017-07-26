@@ -69,12 +69,12 @@
 			<parameter name="simtime" type="double" value="30.1"/>
 			<parameter name="size" type="int" value="10240"/>
 		</ContentPlan>
-		<ContentPlan type="11">
-			<parameter name="simtime" type="double" value="50.1"/>
+		<ContentPlan type="6">
+			<parameter name="simtime" type="double" value="130.15"/>
 			<parameter name="size" type="int" value="10240"/>
 		</ContentPlan>
-		<ContentPlan type="36">
-			<parameter name="simtime" type="double" value="120.1"/>
+		<ContentPlan type="10">
+			<parameter name="simtime" type="double" value="130.2"/>
 			<parameter name="size" type="int" value="10240"/>
 		</ContentPlan>
 	</ContentPlans>

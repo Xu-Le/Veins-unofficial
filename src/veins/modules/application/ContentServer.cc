@@ -33,8 +33,11 @@ void ContentServer::initialize(int stage)
 		{
 			rsuIn[i] = findGate("rsuIn", i);
 			rsuOut[i] = findGate("rsuOut", i);
-			activeDownloaderQs.push_back(std::queue<LAddress::L3Type, std::list<LAddress::L3Type> >());
+			distributeRSUEvts.push_back(new cMessage("distribute rsu evt", SelfMsgKinds::DISTRIBUTE_RSU_EVT));
+			distributeRSUEvts.back()->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at RSU
+			popQueueRSUEvts.push_back(new cMessage("pop queue rsu evt", SelfMsgKinds::POP_QUEUE_RSU_EVT));
 		}
+		prefetchingQs.resize(rsuNum);
 		cellularIn = findGate("cellularIn");
 		cellularOut = findGate("cellularOut");
 		headerLength = par("headerLength").longValue();
@@ -47,10 +50,9 @@ void ContentServer::initialize(int stage)
 		distributeBSPeriod = SimTime(8 * distributeBSLinkBytesOnce * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 		EV << "distribute period for RSU is " << distributeRSUPeriod.dbl() << "s, for BS is " << distributeBSPeriod.dbl() << "s.\n";
 
-		distributeRSUEvt = new cMessage("distribute rsu evt", SelfMsgKinds::DISTRIBUTE_RSU_EVT);
 		distributeBSEvt = new cMessage("distribute bs evt", SelfMsgKinds::DISTRIBUTE_BS_EVT);
-		distributeRSUEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at RSU
 		distributeBSEvt->setSchedulingPriority(1); // ensure when handle with self message to send the next packet, the previous packet has arrived at BS
+		popQueueBSEvt = new cMessage("pop queue bs evt", SelfMsgKinds::POP_QUEUE_BS_EVT);
 	}
 	else
 	{
@@ -62,10 +64,17 @@ void ContentServer::finish()
 {
 	EV << "ContentServer::finish() called.\n";
 
-	cancelAndDelete(distributeRSUEvt);
+	for (int i = 0; i < rsuNum; ++i)
+	{
+		cancelAndDelete(distributeRSUEvts[i]);
+		cancelAndDelete(popQueueRSUEvts[i]);
+	}
 	cancelAndDelete(distributeBSEvt);
+	cancelAndDelete(popQueueBSEvt);
+	distributeRSUEvts.clear();
+	popQueueRSUEvts.clear();
+	prefetchingQs.clear();
 
-	activeDownloaderQs.clear();
 	delete []rsuIn;
 	delete []rsuOut;
 
@@ -123,7 +132,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->addBitLength(8*distributeRSULinkBytesOnce);
 					downloaderInfo->distributedOffset += distributeRSUApplBytesOnce;
 					downloaderInfo->distributedAt = simTime() + distributeRSUPeriod;
-					scheduleAt(downloaderInfo->distributedAt, distributeRSUEvt);
+					scheduleAt(downloaderInfo->distributedAt, distributeRSUEvts[downloaderInfo->rsuIndex]);
 				}
 				else
 				{
@@ -133,14 +142,11 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->setBytesNum(lastPktAmount);
 					dataMsg->addBitLength(8*totalLinkBytes);
 					downloaderInfo->distributedOffset = downloaderInfo->requiredEndOffset;
-					std::queue<LAddress::L3Type, std::list<LAddress::L3Type> > &activeQ = activeDownloaderQs[downloaderInfo->rsuIndex];
-					activeQ.pop();
-					if (!activeQ.empty())
-					{
-						SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
-						downloaders[activeQ.front()]->distributedAt = simTime() + transmissionDelay;
-						scheduleAt(simTime() + transmissionDelay, distributeRSUEvt);
-					}
+
+					SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
+					// pop action will be done later to ensure the correctness of judgment prefetchingQs[rsuIdx].empty() in handleRSUIncomingMsg()
+					popQueueRSUEvts[downloaderInfo->rsuIndex]->setContextPointer(itDL->second);
+					scheduleAt(simTime() + transmissionDelay, popQueueRSUEvts[downloaderInfo->rsuIndex]);
 				}
 				EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
 				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
@@ -176,12 +182,38 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					dataMsg->setBytesNum(lastPktAmount);
 					dataMsg->addBitLength(8*totalLinkBytes);
 					downloaderInfo->distributedOffset = downloaderInfo->requiredEndOffset;
+
+					SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
+					// pop action will be done later to ensure the correctness of judgment fetchingQ.empty() in handleLTEIncomingMsg()
+					scheduleAt(simTime() + transmissionDelay, popQueueBSEvt);
 				}
 				EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
 				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
 				sendDelayed(dataMsg, SimTime::ZERO, "cellularOut");
 				break;
 			}
+		}
+		break;
+	}
+	case SelfMsgKinds::POP_QUEUE_RSU_EVT:
+	{
+		DownloaderInfo *downloaderInfo = static_cast<DownloaderInfo*>(msg->getContextPointer());
+		std::list<LAddress::L3Type> &activeQ = prefetchingQs[downloaderInfo->rsuIndex];
+		activeQ.pop_front();
+		if (!activeQ.empty())
+		{
+			downloaders[activeQ.front()]->distributedAt = simTime();
+			scheduleAt(simTime(), distributeRSUEvts[downloaderInfo->rsuIndex]);
+		}
+		break;
+	}
+	case SelfMsgKinds::POP_QUEUE_BS_EVT:
+	{
+		fetchingQ.pop_front();
+		if (!fetchingQ.empty())
+		{
+			downloaders[fetchingQ.front()]->distributedAt = simTime();
+			scheduleAt(simTime(), distributeBSEvt);
 		}
 		break;
 	}
@@ -218,21 +250,19 @@ void ContentServer::handleRSUIncomingMsg(WiredMessage *rsuMsg, int rsuIdx)
 		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
 
 		downloaderInfo->rsuIndex = rsuIdx;
-		if (activeDownloaderQs[rsuIdx].empty())
+		if (prefetchingQs[rsuIdx].empty())
 		{
-			EV << "active downloader queue is empty, start distribution now.\n";
-			downloaderInfo->distributedAt = simTime() + SimTime((headerLength + 160)*10, SIMTIME_NS);
-			scheduleAt(downloaderInfo->distributedAt, distributeRSUEvt);
+			EV << "active prefetching queue is empty, start distribution now.\n";
+			downloaderInfo->distributedAt = simTime();
+			scheduleAt(downloaderInfo->distributedAt, distributeRSUEvts[rsuIdx]);
 		}
 		else
-			EV << "active downloader queue is not empty, wait other downloaders' distribution to finish.\n";
-		activeDownloaderQs[rsuIdx].push(downloader);
+			EV << "active prefetching queue is not empty, wait other downloaders' distribution to finish.\n";
+		prefetchingQs[rsuIdx].push_back(downloader);
 	}
 	else if (rsuMsg->getControlCode() == WiredMsgCC::END_TRANSMISSION)
 	{
 		EV << "it is a end transmission message.\n";
-		// if (distributeRSUEvt->isScheduled())
-		//	cancelEvent(distributeRSUEvt);
 	}
 	else // (rsuMsg->getControlCode() == WiredMsgCC::COMPLETE_DOWNLOADING)
 	{
@@ -273,8 +303,15 @@ void ContentServer::handleLTEIncomingMsg(WiredMessage *lteMsg)
 		}
 		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
 
-		downloaderInfo->distributedAt = simTime();
-		scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
+		if (fetchingQ.empty())
+		{
+			EV << "active fetching queue is empty, start distribution now.\n";
+			downloaderInfo->distributedAt = simTime();
+			scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
+		}
+		else
+			EV << "active fetching queue is not empty, wait other downloaders' distribution to finish.\n";
+		fetchingQ.push_back(downloader);
 	}
 	else if (lteMsg->getControlCode() == WiredMsgCC::END_TRANSMISSION)
 	{

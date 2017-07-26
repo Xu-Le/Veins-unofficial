@@ -22,9 +22,9 @@ import org.car2x.veins.modules.rsu.BaseRSU;
 
 simple ContentRSU extends BaseRSU
 {
-    @class(ContentRSU);
-    @display("i=block/buffer2");
+	@class(ContentRSU);
+	@display("i=block/buffer2");
 
-    int slotSpan = default(1000); // unit prediction time slot span measured in millisecond
-    int slotNum = default(8); // prediction time slot number, the result of slotSpan*slotNum is prediction period
+	int slotSpan = default(1000); // unit prediction time slot span measured in millisecond
+	int slotNum = default(8); // prediction time slot number, the result of slotSpan*slotNum is prediction period
 }

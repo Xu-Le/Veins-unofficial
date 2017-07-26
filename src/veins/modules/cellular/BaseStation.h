@@ -19,7 +19,6 @@
 #ifndef __BASESTATION_H__
 #define __BASESTATION_H__
 
-#include <omnetpp/csimplemodule.h>
 #include "veins/base/utils/SimpleAddress.h"
 #include "veins/modules/application/ContentStatisticCollector.h"
 #include "veins/modules/messages/CellularMessage_m.h"
@@ -46,7 +45,8 @@ public:
 private:
 	/** @brief The self message kinds. */
 	enum SelfMsgKinds {
-		DISTRIBUTE_EVT
+		DISTRIBUTE_EVT,
+		FETCH_REQUEST_EVT
 	};
 
 	/** @brief Called every time a message arrives. */
@@ -67,8 +67,7 @@ public:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int s, int r) : transmissionActive(false), fetchingActive(false), closingWhileFetching(false), totalContentSize(t), cacheStartOffset(s),
-				cacheEndOffset(0), distributedOffset(s), requiredEndOffset(r), curFetchEndOffset(0), distributedAt(), correspondingGate(nullptr) {}
+		DownloaderInfo(int t, int s, int r);
 
 		bool transmissionActive;
 		bool fetchingActive;
@@ -80,6 +79,7 @@ public:
 		int requiredEndOffset;
 		int curFetchEndOffset;
 		SimTime distributedAt;
+		cMessage *distributeEvt;  ///< self message used to periodically distribute data to vehicle.
 		cGate *correspondingGate;
 	};
 
@@ -97,15 +97,18 @@ public:
 
 	/** @name performance consideration. */
 	///@{
-	int fetchApplBytesOnce; ///< how many bytes measured in application layer to prefetch from content server once.
+	int fetchApplBytesOnce; ///< how many bytes measured in application layer to fetch from content server once.
 	int distributeLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
 	int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
 	SimTime distributePeriod;  ///< period to handle self message distributeEvt.
 	///@}
+	SimTime wiredTxDuration;  ///< transmission delay of a wired packet.
 
-	cMessage *distributeEvt; ///< self message used to periodically distribute data to vehicle.
+	cMessage *fetchRequestEvt; ///< self message used to handle with when to send the fetch request.
 
 	cModule *rootModule; ///< store the pointer to system module to find the sender vehicle's compound module.
+
+	cQueue fetchMsgQueue; ///< the queue of fetching messages.
 
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.

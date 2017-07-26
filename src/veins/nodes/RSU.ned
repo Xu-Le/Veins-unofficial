@@ -25,6 +25,7 @@ import org.car2x.veins.modules.nic.Nic80211p;
 import org.car2x.veins.modules.rsu.RoutingRSU;
 import org.car2x.veins.modules.rsu.WarningRSU;
 import org.car2x.veins.modules.rsu.ContentRSU;
+import org.car2x.veins.modules.rsu.SimpleContentRSU;
 
 module RSU
 {
@@ -47,7 +48,7 @@ module RSU
 
 	submodules:
 		appl: ContentRSU {
-		parameters:
+			parameters:
 				positionX = posX;
 				positionY = posY;
 				positionZ = posZ;

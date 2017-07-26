@@ -959,38 +959,35 @@ void ContentClient::onData(DataMessage *dataMsg)
 			_closeCellularConnection();
 		}
 
-		if (dataMsg->getIsLast()) // it is the last data packet in transmission, thus response an acknowledge message
+		// check whether the consumption starting condition is satisfied
+		if (!startConsuming && downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate)
 		{
-			// check whether the vedio play starting condition is satisified, note this judgement is checked
-			// when a transmission process has just finish for offsets synchronous computation purpose
-			if (!startConsuming && downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate)
-			{
-				EV << "cached data amount is enough, start consuming process.\n";
-				startConsuming = true;
-				downloadingStatus.consumingBeginAt = simTime();
-				ContentStatisticCollector::globalConsumptionStartingDelay += downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl();
-				scheduleAt(simTime(), dataConsumptionEvt);
-			}
+			EV << "cached data amount is enough, start consuming process.\n";
+			startConsuming = true;
+			downloadingStatus.consumingBeginAt = simTime();
+			ContentStatisticCollector::globalConsumptionStartingDelay += downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl();
+			scheduleAt(simTime(), dataConsumptionEvt);
+		}
 
-			if (downloadingStatus.availableOffset < downloadingStatus.totalContentSize)
-			{
-				EV << "data receiving process has finished, response an acknowledge message.\n";
-				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-				ASSERT( wsm != nullptr );
-				ContentMessage *acknowledgeMsg = dynamic_cast<ContentMessage*>(wsm);
+		// it is the last data packet in transmission, thus response an acknowledge message
+		if (dataMsg->getIsLast() && downloadingStatus.availableOffset < downloadingStatus.totalContentSize)
+		{
+			EV << "data receiving process has finished, response an acknowledge message.\n";
+			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+			ASSERT( wsm != nullptr );
+			ContentMessage *acknowledgeMsg = dynamic_cast<ContentMessage*>(wsm);
 
-				acknowledgeMsg->setControlCode(ContentMsgCC::ACKNOWLEDGEMENT);
-				acknowledgeMsg->setReceiver(LAddress::L3BROADCAST());
-				acknowledgeMsg->setDownloader(downloader);
-				acknowledgeMsg->setReceivedOffset(downloadingStatus.availableOffset);
-				acknowledgeMsg->setConsumedOffset(downloadingStatus.consumedOffset);
-				EV << "consumed offset: " << downloadingStatus.consumedOffset << ", available offsets: ";
-				downloadingStatus.lackSegment(&acknowledgeMsg->getLackOffset());
-				EV << "lacking offsets: ";
-				acknowledgeMsg->getLackOffset().print();
+			acknowledgeMsg->setControlCode(ContentMsgCC::ACKNOWLEDGEMENT);
+			acknowledgeMsg->setReceiver(LAddress::L3BROADCAST());
+			acknowledgeMsg->setDownloader(downloader);
+			acknowledgeMsg->setReceivedOffset(downloadingStatus.availableOffset);
+			acknowledgeMsg->setConsumedOffset(downloadingStatus.consumedOffset);
+			EV << "consumed offset: " << downloadingStatus.consumedOffset << ", available offsets: ";
+			downloadingStatus.lackSegment(&acknowledgeMsg->getLackOffset());
+			EV << "lacking offsets: ";
+			acknowledgeMsg->getLackOffset().print();
 
-				sendWSM(acknowledgeMsg);
-			}
+			sendWSM(acknowledgeMsg);
 		}
 
 		if (downloadingStatus.availableOffset == downloadingStatus.totalContentSize)

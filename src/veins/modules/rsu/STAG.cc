@@ -470,7 +470,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 
 	if (willOptimize)
 	{
-		int i = arcPathRange[curDownloaderIdx].first, j = 0; // i is the direct download arc path index
+		int i = arcPathRange[curDownloaderIdx].first; // i is the direct download arc path index
 		int storeI = 0, storeM = 0, storeN = 0, m = 0, n = 0;
 		int maxAlternativeFlow = INT32_MIN;
 		size_t k = 0;
@@ -487,44 +487,42 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 					int alternativeFlow = __calcAlternativeFlow(i, m, n, false); // calculate alternative flow on the same arc path
 					for (k = 0; k < chosenLinks[m].size(); ++k) // calculate alternative flow on the other arc paths
 					{
-						if (chosenPaths[m][k] == i)
+						int chosenPath = chosenPaths[m][k];
+						if (chosenPath == i)
 							continue;
 						collisionArc = &arcTable[chosenLinks[m][k]];
-						alternativeFlow -= collisionArc->flow[m];
-						if (collisionArc->srcID != 0) // second relay arc in the arc path
+						if (arcPathList[chosenPath].size() == 2) // the direct arc path
+							alternativeFlow -= collisionArc->flow[m];
+						else // the relay arc path
 						{
-							for (j = m+1; j < slotNum; ++j)
-								if (collisionArc->downloader[j] == collisionArc->downloader[m])
-									alternativeFlow += collisionArc->bandwidth[j] - collisionArc->flow[j];
-						}
-						else // first relay arc in the arc path
-						{
-							for (j = 0; j < m; ++j)
-								if (collisionArc->downloader[j] == collisionArc->downloader[m])
-									alternativeFlow += collisionArc->bandwidth[j] - collisionArc->flow[j];
+							if (ContentUtils::vectorFind(chosenPaths[n], chosenPath))
+								alternativeFlow += __calcDecreasedFlow(chosenPath, m, n);
+							else if (collisionArc->srcID == 0) // first arc in the relay arc path
+								alternativeFlow += __calcDecreasedFlow(chosenPath, m, -1);
+							else // second arc in the relay arc path
+								alternativeFlow += __calcDecreasedFlow(chosenPath, -1, m);
 						}
 					}
 					for (k = 0; k < chosenLinks[n].size(); ++k) // calculate alternative flow on the other arc paths
 					{
-						if (chosenPaths[n][k] == i)
+						int chosenPath = chosenPaths[n][k];
+						if (chosenPath == i)
 							continue;
 						collisionArc = &arcTable[chosenLinks[n][k]];
-						alternativeFlow -= collisionArc->flow[n];
-						if (collisionArc->srcID != 0) // second relay arc in the arc path
+						if (arcPathList[chosenPath].size() == 2) // the direct arc path
+							alternativeFlow -= collisionArc->flow[n];
+						else // the relay arc path
 						{
-							for (j = n+1; j < slotNum; ++j)
-								if (collisionArc->downloader[j] == collisionArc->downloader[n])
-									alternativeFlow += collisionArc->bandwidth[j] - collisionArc->flow[j];
-						}
-						else // first relay arc in the arc path
-						{
-							for (j = 0; j < n; ++j)
-								if (collisionArc->downloader[j] == collisionArc->downloader[n])
-									alternativeFlow += collisionArc->bandwidth[j] - collisionArc->flow[j];
+							if (ContentUtils::vectorFind(chosenPaths[m], chosenPath))
+								; // avoid calculating twice
+							else if (collisionArc->srcID == 0) // first arc in the relay arc path
+								alternativeFlow += __calcDecreasedFlow(chosenPath, n, -1);
+							else // second arc in the relay arc path
+								alternativeFlow += __calcDecreasedFlow(chosenPath, -1, n);
 						}
 					}
-					if (std::find(chosenPaths[m].begin(), chosenPaths[m].end(), i) != chosenPaths[m].end() && std::find(chosenPaths[n].begin(), chosenPaths[n].end(), i) != chosenPaths[n].end())
-						alternativeFlow = -99999;
+					if (ContentUtils::vectorFind(chosenPaths[m], i) && ContentUtils::vectorFind(chosenPaths[n], i))
+						alternativeFlow = -999999;
 					if (maxAlternativeFlow < alternativeFlow)
 					{
 						maxAlternativeFlow = alternativeFlow;
@@ -1144,11 +1142,35 @@ int STAG::__calcAlternativeFlow(const int curPath, const int m, const int n, con
 	return postFlow - preFlow;
 }
 
+int STAG::__calcDecreasedFlow(const int curPath, const int m, const int n)
+{
+	const bool firstCollision = m != -1, secondCollision = n != -1;
+	struct Arc *marc = &arcTable[arcPathList[curPath][0]], *narc = &arcTable[arcPathList[curPath][1]];
+	std::vector<int> chosenSlot = chosenSlots[curPath]; // value copy
+	int i = 0, preFlow = 0, postFlow = 0, firstArcFlow = 0, secondArcFlow = 0;
+	int indicator = chosenSlot.back(), vecSize = static_cast<int>(chosenSlot.size());
+	for (i = 0; i < indicator; ++i)
+		firstArcFlow += marc->flow[chosenSlot[i]];
+	for (i = indicator; i < vecSize-1; ++i)
+		secondArcFlow += narc->flow[chosenSlot[i]];
+
+	ASSERT(firstArcFlow == secondArcFlow);
+	preFlow = firstArcFlow;
+
+	if (firstCollision)
+		__eraseChosenSlot(chosenSlot, m);
+	if (secondCollision)
+		__eraseChosenSlot(chosenSlot, n);
+
+	postFlow = __calcChosenPathPostFlow(chosenSlot, marc, narc, false);
+
+	return postFlow - preFlow;
+}
+
 int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&marc, struct Arc *&narc, const bool setFlow)
 {
-	int maxFlow = 0;
-	int indicator = chosenSlot.back(), vecSize = static_cast<int>(chosenSlot.size());
 	int i = 0, j = 0, firstArcBW = 0, secondArcBW = 0, firstArcRestCap = 0, secondArcRestCap = 0;
+	int indicator = chosenSlot.back(), vecSize = static_cast<int>(chosenSlot.size());
 	int *marcBandwidth = new int[slotNum];
 	int *narcBandwidth = new int[slotNum];
 	memcpy(marcBandwidth, marc->bandwidth, slotNum*sizeof(int));
@@ -1191,7 +1213,7 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 		secondArcRestCap += narcBandwidth[chosenSlot[j]];
 
 	ASSERT(firstArcBW - firstArcRestCap == secondArcBW - secondArcRestCap);
-	maxFlow = firstArcBW - firstArcRestCap;
+	int maxFlow = firstArcBW - firstArcRestCap;
 
 	if (setFlow)
 	{
@@ -1334,7 +1356,7 @@ void STAG::__eraseChosenSlot(std::vector<int>& vec, const int slot)
 	}
 }
 
-void STAG::__insertChosenSlot(std::vector<int>& vec, const int slot, bool frontArc)
+void STAG::__insertChosenSlot(std::vector<int>& vec, const int slot, const bool firstArc)
 {
 	int i = 0, pos = -1, vecSize = static_cast<int>(vec.size());
 	for (i = 0; i < vecSize-1; ++i)
@@ -1347,7 +1369,7 @@ void STAG::__insertChosenSlot(std::vector<int>& vec, const int slot, bool frontA
 	}
 
 	int &indicator = vec.back();
-	if (frontArc)
+	if (firstArc)
 	{
 		for (i = 0; i < indicator; ++i)
 		{

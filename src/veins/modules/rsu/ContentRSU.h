@@ -27,7 +27,7 @@
  * @brief A concrete RSU class which provides content download service.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup applLayer
  * @see BaseRSU
  */
 class ContentRSU : public BaseRSU
@@ -36,7 +36,6 @@ public:
 	/** @brief The message kinds content RSU uses. */
 	enum ContentRSUMsgKinds {
 		DISTRIBUTE_V_EVT = LAST_BASE_RSU_MESSAGE_KIND,
-		DISTRIBUTE_R_EVT,
 		DISTRIBUTE_C_EVT,
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
@@ -63,9 +62,6 @@ private:
 	void handleWiredMsg(WiredMessage *wiredMsg) override;
 	/** @brief Handle west/east RSU messages, param 'direction': west is 1, east is 2, north is 3, south is 4. */
 	void handleRSUMsg(WiredMessage *wiredMsg, int direction) override;
-
-	/** @brief wave short message decorate method. */
-	void decorateWSM(WaveShortMessage *wsm) override;
 
 	/** @brief call-back method of receiving beacon message. */
 	void onBeacon(BeaconMessage *beaconMsg) override;
@@ -110,21 +106,21 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int c) : totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0), distributedOffset(0), distributedROffset(0), acknowledgedOffset(0),
-				remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0), notifiedLinkBreak(false), sentCoNotification(false),
+		DownloaderInfo(int t, int c) : notifiedLinkBreak(false), sentCoNotification(false), noticeEntering(false), totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0),
+				distributedOffset(0), acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0),
 				distributedAt(), acknowledgedAt(), _lackOffset(), lackOffset(&_lackOffset) {}
 
+		bool notifiedLinkBreak;
+		bool sentCoNotification;
+		bool noticeEntering;
 		int totalContentSize;
 		int cacheStartOffset;
 		int cacheEndOffset;
 		int distributedOffset;
-		int distributedROffset;
 		int acknowledgedOffset;
 		int remainingDataAmount;
 		int consumingRate;
 		int prefetchDataAmount;
-		bool notifiedLinkBreak;
-		bool sentCoNotification;
 		SimTime distributedAt;
 		SimTime acknowledgedAt;
 		Segment _lackOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
@@ -174,8 +170,9 @@ private:
 
 	/** @name carrier related variables. */
 	///@{
-	bool noticeDownloaderEntering; ///< pay attention to the event that the co-downloader enters RSU's communication range.
-	bool noticeRelayEntering; ///< pay attention to the event that the neighbor of co-downloader enters RSU's communication range.
+	int noticeEnteringNum;   ///< pay attention to the event that the co-downloader or its neighbor enters RSU's communication range.
+	int adjustThresholdDist; ///< the threshold distance between RSUs which leads to offset adjustment.
+	int unitOffsetPerMeter;  ///< the starting offset of distribution data aiming to carrier is adjusted according to the distance between RSUs.
 	///@}
 
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
@@ -183,11 +180,8 @@ private:
 	/** @name performance consideration. */
 	///@{
 	int distributeVLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
-	int distributeRLinkBytesOnce; ///< how many bytes measured in link layer to distribute to other RSU once in transmission.
 	int distributeVApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
-	int distributeRApplBytesOnce; ///< how many bytes measured in application layer to distribute to other RSU once in transmission.
 	SimTime distributeVPeriod;    ///< period to handle self message distributeVEvt.
-	SimTime distributeRPeriod;    ///< period to handle self message distributeREvt.
 	///@}
 
 	SimTime schemeSwitchInterval; ///< interval from current time to the time schemeSwitchEvt happens(this interval is time-varying).
@@ -195,7 +189,6 @@ private:
 	SimTime wiredTxDuration;  ///< transmission delay of a wired packet.
 
 	cMessage *distributeVEvt; ///< self message used to periodically distribute data to vehicle.
-	cMessage *distributeREvt; ///< self message used to periodically distribute data to other RSU.
 	cMessage *distributeCEvt; ///< self message used to periodically distribute data to carrier.
 	cMessage *schemeSwitchEvt;    ///< self message used to handle with transmission scheme switch in different time slot.
 	cMessage *segmentAdvanceEvt;  ///< self message used to handle with segment advance in same time slot.
@@ -203,7 +196,7 @@ private:
 	cMessage *lookForCarrierEvt;  ///< self message used to handle with looking for carrier periodically if there is no proper carrier before.
 	cMessage *linkBrokenEvt;  ///< self message used to handle with communication link broken event.
 
-	cQueue prefetchMsgQueue; ///< the queue of prefetch messages.
+	cQueue prefetchMsgQueue; ///< the queue of prefetching messages.
 
 	DownloaderItems activeDownloaders; ///< downloaders who are contained in current transmission scheme.
 	std::list<SchemeTuple> rsuSchemeList; ///< describe how this RSU transmit in each slot.
