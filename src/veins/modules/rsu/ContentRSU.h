@@ -165,7 +165,6 @@ private:
 	int prefetchNecessaryNum;  ///< the number of downloaders who need to prefetch data.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 	SimTime executeSTAGNextAt; ///< store the time when to execute the next time.
-	bool distributionActive;   ///< whether is providing downloading service currently.
 	///@}
 
 	/** @name carrier related variables. */

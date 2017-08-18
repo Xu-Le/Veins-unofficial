@@ -1,7 +1,0 @@
-<routes>
-	<vType id="vtype0" accel="3" decel="9.81" sigma="0.5" length="2.5" minGap="2.5" maxSpeed="70"/>
-	<route id="route0" multi_ref="x" edges="gneE12 gneE13 gneE14"></route>
-	<route id="route1" multi_ref="x" edges="-gneE14 -gneE13 -gneE12"></route>
-	<flow id="flow0" type="vtype0" route="route0" begin="0" period="8" number="12" departSpeed="max"/>
-	<flow id="flow1" type="vtype0" route="route1" begin="0" period="8" number="12" departSpeed="max"/>
-</routes>

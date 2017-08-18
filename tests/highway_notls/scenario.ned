@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2008 Christoph Sommer <christoph.sommer@informatik.uni-erlangen.de>
+// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -15,6 +15,7 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
+
 package org.car2x.veins.tests.highway_notls;
 
 import org.car2x.veins.nodes.Scenario;
@@ -29,28 +30,25 @@ import org.car2x.veins.nodes.RSU;
 network scenario extends Scenario
 {
 	parameters:
-		int numRSU = 5; // number of RSUs
+		int numRSU = 7; // number of RSUs
 
 	submodules:
-		warningCollector: WarningStatisticCollector {
-			@display("p=600,24");
-		}
 		contentCollector: ContentStatisticCollector {
-		    @display("p=750,24");
+			@display("p=750,24");
 		}
 		BS: BaseStation {
-			@display("p=900,24");
+			@display("p=2700,24");
 		}
 		contentServer: ContentServer {
 			parameters:
 				rsuNum = numRSU;
-			@display("p=1000,24");
+			@display("p=3000,24");
 		}
 		rsu[numRSU]: RSU {
 			@display("p=$posX,$posY;b=10,10,oval");
 		}
 		dummyRSU: DummyRSU {
-		    @display("p=$posX,$posY");
+			@display("p=$posX,$posY");
 		}
 
 	connections:
@@ -61,8 +59,8 @@ network scenario extends Scenario
 			rsu[i].veinswiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> contentServer.rsuIn[i];
 		}
 		for i = 0..numRSU-2 {
-		    rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;
-    		rsu[i].veinseastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[i+1].veinswestIn;
+			rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;
+			rsu[i].veinseastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[i+1].veinswestIn;
 		}
 		dummyRSU.eastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[0].veinswestOut;
 		dummyRSU.eastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[0].veinswestIn;

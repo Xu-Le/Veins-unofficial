@@ -70,8 +70,12 @@ void ContentStatisticCollector::finish()
 		globalTotalFlux = 1.0;
 	if (globalConsumingTime < 1e-6)
 		globalConsumingTime = 1.0;
+	if (globalDownloadingTime < 1e-6)
+		globalDownloadingTime = 1.0;
 	if (globalContentRequests == 0)
 		globalContentRequests = 1;
+	if (globalContentSize == 0)
+		globalContentSize = 1;
 
 	double averageDownloadingRate = globalContentSize / globalDownloadingTime / 128.0; // measured in kbps
 	double directFluxRatio = globalDirectFlux / globalTotalFlux;

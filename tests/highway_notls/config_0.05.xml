@@ -16,14 +16,6 @@
 			<parameter name="simtime" type="double" value="90.1"/>
 			<parameter name="receiver" type="long" value="16"/>
 		</RoutingPlan>
-		<RoutingPlan type="14">
-			<parameter name="simtime" type="double" value="145.1"/>
-			<parameter name="receiver" type="long" value="11"/>
-		</RoutingPlan>
-		<RoutingPlan type="18">
-			<parameter name="simtime" type="double" value="185.1"/>
-			<parameter name="receiver" type="long" value="19"/>
-		</RoutingPlan>
 	</RoutingPlans>
 	<WarningPlans>
 		<!-- Notes: Ensure simtime is written increasely, or simulation will crash, however the order of WarningPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime, the warning message's distance of vehicles can be both positive and negative, the latter indicates the warning message aims to vehicles which are driving opposite since vehicle possibly turn around, whereas the warning message's distance of RSUs can only be positive -->
@@ -33,49 +25,53 @@
 			<parameter name="simtime" type="double" value="190.1"/>
 			<parameter name="distance" type="double" value="-300"/>
 		</WarningPlan>
-		<WarningPlan type="15">
-			<parameter name="simtime" type="double" value="155.1"/>
-			<parameter name="distance" type="double" value="600"/>
-		</WarningPlan>
-		<WarningPlan type="0">
-			<parameter name="simtime" type="double" value="175.1"/>
-			<parameter name="distance" type="double" value="1000"/>
-			<parameter name="simtime" type="double" value="185.1"/>
-			<parameter name="distance" type="double" value="-500"/>
-		</WarningPlan>
-		<WarningPlan type="22">
-			<parameter name="simtime" type="double" value="195.1"/>
-			<parameter name="distance" type="double" value="400"/>
-		</WarningPlan>
 		<!-- RSUs' type start from 10000, make sure keep consistent with macro RSU_ADDRESS_OFFSET in BaseRSU.h -->
 		<WarningPlan type="10000">
 			<parameter name="simtime" type="double" value="120.1"/>
 			<parameter name="distance" type="double" value="600"/>
 		</WarningPlan>
-		<WarningPlan type="10001">
-			<parameter name="simtime" type="double" value="150.1"/>
-			<parameter name="distance" type="double" value="1000"/>
-			<parameter name="simtime" type="double" value="180.1"/>
-			<parameter name="distance" type="double" value="1000"/>
-		</WarningPlan>
-		<WarningPlan type="10002">
-			<parameter name="simtime" type="double" value="105.1"/>
-			<parameter name="distance" type="double" value="750"/>
-		</WarningPlan>
 	</WarningPlans>
 	<ContentPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<ContentPlan type="0">
+		<ContentPlan type="2">
 			<parameter name="simtime" type="double" value="50.1"/>
-			<parameter name="size" type="int" value="5120"/>
-		</ContentPlan>
-		<ContentPlan type="9">
-			<parameter name="simtime" type="double" value="150.1"/>
 			<parameter name="size" type="int" value="20480"/>
 		</ContentPlan>
-		<ContentPlan type="15">
-			<parameter name="simtime" type="double" value="250.1"/>
-			<parameter name="size" type="int" value="40960"/>
+		<ContentPlan type="4">
+			<parameter name="simtime" type="double" value="50.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="63">
+			<parameter name="simtime" type="double" value="200.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="75">
+			<parameter name="simtime" type="double" value="300.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="137">
+			<parameter name="simtime" type="double" value="400.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="140">
+			<parameter name="simtime" type="double" value="500.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="211">
+			<parameter name="simtime" type="double" value="600.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="243">
+			<parameter name="simtime" type="double" value="700.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="287">
+			<parameter name="simtime" type="double" value="800.1"/>
+			<parameter name="size" type="int" value="20480"/>
+		</ContentPlan>
+		<ContentPlan type="318">
+			<parameter name="simtime" type="double" value="900.1"/>
+			<parameter name="size" type="int" value="20480"/>
 		</ContentPlan>
 	</ContentPlans>
 </root>

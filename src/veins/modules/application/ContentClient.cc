@@ -42,6 +42,7 @@ void ContentClient::initialize(int stage)
 		rebroadcastDownloader = -1;
 
 		slotSpan = par("slotSpan").longValue();
+		codeRate = par("codeRate").longValue();
 		prevSlotStartTime = SimTime::ZERO;
 		relayLinkBytesOnce = 10 * (headerLength + dataLengthBits) / 8; // relayLinkPacketsOnce == 10
 		relayApplBytesOnce = 10 * dataLengthBits / 8;
@@ -150,10 +151,20 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 		Coord &receiverPos = itN->second->pos;
 		Coord &receiverSpeed = itN->second->speed;
 		int distance = RoutingUtils::_length(curPosition, receiverPos);
-		ASSERT( distance < 250 );
+		if (distance >= 250)
+		{
+			EV << "distance " << distance << " is larger than 250, give up sending the data and notify link broken event.\n";
+			delete dataMsg;
+
+			brokenDownloader = itSL->downloader;
+			scheduleAt(simTime(), linkBrokenEvt);
+
+			_prepareSchemeSwitch();
+			return;
+		}
 		int estimatedRate = ContentUtils::rateTable[distance/5];
 		EV << "estimated rate between myself and receiver [" << itSL->receiver << "] is " << 128*estimatedRate << " bytes per second.\n";
-		if (distance > 200 && !downloaderInfo->notifiedLinkBreak && curSpeed.x*receiverSpeed.x > 0 && (curPosition.x - receiverPos.x)*curSpeed.x < 0)
+		if (distance > 200 && !downloaderInfo->notifiedLinkBreak && (curPosition.x - receiverPos.x)*receiverSpeed.x < 0)
 		{
 			EV << "the communication link between downloader and relay will break soon, notify downloader to report its downloading status to RSU.\n";
 			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
@@ -417,7 +428,7 @@ void ContentClient::handleCellularMsg(CellularMessage *cellularMsg)
 	downloadingStatus.itS->second = downloadingStatus.availableOffset;
 	EV << "available offset updates to " << downloadingStatus.availableOffset << " bytes.\n";
 
-	// check whether the vedio play starting condition is satisfied
+	// check whether the video play starting condition is satisfied
 	if (!startConsuming && downloadingStatus.availableOffset > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate)
 	{
 		EV << "cached data amount is enough, start consuming process.\n";
@@ -639,7 +650,7 @@ void ContentClient::onContent(ContentMessage *contentMsg)
 			EV << "downloader [" << downloader << "]'s acknowledged offset updates to " << contentMsg->getReceivedOffset() << std::endl;
 			downloaders[downloader]->acknowledgedOffset = contentMsg->getReceivedOffset();
 			// help to rebroadcast acknowledge message, for downloader might has driven away RSU's communication area
-			if (simTime() - prevSlotStartTime < SimTime(slotSpan, SIMTIME_MS))
+			if (simTime() - prevSlotStartTime < SimTime(slotSpan + 100, SIMTIME_MS))
 			{
 				EV << "I am the relay in the last slot, thus help to rebroadcast acknowledge message.\n";
 				ContentMessage *dupAckMsg = new ContentMessage(*contentMsg);
@@ -1070,7 +1081,7 @@ void ContentClient::callContent(int size)
 
 	downloadingStatus.reset();
 	downloadingStatus.totalContentSize = size;
-	downloadingStatus.consumingRate = VideoQuailty::_480P;
+	downloadingStatus.consumingRate = 128*codeRate; // VideoQuailty::_480P;
 	downloadingStatus.requestAt = simTime();
 	ASSERT( downloadingStatus.totalContentSize > CACHE_TIME_BEFORE_PLAY*downloadingStatus.consumingRate );
 

@@ -174,6 +174,7 @@ private:
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
 	LAddress::L3Type rebroadcastDownloader; ///< the downloader whose beacon message should be rebroadcast.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
+	int codeRate; ///< code rate of the videos measured in kbps.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 
 	/** @name performance consideration. */

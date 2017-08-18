@@ -34,7 +34,7 @@ void BaseStation::initialize(int stage)
 		wiredHeaderLength = par("wiredHeaderLength").longValue();
 		wirelessHeaderLength = par("wirelessHeaderLength").longValue();
 		wirelessDataLength = par("wirelessDataLength").longValue();
-		wirelessBitsRate = par("wirelessBitsRate").longValue() / 25; // user number is 25, thus rate is 500KB/s
+		wirelessBitsRate = par("wirelessBitsRate").longValue() / 50; // user number is 50, thus rate is 2000kbps
 
 		fetchApplBytesOnce = 500 * 1472; // fetchPacketsOnce == 500
 		distributeLinkBytesOnce = 20 * (wirelessHeaderLength + wirelessDataLength) / 8; // distributeLinkPacketsOnce == 20
@@ -117,10 +117,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 				if (undistributedAmount > distributeApplBytesOnce) // has enough data to filling a cellular normal data packet
 				{
 					CellularMessage *cellularMsg = new CellularMessage("data", CellularMsgCC::DATA_PACKET_NORMAL);
-					if (downloaderInfo->transmissionActive)
-						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
-					else
-						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
+					cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
 					cellularMsg->setDownloader(itDL->first);
 					cellularMsg->addBitLength(8 * distributeLinkBytesOnce);
 					ContentStatisticCollector::globalCellularFlux += distributeApplBytesOnce;
@@ -142,7 +139,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 							EV << "send the last half-filled data packet because cellular connection is closed by downloader.\n";
 
 						CellularMessage *cellularMsg = new CellularMessage("data", CellularMsgCC::DATA_PACKET_LAST);
-						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
+						cellularMsg->setControlCode(downloaderInfo->transmissionActive ? CellularMsgCC::DATA_PACKET_LAST : CellularMsgCC::DATA_PACKET_NORMAL);
 						cellularMsg->setDownloader(itDL->first);
 						int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
 						int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, wirelessHeaderLength/8, wirelessDataLength/8);

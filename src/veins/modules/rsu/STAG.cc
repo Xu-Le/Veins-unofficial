@@ -231,34 +231,38 @@ void STAG::maximumFlow()
 
 	double minTotalInterruptTime = totalInterruptTime;
 	int maxTotalReceivedAmount = totalReceivedAmount;
-	_recordBetterScheme();
 
-	for (int loop = 0; loop < slotNum/2; ++loop)
+	if (nodeNum > 2)
 	{
-		EV << "===============    Loop " << loop + 1 << "    ===============\n";
+		_recordBetterScheme();
 
-		bool continueLoop = _seekBetterScheme();
-		if (!continueLoop)
-			break;
-
-		_clearNodeStorage();
-
-		_calcNodeStorage();
-
-		_obtainSchemeIndicators(totalInterruptTime, totalReceivedAmount);
-
-		// if indeed get a better scheme, then record this better scheme
-		if (minTotalInterruptTime > totalInterruptTime || (minTotalInterruptTime == totalInterruptTime && maxTotalReceivedAmount < totalReceivedAmount))
+		for (int loop = 0; loop < downloaderNum*slotNum/2; ++loop)
 		{
-			minTotalInterruptTime = totalInterruptTime;
-			maxTotalReceivedAmount = totalReceivedAmount;
-			_recordBetterScheme();
+			EV << "===============    Loop " << loop + 1 << "    ===============\n";
+
+			bool continueLoop = _seekBetterScheme();
+			if (!continueLoop)
+				break;
+
+			_clearNodeStorage();
+
+			_calcNodeStorage();
+
+			_obtainSchemeIndicators(totalInterruptTime, totalReceivedAmount);
+
+			// if indeed get a better scheme, then record this better scheme
+			if (minTotalInterruptTime > totalInterruptTime || (minTotalInterruptTime == totalInterruptTime && maxTotalReceivedAmount < totalReceivedAmount))
+			{
+				minTotalInterruptTime = totalInterruptTime;
+				maxTotalReceivedAmount = totalReceivedAmount;
+				_recordBetterScheme();
+			}
 		}
+
+		_revertBestScheme();
 	}
 
 	EV << "Final total interrupt time is " << minTotalInterruptTime << ", total received data amount is " << maxTotalReceivedAmount << ".\n";
-
-	_revertBestScheme();
 
 	_recordFluxScheme();
 
@@ -539,11 +543,11 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 		n = storeN;
 		marc = &arcTable[arcPathList[i][0]];
 		narc = &arcTable[arcPathList[i][1]];
-		EV << "path " << i << ", m " << m << ", n " << n << std::endl;
+		EV << "path: " << i << ", m: " << m+1 << ", n: " << n+1 << std::endl;
 
 		// update chosenLinks, chosenPaths, chosenSlots
 		std::vector<int> tmpChosenLink;
-		std::vector<int> tmpChosenPath;
+		std::vector<int> tmpChosenPath, storeChosenPath;
 		for (k = 0; k < chosenLinks[m].size(); ++k)
 		{
 			int chosenPath = chosenPaths[m][k];
@@ -556,7 +560,10 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 			else if (chosenPath != i)
 			{
 				__eraseChosenSlot(chosenSlots[chosenPath], m);
-				_checkChosenSlots(collisionArc, m, chosenPath);
+				if (ContentUtils::vectorFind(chosenPaths[n], chosenPath))
+					storeChosenPath = chosenPaths[m]; // reserve to be done when check slot n
+				else
+					_checkChosenSlots(collisionArc, m, chosenPath);
 				collisionArc->flow[m] = 0;
 				collisionArc->downloader[m] = -1;
 			}
@@ -579,7 +586,13 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 			else if (chosenPath != i)
 			{
 				__eraseChosenSlot(chosenSlots[chosenPath], n);
-				_checkChosenSlots(collisionArc, n, chosenPath);
+				if (arcPathList[chosenPath].size() > 2 && ContentUtils::vectorFind(storeChosenPath, chosenPath))
+				{
+					struct Arc *farc = &arcTable[arcPathList[chosenPath][0]], *sarc = &arcTable[arcPathList[chosenPath][1]];
+					__calcChosenPathPostFlow(chosenSlots[chosenPath], farc, sarc, true);
+				}
+				else
+					_checkChosenSlots(collisionArc, n, chosenPath);
 				collisionArc->flow[n] = 0;
 				collisionArc->downloader[n] = -1;
 			}
@@ -611,10 +624,10 @@ bool STAG::_optimizeReceivedAmount(const int curDownloaderIdx)
 
 void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, const int chosenPath)
 {
-	int j = 0, decreasedFlow = collisionArc->flow[collisionSlot];
-	struct Arc *checkingArc = NULL;
 	if (arcPathList[chosenPath].size() > 2)
 	{
+		int j = 0, decreasedFlow = collisionArc->flow[collisionSlot];
+		struct Arc *checkingArc = NULL;
 		if (collisionArc->srcID == 0) // scan second relay arc, checking whether need to erase slot
 		{
 			checkingArc = &arcTable[arcPathList[chosenPath][1]];
@@ -903,7 +916,7 @@ void STAG::_recordFluxScheme()
 			struct Arc *parc = &arcTable[arcPathList[pathIdx][k]];
 			for (int j = 0; j < slotNum; ++j)
 			{
-				if (parc->flow[j] > 0)
+				if (parc->flow[j] > 0 && parc->dstID == parc->downloader[j])
 				{
 					fluxSchemeList[parc->srcID].push_back(FluxScheme(j+1, parc->dstID, parc->downloader[j], parc->flow[j]));
 					fluxSchemeList[parc->srcID].back().segment = segmentOffsets[j];
@@ -1123,9 +1136,23 @@ int STAG::__calcAlternativeFlow(const int curPath, const int m, const int n, con
 	preFlow = firstArcFlow;
 
 	if (erasureM)
+	{
 		__eraseChosenSlot(chosenSlot, m);
+		if (setFlow)
+		{
+			narc->flow[m] = 0;
+			narc->downloader[m] = -1;
+		}
+	}
 	if (erasureN)
+	{
 		__eraseChosenSlot(chosenSlot, n);
+		if (setFlow)
+		{
+			marc->flow[n] = 0;
+			marc->downloader[n] = -1;
+		}
+	}
 	if (!collisionM)
 		__insertChosenSlot(chosenSlot, m, true);
 	if (!collisionN)
@@ -1217,9 +1244,6 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 
 	if (setFlow)
 	{
-		memset(marc->flow, 0, slotNum*sizeof(int));
-		memset(narc->flow, 0, slotNum*sizeof(int));
-
 		for (i = 0; i < indicator; ++i)
 			marc->flow[chosenSlot[i]] = marc->bandwidth[chosenSlot[i]] - marcBandwidth[chosenSlot[i]];
 
@@ -1310,7 +1334,7 @@ void STAG::__printChosenSlot(std::vector<int>& vec)
 		{
 			EV << " " << vec[i]+1;
 			if (i == vecSize-2)
-                EV << " |";
+				EV << " |";
 		}
 		EV << " " << indicator;
 	}
