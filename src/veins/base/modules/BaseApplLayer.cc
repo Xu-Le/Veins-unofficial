@@ -38,7 +38,7 @@ void BaseApplLayer::initialize(int stage)
         myAddr = getParentModule()->getIndex();
         headerLength = par("headerLength").longValue();
         double maxOffset = par("maxOffset").doubleValue();
-        individualOffset = dblrand() * maxOffset;
+        individualOffset = maxOffset;
     }
 }
 

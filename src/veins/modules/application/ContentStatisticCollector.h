@@ -45,6 +45,9 @@ private:
 	int contentSize;    ///< total content size required by ContentClient.
 	int contentQuality; ///< content consuming rate of ContentClient.
 	int cellularRate;   ///< average cellular downloading rate in the simulation.
+	int trafficDensity; ///< traffic flow density measured in vph.
+	int deployInterval; ///< deploy interval of RSUs measured in meters.
+	bool isComparison;  ///< indicates whether are SimpleContentRSU's results.
 
 public:
 	static long globalContentRequests; ///< accumulated content request number in the whole simulation.

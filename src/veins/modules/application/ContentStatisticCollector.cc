@@ -41,11 +41,13 @@ void ContentStatisticCollector::initialize(int stage)
 	{
 		EV << "ContentStatisticCollector::initialize() called.\n";
 
-		srand(1);
 		slotNum = par("slotNum").longValue();
 		contentSize = par("contentSize").longValue();
 		contentQuality = par("contentQuality").longValue();
 		cellularRate = par("cellularRate").longValue();
+		trafficDensity = par("trafficDensity").longValue();
+		deployInterval = par("deployInterval").longValue();
+		isComparison = par("isComparison").boolValue();
 	}
 }
 
@@ -96,14 +98,15 @@ void ContentStatisticCollector::finish()
 	recordScalar("averageConsumptionStartingDelay", averageConsumptionStartingDelay);
 
 	// append statistic to file for figuring in MATLAB
-	std::ofstream fout("contentStatistics.csv", std::ios_base::out | std::ios_base::app);
+	const char *resultFile = isComparison ? "contentStatistics_cmp.csv" : "contentStatistics.csv";
+	std::ofstream fout(resultFile, std::ios_base::out | std::ios_base::app);
 	if ( !fout.is_open() )
 	{
 		error("cannot open file routingStatistics.csv!");
 	}
 	else
 	{
-		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << cellularRate << ',';
+		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << trafficDensity << ',' << deployInterval << ',';
 		fout << globalContentRequests << ',' << globalContentSize << ',' << globalConsumingTime << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
 		fout << averageDownloadingRate << ',' << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << ',' << cellularFluxRatio << ',';
 		fout << redundantStorageRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;

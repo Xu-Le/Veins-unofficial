@@ -22,8 +22,6 @@
 		<WarningPlan type="3">
 			<parameter name="simtime" type="double" value="100.1"/>
 			<parameter name="distance" type="double" value="600"/>
-			<parameter name="simtime" type="double" value="190.1"/>
-			<parameter name="distance" type="double" value="-300"/>
 		</WarningPlan>
 		<!-- RSUs' type start from 10000, make sure keep consistent with macro RSU_ADDRESS_OFFSET in BaseRSU.h -->
 		<WarningPlan type="10000">
@@ -33,45 +31,45 @@
 	</WarningPlans>
 	<ContentPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<ContentPlan type="2">
-			<parameter name="simtime" type="double" value="50.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="12">
+			<parameter name="simtime" type="double" value="330.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="4">
-			<parameter name="simtime" type="double" value="50.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="15">
+			<parameter name="simtime" type="double" value="360.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="63">
-			<parameter name="simtime" type="double" value="200.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="20">
+			<parameter name="simtime" type="double" value="390.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="75">
-			<parameter name="simtime" type="double" value="300.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="24">
+			<parameter name="simtime" type="double" value="420.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="137">
-			<parameter name="simtime" type="double" value="400.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="27">
+			<parameter name="simtime" type="double" value="450.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="140">
-			<parameter name="simtime" type="double" value="500.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="28">
+			<parameter name="simtime" type="double" value="510.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="211">
+		<ContentPlan type="30">
+			<parameter name="simtime" type="double" value="570.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="29">
 			<parameter name="simtime" type="double" value="600.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="243">
-			<parameter name="simtime" type="double" value="700.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="32">
+			<parameter name="simtime" type="double" value="660.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="287">
-			<parameter name="simtime" type="double" value="800.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="318">
-			<parameter name="simtime" type="double" value="900.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="37">
+			<parameter name="simtime" type="double" value="750.1"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
 	</ContentPlans>
 </root>

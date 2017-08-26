@@ -94,7 +94,7 @@ void BaseWaveApplLayer::initialize(int stage)
 			initializeContentPlanList(par("contentPlan").xmlValue());
 
 		// simulate asynchronous channel access
-		double offSet = dblrand() * (beaconInterval/2);
+		double offSet = static_cast<double>(myAddr%100)/100.0 * (beaconInterval/2);
 		offSet = offSet + floor(offSet/0.050)*0.050;
 
 		if ( sendBeacons )

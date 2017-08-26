@@ -56,7 +56,7 @@ void Mac1609_4::initialize(int stage)
 		setParametersForBitrate(bitrate);
 
 		// mac-adresses
-		myMacAddress = intuniform(0, 0xFFFFFFFE);
+		myMacAddress = intuniform(0, 0x7FFFFFFD);
 		myId = getParentModule()->getParentModule()->getFullPath();
 		// create frequency mappings
 		frequency.insert(std::pair<int, double>(Channels::CRIT_SOL, 5.86e9));

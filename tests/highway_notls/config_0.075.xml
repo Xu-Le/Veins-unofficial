@@ -31,87 +31,45 @@
 	</WarningPlans>
 	<ContentPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<!--
-		<ContentPlan type="110">
+		<ContentPlan type="30">
 			<parameter name="simtime" type="double" value="330.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="126">
+		<ContentPlan type="35">
 			<parameter name="simtime" type="double" value="360.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="136">
+		<ContentPlan type="18">
 			<parameter name="simtime" type="double" value="390.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="145">
+		<ContentPlan type="53">
 			<parameter name="simtime" type="double" value="420.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="158">
+		<ContentPlan type="62">
 			<parameter name="simtime" type="double" value="450.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="171">
+		<ContentPlan type="67">
 			<parameter name="simtime" type="double" value="480.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="180">
+		<ContentPlan type="71">
 			<parameter name="simtime" type="double" value="510.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="190">
-			<parameter name="simtime" type="double" value="540.1"/>
-			<parameter name="size" type="int" value="20480"/>
+		<ContentPlan type="77">
+			<parameter name="simtime" type="double" value="540.2"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="205">
+		<ContentPlan type="84">
 			<parameter name="simtime" type="double" value="570.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="214">
+		<ContentPlan type="87">
 			<parameter name="simtime" type="double" value="600.1"/>
-			<parameter name="size" type="int" value="20480"/>
+			<parameter name="size" type="int" value="30720"/>
 		</ContentPlan>
-		<ContentPlan type="223">
-			<parameter name="simtime" type="double" value="630.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="237">
-			<parameter name="simtime" type="double" value="660.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="243">
-			<parameter name="simtime" type="double" value="690.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="259">
-			<parameter name="simtime" type="double" value="720.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="265">
-			<parameter name="simtime" type="double" value="750.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="275">
-			<parameter name="simtime" type="double" value="780.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="286">
-			<parameter name="simtime" type="double" value="810.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="304">
-			<parameter name="simtime" type="double" value="840.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="319">
-			<parameter name="simtime" type="double" value="870.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		<ContentPlan type="327">
-			<parameter name="simtime" type="double" value="900.1"/>
-			<parameter name="size" type="int" value="20480"/>
-		</ContentPlan>
-		-->
 	</ContentPlans>
 </root>

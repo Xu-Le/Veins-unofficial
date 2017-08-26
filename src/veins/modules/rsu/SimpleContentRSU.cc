@@ -174,7 +174,10 @@ void SimpleContentRSU::handleWiredMsg(WiredMessage *wiredMsg)
 	ASSERT( wiredMsg->getControlCode() == WiredMsgCC::NORMAL_DATA_PACKET || wiredMsg->getControlCode() == WiredMsgCC::LAST_DATA_PACKET );
 
 	LAddress::L3Type downloader = wiredMsg->getDownloader();  // alias
-	DownloaderInfo *downloaderInfo = downloaders[downloader]; // this downloader's record certainly exists
+	if ((itDL = downloaders.find(downloader)) == downloaders.end())
+		return;
+
+	DownloaderInfo *downloaderInfo = itDL->second;
 	if (downloaderInfo->cacheStartOffset == -1)
 		downloaderInfo->cacheStartOffset = wiredMsg->getCurOffset() - wiredMsg->getBytesNum();
 	downloaderInfo->cacheEndOffset = wiredMsg->getCurOffset();
@@ -253,6 +256,7 @@ void SimpleContentRSU::onBeacon(BeaconMessage *beaconMsg)
 
 				sendWSM(discoveryMsg);
 
+				--noticeEnteringNum;
 				downloaders[sender]->noticeEntering = false;
 				break;
 			}
@@ -322,6 +326,7 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 		sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
 		// release ourself resources corresponding to this downloader
 		__eraseDownloader(downloader);
+		coDownloaders.erase(downloader);
 		break;
 	}
 	case ContentMsgCC::LINK_BREAK_DIRECT: // it is a link break notification - the communication link between downloader and RSU will break soon
@@ -338,7 +343,6 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 	{
 		if (contentMsg->getNeighbors().empty() == false) // received response is yes, otherwise still paying attention to entering vehicles
 		{
-			--noticeEnteringNum;
 			coDownloaders.erase(downloader);
 
 			if (contentMsg->getReceivedOffset() == contentMsg->getContentSize())

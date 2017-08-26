@@ -25,8 +25,6 @@
 #define RELAY         2
 #define CARRIER       3
 
-#define CACHE_TIME_BEFORE_PLAY    3
-
 /**
  * @brief File Content Client.
  *
@@ -98,6 +96,8 @@ private:
 	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver);
 	/** @brief filling downloading status report message, and then send it to RSU. */
 	void _reportDownloadingStatus2(const int contentMsgCC, const LAddress::L3Type receiver);
+	/** @brief open cellular connection, start downloading data from cellular network. */
+	void _openCellularConnection();
 	/** @brief cut off cellular connection, stop downloading data from cellular network. */
 	void _closeCellularConnection();
 	/** @brief notify base station, RSUs and other vehicles that downloading process has completed. */
@@ -167,8 +167,8 @@ private:
 	int cellularBitsRate; ///< data transmission rate measured in bps of cellular radio.
 
 	bool startConsuming; ///< whether the consuming process has started.
+	bool carrierDownloading; ///< whether is downloading from carrier currently.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
-	bool waitingDistribution; ///< whether is waiting for RSU's downloading service.
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.

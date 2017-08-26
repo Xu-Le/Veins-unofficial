@@ -34,12 +34,13 @@ void BaseStation::initialize(int stage)
 		wiredHeaderLength = par("wiredHeaderLength").longValue();
 		wirelessHeaderLength = par("wirelessHeaderLength").longValue();
 		wirelessDataLength = par("wirelessDataLength").longValue();
-		wirelessBitsRate = par("wirelessBitsRate").longValue() / 50; // user number is 50, thus rate is 2000kbps
+		wirelessBitsRate = 3000000; // 3000kbps
 
 		fetchApplBytesOnce = 500 * 1472; // fetchPacketsOnce == 500
 		distributeLinkBytesOnce = 20 * (wirelessHeaderLength + wirelessDataLength) / 8; // distributeLinkPacketsOnce == 20
 		distributeApplBytesOnce = 20 * wirelessDataLength / 8;
-		distributePeriod = SimTime(8 * distributeLinkBytesOnce * 10 * 25, SIMTIME_NS); // 100Mbps TD-LTE downlink channel, 10 is obtained by 1e9 / 100 / 1e6
+		double nanoseconds = floor(8 * distributeLinkBytesOnce * 10 * 33.333);
+		distributePeriod = SimTime(static_cast<int64_t>(nanoseconds), SIMTIME_NS); // 100Mbps TD-LTE downlink channel, 10 is obtained by 1e9 / 100 / 1e6
 		EV << "distribute period is " << distributePeriod.dbl() << "s.\n";
 		wiredTxDuration = SimTime((wiredHeaderLength + 160) * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 
@@ -99,8 +100,9 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
 			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
 			{
-				int undistributedAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
-				if (downloaderInfo->transmissionActive && !downloaderInfo->fetchingActive && undistributedAmount < 3*distributeApplBytesOnce) // need to fetch more data
+				int undistributedAmount = downloaderInfo->requiredEndOffset - downloaderInfo->distributedOffset; // alias
+				int remainingAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
+				if (downloaderInfo->transmissionActive && !downloaderInfo->fetchingActive && remainingAmount < 3*distributeApplBytesOnce) // need to fetch more data
 				{
 					downloaderInfo->curFetchEndOffset += fetchApplBytesOnce;
 					if (downloaderInfo->curFetchEndOffset > downloaderInfo->requiredEndOffset)
@@ -114,7 +116,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 
 				downloaderInfo->distributedAt = simTime() + distributePeriod;
 
-				if (undistributedAmount > distributeApplBytesOnce) // has enough data to filling a cellular normal data packet
+				if (remainingAmount > distributeApplBytesOnce && undistributedAmount > distributeApplBytesOnce) // has enough data to filling a cellular normal data packet
 				{
 					CellularMessage *cellularMsg = new CellularMessage("data", CellularMsgCC::DATA_PACKET_NORMAL);
 					cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
@@ -128,10 +130,10 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 					cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
 					sendDirect(cellularMsg, SimTime::ZERO, distributePeriod, downloaderInfo->correspondingGate);
 				}
-				else if (downloaderInfo->cacheEndOffset > downloaderInfo->distributedOffset) // has data but not enough to filling a cellular normal data packet
+				else if (remainingAmount > 0) // has data but not enough to filling a cellular normal data packet
 				{
 					 // data fetch process has finished or cellular connection is closed by downloader, thus send the last half-filled cellular data packet
-					if (downloaderInfo->cacheEndOffset == downloaderInfo->requiredEndOffset || !downloaderInfo->transmissionActive)
+					if (downloaderInfo->cacheEndOffset >= downloaderInfo->requiredEndOffset || !downloaderInfo->transmissionActive)
 					{
 						if (downloaderInfo->transmissionActive)
 							EV << "send the last half-filled data packet because data fetching process has finished.\n";
@@ -139,13 +141,14 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 							EV << "send the last half-filled data packet because cellular connection is closed by downloader.\n";
 
 						CellularMessage *cellularMsg = new CellularMessage("data", CellularMsgCC::DATA_PACKET_LAST);
-						cellularMsg->setControlCode(downloaderInfo->transmissionActive ? CellularMsgCC::DATA_PACKET_LAST : CellularMsgCC::DATA_PACKET_NORMAL);
+						cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_LAST);
 						cellularMsg->setDownloader(itDL->first);
-						int lastPktAmount = downloaderInfo->cacheEndOffset - downloaderInfo->distributedOffset; // alias
+						int distributedEndOffset = std::min(downloaderInfo->cacheEndOffset, downloaderInfo->requiredEndOffset);
+						int lastPktAmount = distributedEndOffset - downloaderInfo->distributedOffset; // alias
 						int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, wirelessHeaderLength/8, wirelessDataLength/8);
 						cellularMsg->addBitLength(8 * totalLinkBytes);
 						ContentStatisticCollector::globalCellularFlux += lastPktAmount;
-						downloaderInfo->distributedOffset = downloaderInfo->cacheEndOffset;
+						downloaderInfo->distributedOffset = distributedEndOffset;
 						cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
 						EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << ".\n";
 						SimTime transmissionDelay((totalLinkBytes*1000)/(wirelessBitsRate/1000) * 8, SIMTIME_US);
@@ -216,6 +219,13 @@ void BaseStation::handleWirelessIncomingMsg(CellularMessage *cellularMsg)
 			int curFetchStartOffset = std::max(cellularMsg->getStartOffset(), downloaderInfo->cacheEndOffset);
 			EV << "current fetching start offset: " << curFetchStartOffset << ", end offset: " << downloaderInfo->curFetchEndOffset << ".\n";
 			_sendFetchingRequest(downloader, curFetchStartOffset);
+		}
+		else if (!downloaderInfo->distributeEvt->isScheduled())
+		{
+			EV << "current cached data is adequate, start distributing to downloader now.\n";
+			downloaderInfo->transmissionActive = !downloaderInfo->closingWhileFetching;
+			downloaderInfo->distributedAt = simTime();
+			scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
 		}
 	}
 	else if (cellularMsg->getControlCode() == CellularMsgCC::TRANSMISSION_ENDING)

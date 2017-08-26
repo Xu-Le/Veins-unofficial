@@ -69,13 +69,17 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t) : totalContentSize(t), distributedOffset(0), requiredEndOffset(t), rsuIndex(-1), distributedAt(omnetpp::SimTime::ZERO) {}
+		DownloaderInfo(int t) : totalContentSize(t), distributedOffset(0), requiredEndOffset(t), rsuIndex(-1),
+				distributedBSOffset(0), requiredEndBSOffset(t), distributedAt(), distributedBSAt() {}
 
 		int totalContentSize;
 		int distributedOffset;
 		int requiredEndOffset;
 		int rsuIndex;
+		int distributedBSOffset;
+		int requiredEndBSOffset;
 		SimTime distributedAt;
+		SimTime distributedBSAt;
 	};
 
 	int rsuNum; ///< number of RSUs in current scenario.

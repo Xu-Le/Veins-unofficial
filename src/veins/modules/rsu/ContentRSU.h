@@ -130,9 +130,10 @@ private:
 	class CoDownloaderInfo
 	{
 	public:
-		CoDownloaderInfo(Coord& _pos, Coord& _speed) : carrier(-1), transmissionAmount(-1), tryingLookForTimes(0), pos(_pos), speed(_speed) { neighbors.reserve(32); }
+		CoDownloaderInfo(Coord& _pos, Coord& _speed) : carrier(-1), encounterSeconds(-1), transmissionAmount(-1), tryingLookForTimes(0), pos(_pos), speed(_speed) { neighbors.reserve(32); }
 
 		LAddress::L3Type carrier;
+		int encounterSeconds;
 		int transmissionAmount;
 		int tryingLookForTimes;
 		SimTime transmitAt;
@@ -170,8 +171,7 @@ private:
 	/** @name carrier related variables. */
 	///@{
 	int noticeEnteringNum;   ///< pay attention to the event that the co-downloader or its neighbor enters RSU's communication range.
-	int adjustThresholdDist; ///< the threshold distance between RSUs which leads to offset adjustment.
-	int unitOffsetPerMeter;  ///< the starting offset of distribution data aiming to carrier is adjusted according to the distance between RSUs.
+	int unitOffsetPerSecond; ///< the baseline offset is adjusted according to carrier's finding delay.
 	///@}
 
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.

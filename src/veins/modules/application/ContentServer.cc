@@ -148,7 +148,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 					popQueueRSUEvts[downloaderInfo->rsuIndex]->setContextPointer(itDL->second);
 					scheduleAt(simTime() + transmissionDelay, popQueueRSUEvts[downloaderInfo->rsuIndex]);
 				}
-				EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
+				EV << "downloader [" << itDL->first << "]'s distributed(RSU) offset updates to " << downloaderInfo->distributedOffset << std::endl;
 				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
 				sendDelayed(dataMsg, SimTime::ZERO, "rsuOut", downloaderInfo->rsuIndex);
 				break;
@@ -161,34 +161,34 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 		for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
 		{
 			DownloaderInfo *downloaderInfo = itDL->second; // alias
-			if (downloaderInfo->distributedAt == simTime()) // self message aims to this downloader
+			if (downloaderInfo->distributedBSAt == simTime()) // self message aims to this downloader
 			{
 				WiredMessage *dataMsg = new WiredMessage("data", WiredMsgCC::NORMAL_DATA_PACKET);
 				dataMsg->setDownloader(itDL->first);
-				if (downloaderInfo->requiredEndOffset - downloaderInfo->distributedOffset > distributeBSApplBytesOnce)
+				if (downloaderInfo->requiredEndBSOffset - downloaderInfo->distributedBSOffset > distributeBSApplBytesOnce)
 				{
 					dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
 					dataMsg->setBytesNum(distributeBSApplBytesOnce);
 					dataMsg->addBitLength(8*distributeBSLinkBytesOnce);
-					downloaderInfo->distributedOffset += distributeBSApplBytesOnce;
-					downloaderInfo->distributedAt = simTime() + distributeBSPeriod;
-					scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
+					downloaderInfo->distributedBSOffset += distributeBSApplBytesOnce;
+					downloaderInfo->distributedBSAt = simTime() + distributeBSPeriod;
+					scheduleAt(downloaderInfo->distributedBSAt, distributeBSEvt);
 				}
 				else
 				{
 					dataMsg->setControlCode(WiredMsgCC::LAST_DATA_PACKET);
-					int lastPktAmount = downloaderInfo->requiredEndOffset - downloaderInfo->distributedOffset; // alias
+					int lastPktAmount = downloaderInfo->requiredEndBSOffset - downloaderInfo->distributedBSOffset; // alias
 					int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, 28, 1472);
 					dataMsg->setBytesNum(lastPktAmount);
 					dataMsg->addBitLength(8*totalLinkBytes);
-					downloaderInfo->distributedOffset = downloaderInfo->requiredEndOffset;
+					downloaderInfo->distributedBSOffset = downloaderInfo->requiredEndBSOffset;
 
 					SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
 					// pop action will be done later to ensure the correctness of judgment fetchingQ.empty() in handleLTEIncomingMsg()
 					scheduleAt(simTime() + transmissionDelay, popQueueBSEvt);
 				}
-				EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << std::endl;
-				dataMsg->setCurOffset(downloaderInfo->distributedOffset);
+				EV << "downloader [" << itDL->first << "]'s distributed(BS) offset updates to " << downloaderInfo->distributedBSOffset << std::endl;
+				dataMsg->setCurOffset(downloaderInfo->distributedBSOffset);
 				sendDelayed(dataMsg, SimTime::ZERO, "cellularOut");
 				break;
 			}
@@ -212,7 +212,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 		fetchingQ.pop_front();
 		if (!fetchingQ.empty())
 		{
-			downloaders[fetchingQ.front()]->distributedAt = simTime();
+			downloaders[fetchingQ.front()]->distributedBSAt = simTime();
 			scheduleAt(simTime(), distributeBSEvt);
 		}
 		break;
@@ -247,7 +247,7 @@ void ContentServer::handleRSUIncomingMsg(WiredMessage *rsuMsg, int rsuIdx)
 			downloaderInfo->requiredEndOffset = rsuMsg->getEndOffset();
 			downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 		}
-		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
+		EV << "downloader [" << downloader << "]'s required(RSU) end offset is " << downloaderInfo->requiredEndOffset << std::endl;
 
 		downloaderInfo->rsuIndex = rsuIdx;
 		if (prefetchingQs[rsuIdx].empty())
@@ -290,24 +290,24 @@ void ContentServer::handleLTEIncomingMsg(WiredMessage *lteMsg)
 		{
 			EV << "    downloader [" << downloader << "] is an old downloader, update its info.\n";
 			downloaderInfo = downloaders[downloader];
-			downloaderInfo->distributedOffset = lteMsg->getStartOffset();
-			downloaderInfo->requiredEndOffset = lteMsg->getEndOffset();
+			downloaderInfo->distributedBSOffset = lteMsg->getStartOffset();
+			downloaderInfo->requiredEndBSOffset = lteMsg->getEndOffset();
 		}
 		else // insert new record
 		{
 			EV << "    downloader [" << downloader << "] is a new downloader, insert its info.\n";
 			downloaderInfo = new DownloaderInfo(lteMsg->getContentSize());
 			ASSERT( lteMsg->getStartOffset() == 0 );
-			downloaderInfo->requiredEndOffset = lteMsg->getEndOffset();
+			downloaderInfo->requiredEndBSOffset = lteMsg->getEndOffset();
 			downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 		}
-		EV << "downloader [" << downloader << "]'s required end offset is " << downloaderInfo->requiredEndOffset << std::endl;
+		EV << "downloader [" << downloader << "]'s required(BS) end offset is " << downloaderInfo->requiredEndBSOffset << std::endl;
 
 		if (fetchingQ.empty())
 		{
 			EV << "active fetching queue is empty, start distribution now.\n";
-			downloaderInfo->distributedAt = simTime();
-			scheduleAt(downloaderInfo->distributedAt, distributeBSEvt);
+			downloaderInfo->distributedBSAt = simTime();
+			scheduleAt(downloaderInfo->distributedBSAt, distributeBSEvt);
 		}
 		else
 			EV << "active fetching queue is not empty, wait other downloaders' distribution to finish.\n";

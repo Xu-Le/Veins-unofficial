@@ -351,7 +351,7 @@ void STAG::_obtainInitialScheme()
 	struct Arc *parc = NULL, *qarc = NULL, *tarc = NULL, *rarc = NULL;
 	for (int j = 0; j < slotNum; ++j)
 	{
-		int maxBandwidth = 0;
+		int maxBandwidth = -1;
 		int maxArcID = 0;
 		size_t maxArcPathIdx = 0;
 		for (k = 0; k < arcPathList.size(); ++k)
@@ -707,8 +707,11 @@ void STAG::_calcNodeStorage()
 		for (size_t k = 0; k < chosenLink.size(); ++k)
 		{
 			struct Arc *parc = &arcTable[chosenLink[k]];
-			downloaderIdx = downloaderTable[parc->downloader[j]];
-			parc->flow[j] = std::min(parc->flow[j], NodeList[parc->srcID].S[j][downloaderIdx].size);
+			if (parc->downloader[j] != -1)
+			{
+				downloaderIdx = downloaderTable[parc->downloader[j]];
+				parc->flow[j] = std::min(parc->flow[j], NodeList[parc->srcID].S[j][downloaderIdx].size);
+			}
 			NodeList[parc->srcID].S[j+1][downloaderIdx].size -= parc->flow[j];
 			NodeList[parc->dstID].S[j+1][downloaderIdx].size += parc->flow[j];
 		}
@@ -930,7 +933,7 @@ void STAG::_recordFluxScheme()
 			std::vector<std::pair<int /* slot */, int /* flow */> > marcSlotFlow, narcSlotFlow;
 			for (int j = 0; j < slotNum; ++j)
 			{
-				if (marc->flow[j] > 0)
+				if (marc->flow[j] > 0 && marc->downloader[j] == arcPathList[pathIdx].back())
 					marcSlotFlow.push_back(std::pair<int, int>(j, marc->flow[j]));
 				if (narc->flow[j] > 0)
 					narcSlotFlow.push_back(std::pair<int, int>(j, narc->flow[j]));
@@ -983,7 +986,7 @@ void STAG::_recordFluxScheme()
 			}
 			for (int j = 0; j < slotNum; ++j)
 			{
-				if (marc->flow[j] > 0)
+				if (marc->flow[j] > 0 && marc->downloader[j] == arcPathList[pathIdx].back())
 				{
 					fluxSchemeList[marc->srcID].push_back(FluxScheme(j+1, marc->dstID, marc->downloader[j], marc->flow[j]));
 					fluxSchemeList[marc->srcID].back().segment = segmentOffsets[j];

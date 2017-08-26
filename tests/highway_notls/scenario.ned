@@ -37,12 +37,12 @@ network scenario extends Scenario
 			@display("p=750,24");
 		}
 		BS: BaseStation {
-			@display("p=2700,24");
+			@display("p=4500,24");
 		}
 		contentServer: ContentServer {
 			parameters:
 				rsuNum = numRSU;
-			@display("p=3000,24");
+			@display("p=5000,24");
 		}
 		rsu[numRSU]: RSU {
 			@display("p=$posX,$posY;b=10,10,oval");

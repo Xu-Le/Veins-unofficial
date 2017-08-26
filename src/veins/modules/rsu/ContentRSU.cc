@@ -35,8 +35,7 @@ void ContentRSU::initialize(int stage)
 
 		executeSTAGNextAt = SimTime::ZERO;
 		noticeEnteringNum = 0;
-		adjustThresholdDist = 1000;
-		unitOffsetPerMeter = 5000;
+		unitOffsetPerSecond = 3000000/8; // equals to cellular rate
 
 		distributeVLinkBytesOnce = 10 * (headerLength + dataLengthBits) / 8; // distributeVLinkPacketsOnce == 10
 		distributeVApplBytesOnce = 10 * dataLengthBits / 8;
@@ -96,6 +95,12 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 	}
 	case ContentRSUMsgKinds::SEGMENT_ADVANCE_EVT:
 	{
+		if ((itDL = downloaders.find(itRSL->downloader)) == downloaders.end())
+		{
+			rsuSchemeList.clear();
+			return;
+		}
+
 		if (isSegmentAdvanceEvt)
 		{
 			EV << "switched to advance the next segment, distributed offset starts at " << itRSL->offset->begin << " bytes.\n";
@@ -104,7 +109,7 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 	}
 	case ContentRSUMsgKinds::DISTRIBUTE_V_EVT:
 	{
-		if ((itDL = downloaders.find(itRSL->downloader)) == downloaders.end())
+		if ((itDL = downloaders.find(itRSL->downloader)) == downloaders.end() || (itV = vehicles.find(itRSL->receiver)) == vehicles.end())
 		{
 			rsuSchemeList.clear();
 			return;
@@ -118,9 +123,11 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 		dataMsg->setDownloader(itRSL->downloader);
 		DownloaderInfo *downloaderInfo = downloaders[itRSL->downloader];
 		// estimate transmission rate between self and receiver only taking relative distance into consideration
-		int distance = RoutingUtils::_length(curPosition, vehicles[itRSL->receiver]->pos);
+		Coord &receiverPos = itV->second->pos;
+		Coord &receiverSpeed = itV->second->speed;
+		int distance = RoutingUtils::_length(curPosition, receiverPos);
 		ASSERT( distance < 250 );
-		if (distance >= 225)
+		if (distance >= 225 && (curPosition.x - receiverPos.x)*receiverSpeed.x < 0)
 		{
 			EV << "distance " << distance << " is larger than 225, erase this downloader's info.\n";
 			delete dataMsg;
@@ -291,7 +298,9 @@ void ContentRSU::handleSelfMsg(cMessage *msg)
 			{
 				EV << "wait time elapsed, try to choose a carrier again.\n";
 
-				bool hasCarrier = selectCarrier(itCDL->first);
+				bool hasCarrier = false;
+				if (!distributeCEvt->isScheduled())
+					hasCarrier = selectCarrier(itCDL->first);
 				if (!hasCarrier && ++itCDL->second->tryingLookForTimes < 3)
 				{
 					EV << "there is no proper carrier, wait a certain time and check later.\n";
@@ -372,10 +381,11 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 		coDownloaders.insert(std::pair<LAddress::L3Type, CoDownloaderInfo*>(downloader, coDownloaderInfo));
 
 		EV << "downloader [" << downloader << "] is a co-downloader, insert its info.\n";
-		downloaderInfo = new DownloaderInfo(wiredMsg->getContentSize(), 0); // consuming rate is set when relay discovery event happens
+		downloaderInfo = new DownloaderInfo(wiredMsg->getContentSize(), wiredMsg->getBytesNum()); // reuse function name, actually is consuming rate
 		downloaderInfo->cacheEndOffset = downloaderInfo->cacheStartOffset = wiredMsg->getStartOffset();
 		downloaderInfo->distributedOffset = wiredMsg->getStartOffset();
 		downloaderInfo->acknowledgedOffset = wiredMsg->getStartOffset();
+		downloaderInfo->remainingDataAmount = downloaderInfo->acknowledgedOffset - wiredMsg->getCurOffset(); // reuse function name, actually is consumed offset
 		downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 
 		WiredMessage *coAckMsg = new WiredMessage("co-ack", WiredMsgCC::COOPERATIVE_ACKNOWLEDGEMENT);
@@ -387,12 +397,15 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 		sendDelayed(coAckMsg, SimTime::ZERO, outGate);
 
 		EV << "now try to choose a carrier.\n";
-		bool hasCarrier = selectCarrier(downloader);
+		bool hasCarrier = false;
+		if (!distributeCEvt->isScheduled())
+			hasCarrier = selectCarrier(downloader);
 		if (!hasCarrier)
 		{
 			EV << "there is no proper carrier, wait a certain time and check later.\n";
 			++noticeEnteringNum;
 			downloaderInfo->noticeEntering = true;
+			++coDownloaderInfo->tryingLookForTimes;
 			coDownloaderInfo->lookForAt = simTime() + lookForCarrierPeriod;
 			scheduleAt(coDownloaderInfo->lookForAt, lookForCarrierEvt);
 		}
@@ -410,9 +423,10 @@ void ContentRSU::onBeacon(BeaconMessage *beaconMsg)
 
 	LAddress::L3Type sender = beaconMsg->getSenderAddress(); // alias
 
-	if (!downloaders.empty() && (itDL = downloaders.find(sender)) != downloaders.end() && itDL->second->notifiedLinkBreak == false)
+	if (!downloaders.empty() && (itDL = downloaders.find(sender)) != downloaders.end())
 	{
-		if ((curPosition.x - beaconMsg->getSenderPos().x)*beaconMsg->getSenderSpeed().x < 0 && RoutingUtils::_length(curPosition, beaconMsg->getSenderPos()) > 200.0)
+		int distD = RoutingUtils::_length(curPosition, beaconMsg->getSenderPos());
+		if (itDL->second->notifiedLinkBreak == false && distD >= 200 && (curPosition.x - beaconMsg->getSenderPos().x)*beaconMsg->getSenderSpeed().x < 0)
 		{
 			EV << "the communication link between downloader and RSU will break soon, notify downloader to fetch its downloading status.\n";
 			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
@@ -431,21 +445,36 @@ void ContentRSU::onBeacon(BeaconMessage *beaconMsg)
 	if (!relays.empty() && relays.find(sender) != relays.end())
 	{
 		LAddress::L3Type downloader = relays[sender];
-		if ((itDL = downloaders.find(sender)) != downloaders.end() && itDL->second->notifiedLinkBreak == false
-			&& (curPosition.x - beaconMsg->getSenderPos().x)*beaconMsg->getSenderSpeed().x < 0 && RoutingUtils::_length(curPosition, beaconMsg->getSenderPos()) > 200.0)
+		if ((itDL = downloaders.find(downloader)) != downloaders.end())
 		{
-			EV << "the communication link between relay and RSU will break soon, notify downloader to fetch its downloading status.\n";
-			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-			ASSERT( wsm != nullptr );
-			ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
+			int distR = RoutingUtils::_length(curPosition, beaconMsg->getSenderPos());
+			int distD = 0;
+			if ((itV = vehicles.find(downloader)) != vehicles.end())
+				distD = RoutingUtils::_length(curPosition, itV->second->pos);
+			if (itV == vehicles.end() || distD >= 200)
+			{
+				if (itDL->second->notifiedLinkBreak == false && distR >= 200 && (curPosition.x - beaconMsg->getSenderPos().x)*beaconMsg->getSenderSpeed().x < 0)
+				{
+					EV << "the communication link between relay and RSU will break soon, notify downloader to fetch its downloading status.\n";
+					WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+					ASSERT( wsm != nullptr );
+					ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
 
-			notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_RR);
-			notifyMsg->setReceiver(sender);
-			notifyMsg->setDownloader(downloader);
+					notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_RR);
+					notifyMsg->setReceiver(sender);
+					notifyMsg->setDownloader(downloader);
 
-			sendWSM(notifyMsg);
+					sendWSM(notifyMsg);
 
-			itDL->second->notifiedLinkBreak = true;
+					itDL->second->notifiedLinkBreak = true;
+				}
+				else if (itDL->second->notifiedLinkBreak == true && distR >= 225)
+				{
+					EV << "downloader [" << downloader << "] has driven away RSU's communication area, erase its info.\n";
+					delete itDL->second;
+					downloaders.erase(itDL);
+				}
+			}
 		}
 	}
 
@@ -468,6 +497,7 @@ void ContentRSU::onBeacon(BeaconMessage *beaconMsg)
 				sendWSM(discoveryMsg);
 
 				downloaders[sender]->noticeEntering = false;
+				--noticeEnteringNum;
 				break;
 			}
 #if 0
@@ -508,7 +538,7 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 	{
 	case ContentMsgCC::CONTENT_REQUEST: // it is a request message from a downloader
 	{
-		EV << "downloaders: ";
+		EV << "downloaders:";
 		for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
 			EV << ' ' << itDL->first;
 		EV << "\n";
@@ -546,6 +576,12 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			if (!noDownloader)
 				return;
 
+			if (vehicles.find(downloader) == vehicles.end()) // insert downloader's mobility information into container vehicles
+			{
+				EV << "    vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
+				VehicleInfo *vehicleInfo = new VehicleInfo(contentMsg->getPosition(), contentMsg->getSpeed(), simTime());
+				vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
+			}
 			// check if there exists any downloader has driven away RSU's communication area
 			for (itDL = downloaders.begin(); itDL != downloaders.end();)
 			{
@@ -594,8 +630,8 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 				return;
 			}
 
-			if (vehicles.find(downloader) == vehicles.end() || (sender == downloader && RoutingUtils::_length(curPosition, vehicles[downloader]->pos) >= 225)
-				|| (downloaderInfo->sentCoNotification && sender != downloader))
+			if (vehicles.find(downloader) == vehicles.end() || (sender != downloader && downloaderInfo->sentCoNotification)
+				|| (sender == downloader && (curPosition.x - vehicles[downloader]->pos.x)*vehicles[downloader]->speed.x < 0 && RoutingUtils::_length(curPosition, vehicles[downloader]->pos) >= 225))
 			{
 				EV << "downloader [" << downloader << "] has driven away RSU's communication area, erase its info.\n";
 				delete itDL->second;
@@ -650,10 +686,12 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 		downloaderInfo = downloaders[downloader];
 		CoDownloaderInfo *coDownloaderInfo = coDownloaders[downloader];
 		ASSERT( downloaderInfo->distributedOffset == downloaderInfo->cacheStartOffset );
-		if (coDownloaderInfo->speed.x > 0 && westDist > 1000)
-			downloaderInfo->distributedOffset += (westDist - adjustThresholdDist)*unitOffsetPerMeter;
-		else if (coDownloaderInfo->speed.x < 0 && eastDist > 1000)
-			downloaderInfo->distributedOffset += (eastDist - adjustThresholdDist)*unitOffsetPerMeter;
+		// distribution offset correction
+		int remainingSeconds = downloaderInfo->remainingDataAmount/downloaderInfo->consumingRate - 3*coDownloaderInfo->tryingLookForTimes;
+		EV << "downloader [" << downloader << "]'s consuming process remains " << remainingSeconds << "s.\n";
+		downloaderInfo->distributedOffset += (coDownloaderInfo->encounterSeconds - remainingSeconds - 4) * unitOffsetPerSecond;
+		if (downloaderInfo->distributedOffset < downloaderInfo->cacheStartOffset) // in the best situation, downloader doesn't need cellular network
+			downloaderInfo->distributedOffset = downloaderInfo->cacheStartOffset;
 		EV << "cache start offset is " << downloaderInfo->cacheStartOffset << ", distributed offset corrects to " << downloaderInfo->distributedOffset << ".\n";
 		// check whether cached data is adequate for transmitting to carrier
 		// cached segment       [_____________________]-----------------| EOF
@@ -678,7 +716,7 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			if (coDownloaderInfo->transmissionAmount > downloaderInfo->totalContentSize - downloaderInfo->distributedOffset)
 				coDownloaderInfo->transmissionAmount = downloaderInfo->totalContentSize - downloaderInfo->distributedOffset;
 
-			_sendPrefetchRequest(downloader, downloaderInfo->cacheEndOffset, downloaderInfo->distributedOffset + coDownloaderInfo->transmissionAmount);
+			_sendPrefetchRequest(downloader, std::max(downloaderInfo->cacheEndOffset, downloaderInfo->distributedOffset), downloaderInfo->distributedOffset + coDownloaderInfo->transmissionAmount);
 			prefetchCompletedNum = 0;
 			prefetchNecessaryNum = 1;
 			std::pair<LAddress::L3Type, Coord> downloaderItem(downloader, coDownloaderInfo->speed);
@@ -710,6 +748,7 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 		sendDelayed(wiredMsg, SimTime::ZERO, wiredOut);
 		// release ourself resources corresponding to this downloader
 		__eraseDownloader(downloader);
+		coDownloaders.erase(downloader);
 		ackMsgNum = 0;
 		activeSlotNum = 0;
 		break;
@@ -757,8 +796,6 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			ContentUtils::vectorRemove(coDownloaders[downloader]->neighbors, sender);
 		else // received response is yes, now start to execute STAG algorithm
 		{
-			--noticeEnteringNum;
-
 			itCDL = coDownloaders.find(downloader);
 			itCDL->second->neighbors.clear();
 			delete itCDL->second;
@@ -780,10 +817,12 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			downloaderInfo->_lackOffset = contentMsg->getLackOffset();
 			downloaderInfo->lackOffset = &downloaderInfo->_lackOffset;
 #if 0
-			// insert downloader's mobility information into container vehicles
-			EV << "    vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
-			VehicleInfo *vehicleInfo = new VehicleInfo(contentMsg->getPosition(), contentMsg->getSpeed(), simTime());
-			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
+			if (vehicles.find(downloader) == vehicles.end()) // insert downloader's mobility information into container vehicles
+			{
+				EV << "    vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
+				VehicleInfo *vehicleInfo = new VehicleInfo(contentMsg->getPosition(), contentMsg->getSpeed(), simTime());
+				vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
+			}
 #endif
 			if (downloaders.size() - coDownloaders.size() > 1)
 			{
@@ -1026,7 +1065,16 @@ void ContentRSU::predictLinkBandwidth()
 						std::swap(minIdx, maxIdx);
 					int maxIdx_ = std::min(49, maxIdx); // avoid reading memory outside of the bounds of ContentUtils::rateTable[]
 					for (int i = minIdx; i <= maxIdx_; ++i)
-						itLT->bandwidth[j] += 112*ContentUtils::rateTable[i]; // due to prediction precision consideration, multiply 112 instead of 128
+					{
+						if (i < 25)
+							itLT->bandwidth[j] += 115*ContentUtils::rateTable[i]; // due to prediction precision consideration
+						else if (i < 30 && i >= 25)
+							itLT->bandwidth[j] += 108*ContentUtils::rateTable[i]; // due to prediction precision consideration
+						else if (i < 35 && i >= 30)
+							itLT->bandwidth[j] += 102*ContentUtils::rateTable[i]; // due to prediction precision consideration
+						else
+							itLT->bandwidth[j] += 96*ContentUtils::rateTable[i]; // due to prediction precision consideration
+					}
 					itLT->bandwidth[j] /= maxIdx - minIdx + 1;
 				}
 				else
@@ -1039,7 +1087,7 @@ void ContentRSU::predictLinkBandwidth()
 	int downloaderIdx = 0;
 	for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
 	{
-		if (coDownloaders.find(itDL->first) != coDownloaders.end())
+		if (coDownloaders.find(itDL->first) != coDownloaders.end() || nodeIdRevMap.find(itDL->first) == nodeIdRevMap.end())
 			continue;
 		int downloaderID = nodeIdRevMap[itDL->first]; // downloader's corresponding nodeId used by STAG
 		downloaderArray.push_back(downloaderID);
@@ -1057,6 +1105,8 @@ void ContentRSU::predictLinkBandwidth()
 		++downloaderNum;
 		++downloaderIdx;
 	}
+	if (downloaderNum > 1)
+		srcNode = 0;
 
 #if !DEBUG_STAG
 	std::ofstream fout("STAG_input.txt", std::ios_base::out | std::ios_base::trunc);
@@ -1313,15 +1363,13 @@ bool ContentRSU::selectCarrier(LAddress::L3Type coDownloader)
 {
 	CoDownloaderInfo *coDownloaderInfo = coDownloaders[coDownloader];
 
-	std::vector<std::pair<int /* amount */, LAddress::L3Type> > sortCarryAmount;
-	std::vector<std::pair<double /* time */, LAddress::L3Type> > sortEncounterTime;
+	int minDistR2C = -1;
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
 	{
 		if (coDownloaderInfo->speed.x * itV->second->speed.x > 0) // same direction with co-downloader
 			continue;
 		int distR2C = RoutingUtils::_length(curPosition, itV->second->pos);
-		bool preseed = (curPosition.x - itV->second->pos.x)*itV->second->speed.x < 0;
-		if ((preseed && distR2C > 150) || (!preseed && distR2C > 50)) // will drive away communication area soon or it can carry too much data
+		if (distR2C > 50) // it can carry too little data or it can carry too much data
 			continue;
 		// calculate total data amount it can carry before driving out
 		int carryAmount = 0;
@@ -1340,45 +1388,24 @@ bool ContentRSU::selectCarrier(LAddress::L3Type coDownloader)
 			nextPos += itV->second->speed;
 			distR2C = nextDistR2C;
 		}
-		sortCarryAmount.push_back(std::pair<int, LAddress::L3Type>(carryAmount, itV->first));
 		// calculate the time from now on to the time it encounters the co-downloader
 		double distD2C = RoutingUtils::_length(coDownloaderInfo->pos, itV->second->pos);
 		double relativeSpeed = RoutingUtils::_length(coDownloaderInfo->speed, itV->second->speed);
 		double encounterTime = (distD2C - BaseConnectionManager::maxInterferenceDistance) / relativeSpeed;
-		sortEncounterTime.push_back(std::pair<double, LAddress::L3Type>(encounterTime, itV->first));
-		EV << "vehicle [" << itV->first << "] can carry " << carryAmount << " bytes, it will encounter the co-downloader after " << encounterTime << "s.\n";
-	}
-	if (!sortCarryAmount.empty())
-	{
-		// calculate the union rank of all vehicles
-		std::map<LAddress::L3Type, int> carryRank;
-		std::sort(sortCarryAmount.begin(), sortCarryAmount.end(), std::greater<std::pair<int, LAddress::L3Type> >());
-		std::sort(sortEncounterTime.begin(), sortEncounterTime.end());
-		for (int m = 0; m < static_cast<int>(sortCarryAmount.size()); ++m)
-			carryRank.insert(std::pair<LAddress::L3Type, int>(sortCarryAmount[m].second, m+1));
-		for (int n = 0; n < static_cast<int>(sortEncounterTime.size()); ++n)
-			carryRank[sortEncounterTime[n].second] *= n+1;
-		// find the vehicle with the minimum union rank
-		int maxCarryRank = 0;
-		for (std::map<LAddress::L3Type, int>::iterator it = carryRank.begin(); it != carryRank.end(); ++it)
-		{
-			if (maxCarryRank < it->second)
-			{
-				maxCarryRank = it->second;
-				coDownloaderInfo->carrier = it->first;
-			}
-		}
-		// set CoDownloaderInfo->transmissionAmount variable of the best carrier
-		for (int l = 0; l < static_cast<int>(sortCarryAmount.size()); ++l)
-		{
-			if (sortCarryAmount[l].second == coDownloaderInfo->carrier)
-			{
-				coDownloaderInfo->transmissionAmount = sortCarryAmount[l].first;
-				break;
-			}
-		}
 
-		EV << "find a carrier " << coDownloaders[coDownloader]->carrier << ", send carry request to it.\n";
+		EV << "vehicle [" << itV->first << "] can carry " << carryAmount << " bytes, it will encounter the co-downloader after " << encounterTime << "s.\n";
+
+		if (minDistR2C < distR2C)
+		{
+			minDistR2C = distR2C;
+			coDownloaderInfo->carrier = itV->first;
+			coDownloaderInfo->encounterSeconds = encounterTime;
+			coDownloaderInfo->transmissionAmount = carryAmount;
+		}
+	}
+	if (minDistR2C != -1)
+	{
+		EV << "find a carrier " << coDownloaderInfo->carrier << ", send carry request to it.\n";
 
 		WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
 		ASSERT( wsm != nullptr );
@@ -1391,7 +1418,7 @@ bool ContentRSU::selectCarrier(LAddress::L3Type coDownloader)
 
 		sendWSM(selectMsg);
 	}
-	return !sortCarryAmount.empty();
+	return minDistR2C != -1;
 }
 
 void ContentRSU::_sendCooperativeNotification(const LAddress::L3Type downloader, ContentMessage *reportMsg)
@@ -1410,8 +1437,10 @@ void ContentRSU::_sendCooperativeNotification(const LAddress::L3Type downloader,
 	coNotifyMsg->setControlCode(WiredMsgCC::COOPERATIVE_NOTIFICATION);
 	coNotifyMsg->setDownloader(downloader);
 	coNotifyMsg->setContentSize(downloaderInfo->totalContentSize);
+	coNotifyMsg->setCurOffset(reportMsg->getConsumedOffset());
 	coNotifyMsg->setStartOffset(reportMsg->getReceivedOffset());
 	coNotifyMsg->setEndOffset(downloaderInfo->cacheEndOffset);
+	coNotifyMsg->setBytesNum(reportMsg->getConsumingRate()); // reuse function name
 	coNotifyMsg->setPosition(reportMsg->getPosition());
 	coNotifyMsg->setSpeed(reportMsg->getSpeed());
 	coNotifyMsg->setNeighbors(reportMsg->getNeighbors());
