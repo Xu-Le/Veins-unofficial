@@ -16,28 +16,40 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include "veins/modules/rsu/STAG.h"
-#include <omnetpp/cexception.h>
+#include "STAG.h"
 
-using omnetpp::cRuntimeError;
+extern int log_level;
 
-int STAG::arcIDIncrement = 0;
-int STAG::gDownloaderNum = 0;
-int STAG::gSlotNum = 0;
+int nodeNum = 0;
+int linkNum = 0;
+int downloaderNum = 0;
+int slotNum = 0;
 
-STAG::Arc::Arc() : arcID(arcIDIncrement), srcID(-1), dstID(-1), nextArc(NULL)
+/** maintaining the map from node ID to its initial storage. */
+std::map<int, std::string> storageTable;
+/** maintaining the map from downloader node ID to its play rate. */
+std::map<int, int> playTable;
+/** maintaining the map from downloader node ID to its index. */
+std::map<int, int> downloaderTable;
+/** reverse table of downloaderTable, cost only O(1). */
+std::vector<int> downloaderArray;
+
+/** automatically increase ID for all arcs. */
+static int arcIDIncrement = 0;
+
+Arc::Arc() : arcID(arcIDIncrement), srcID(-1), dstID(-1), nextArc(NULL)
 {
-	bandwidth = new int[gSlotNum];
-	flow = new int[2*gSlotNum];       // index range [slotNum, 2*slotNum-1) is used for recording purpose
-	downloader = new int[2*gSlotNum]; // index range [slotNum, 2*slotNum-1) is used for recording purpose
-	idle = new bool[gSlotNum];
-	memset(flow, 0, 2*gSlotNum*sizeof(int));
-	memset(downloader, -1, 2*gSlotNum*sizeof(int));
-	memset(idle, true, gSlotNum*sizeof(bool));
+	bandwidth = new int[slotNum];
+	flow = new int[2*slotNum];       // index range [slotNum, 2*slotNum-1) is used for recording purpose
+	downloader = new int[2*slotNum]; // index range [slotNum, 2*slotNum-1) is used for recording purpose
+	idle = new bool[slotNum];
+	memset(flow, 0, 2*slotNum*sizeof(int));
+	memset(downloader, -1, 2*slotNum*sizeof(int));
+	memset(idle, true, slotNum*sizeof(bool));
 	++arcIDIncrement;
 }
 
-STAG::Arc::~Arc()
+Arc::~Arc()
 {
 	delete []bandwidth;
 	delete []flow;
@@ -45,35 +57,38 @@ STAG::Arc::~Arc()
 	delete []idle;
 }
 
-STAG::Node::Node() : firstArc(NULL), lastArc(NULL)
+Node::Node() : firstArc(NULL), lastArc(NULL)
 {
-	_S = new struct Data[(gSlotNum+1)*gDownloaderNum];
-	S = new struct Data*[gSlotNum+1];
-	for (int i = 0; i < gSlotNum+1; ++i)
-		S[i] = _S + i*gDownloaderNum;
+	_S = new struct Data[(slotNum+1)*downloaderNum];
+	S = new struct Data*[slotNum+1];
+	for (int i = 0; i < slotNum+1; ++i)
+		S[i] = _S + i*downloaderNum;
 }
 
-STAG::Node::~Node()
+Node::~Node()
 {
 	delete []S;
 	delete []_S;
 }
 
 /** constructor of class STAG. */
-STAG::STAG(int _nodeNum, int _linkNum, int _downloaderNum, int _slotNum, std::vector<int>& _downloaderArray, std::map<int, int>& _downloaderTable, std::map<int, int>& _remainingTable, std::map<int, int>& _playTable, std::map<int, int>& _demandingAmountTable)
-	: nodeNum(_nodeNum), linkNum(_linkNum), downloaderNum(_downloaderNum), slotNum(_slotNum), downloaderArray(_downloaderArray), downloaderTable(_downloaderTable), remainingTable(_remainingTable), playTable(_playTable), demandingAmountTable(_demandingAmountTable)
+STAG::STAG()
 {
-	arcNum = 2*linkNum + downloaderNum;
-	arcIDIncrement = 0;
-	gDownloaderNum = downloaderNum;
-	gSlotNum = slotNum;
 	NodeList = new Node[nodeNum + 1]; // reserve one node as the super sink
-	arcTable = new Arc[arcNum];
+	arcTable = new Arc[2*linkNum + downloaderNum];
+	arcRecord = new Arc*[nodeNum + 1];
+	dist = new int[nodeNum + 1];
+	f = new int[nodeNum + 1];
+	pi = new int[nodeNum + 1];
 }
 
 /** destructor of class STAG. */
 STAG::~STAG()
 {
+	delete []pi;
+	delete []dist;
+	delete []f;
+	delete []arcRecord;
 	delete []arcTable;
 	delete []NodeList;
 }
@@ -81,7 +96,7 @@ STAG::~STAG()
 /** construct the graph in the structure of adjacency list. */
 void STAG::construct(std::list<LinkTuple>& linkTuples)
 {
-	std::list<LinkTuple>::iterator iter1 = linkTuples.begin(), iter2;
+	std::list<struct LinkTuple>::iterator iter1 = linkTuples.begin(), iter2;
 
 	int curNode = 0, rank = 2;
 	struct Arc *firstarc = NULL, *parc = NULL, *qarc = NULL;
@@ -94,6 +109,7 @@ void STAG::construct(std::list<LinkTuple>& linkTuples)
 	firstarc->nextArc = NULL;
 
 	curNode = iter1->src; // node index start with 0
+	_initNodeStorage(curNode);
 	NodeList[curNode].firstArc = firstarc;
 	NodeList[curNode].lastArc = firstarc;
 	while (true)
@@ -145,28 +161,44 @@ void STAG::construct(std::list<LinkTuple>& linkTuples)
 			firstarc->nextArc = NULL;
 
 			curNode = iter2->src;
+			_initNodeStorage(curNode);
 			NodeList[curNode].firstArc = firstarc;
 			NodeList[curNode].lastArc = firstarc;
 		}
 		++iter1;
 	}
 
-	_initNodeStorage();
+	for (int i = 0; i < nodeNum; ++i)
+		if (NodeList[i].firstArc == NULL)
+			_initNodeStorage(i);
 }
 
 /** internal function called by function construct(). */
-void STAG::_initNodeStorage()
+void STAG::_initNodeStorage(int curNode)
 {
-	for (int downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+	std::string &str = storageTable[curNode];
+	std::string subStr;
+	size_t old = 0, cur = 0;
+	int idx = 0;
+	while (cur < str.length())
 	{
-		int downloader = downloaderArray[downloaderIdx];
-		for (int i = 1; i < nodeNum; ++i)
+		if (str[cur] == ' ')
 		{
-			NodeList[i].S[0][downloaderIdx].downloader = downloader;
-			NodeList[i].S[0][downloaderIdx].size = downloaderTable.find(i) != downloaderTable.end() ? remainingTable[i] : 0;
+			subStr = str.substr(old, cur-old);
+			if (idx % 2 == 0)
+				NodeList[curNode].S[0][idx/2].downloader = atoi(subStr.c_str());
+			else
+				NodeList[curNode].S[0][idx/2].size = atoi(subStr.c_str());
+			++idx;
+			old = ++cur;
 		}
-		NodeList[0].S[0][downloaderIdx].downloader = downloader;
-		NodeList[0].S[0][downloaderIdx].size = 1024*1024*1024; // 1GB
+		else
+			++cur;
+	}
+	if (!str.empty())
+	{
+		subStr = str.substr(old, cur-old);
+		NodeList[curNode].S[0][idx/2].size = atoi(subStr.c_str());
 	}
 }
 
@@ -210,7 +242,28 @@ void STAG::destruct()
 	}
 }
 
-void STAG::maximumFlow()
+/** display the graph whose structure is adjacency list. */
+void STAG::display()
+{
+	if (log_level < DEBUG_LEVEL)
+		return;
+
+	printf("STAG's adjacency list displays: \n");
+	for (int i = 0; i < nodeNum; i++)
+	{
+		printf("node [%d]", i);
+		for (struct Arc *darc = NodeList[i].firstArc; darc != NULL; darc = darc->nextArc)
+		{
+			printf(" -> %d(", darc->dstID);
+			for (int j = 0; j < slotNum-1; ++j)
+				printf("%d,", darc->bandwidth[j]);
+			printf("%d)", darc->bandwidth[slotNum-1]);
+		}
+		printf("\n");
+	}
+}
+
+std::pair<double, int> STAG::maximumFlow()
 {
 	superSink = nodeNum;
 	interruptTimeTable.resize(downloaderNum);
@@ -238,7 +291,7 @@ void STAG::maximumFlow()
 
 		for (int loop = 0; loop < downloaderNum*slotNum/2; ++loop)
 		{
-			EV << "===============    Loop " << loop + 1 << "    ===============\n";
+			info_log("===============    Loop %d    ===============\n", loop + 1);
 
 			bool continueLoop = _seekBetterScheme();
 			if (!continueLoop)
@@ -262,13 +315,155 @@ void STAG::maximumFlow()
 		_revertBestScheme();
 	}
 
-	EV << "Final total interrupt time is " << minTotalInterruptTime << ", total received data amount is " << maxTotalReceivedAmount << ".\n";
+#if VERIFY_SCHEME
+	_recordFluxPath();
+#endif
 
 	_recordFluxScheme();
 
 	_clearNodeStorage();
 
 	_delSuperSink();
+
+	return std::pair<double, int>(minTotalInterruptTime, maxTotalReceivedAmount);
+}
+
+void STAG::test()
+{
+	// test __calcChosenPathPostFlow()
+#if 1
+	std::vector<int> cslots({0, 1, 3, 4, 2, 5, 6, 7, 4});
+
+	struct Arc *marc = new struct Arc;
+	struct Arc *narc = new struct Arc;
+	marc->bandwidth[0] = 5; marc->bandwidth[1] = 11; marc->bandwidth[2] = 0; marc->bandwidth[3] = 25;
+	marc->bandwidth[4] = 10; marc->bandwidth[5] = 0; marc->bandwidth[6] = 0; marc->bandwidth[7] = 0;
+	narc->bandwidth[0] = 0; narc->bandwidth[1] = 0; narc->bandwidth[2] = 18; narc->bandwidth[3] = 0;
+	narc->bandwidth[4] = 0; narc->bandwidth[5] = 11; narc->bandwidth[6] = 11; narc->bandwidth[7] = 12;
+	for (int j = 0; j < slotNum; ++j)
+		marc->flow[j] = narc->flow[j] = 1;
+	marc->downloader[5] = narc->downloader[3] = 2;
+	__calcChosenPathPostFlow(cslots, marc, narc, true);
+
+	debug_log("marc->flow:");
+	int i = 0;
+	for (i = 0; i < slotNum; ++i)
+		printf(" %d", marc->flow[i]);
+	printf("\n");
+	debug_log("narc->flow:");
+	for (i = 0; i < slotNum; ++i)
+		printf(" %d", narc->flow[i]);
+	printf("\n");
+#endif
+
+#if 0
+	std::vector<int> cslots({0, 1, 2, 3, 4, 5, 6, 4});
+
+	struct Arc *marc = new struct Arc;
+	struct Arc *narc = new struct Arc;
+	marc->bandwidth[0] = 601600; marc->bandwidth[1] = 524800; marc->bandwidth[2] = 332800; marc->bandwidth[3] = 204800;
+	marc->bandwidth[4] = 89600; marc->bandwidth[5] = 51200; marc->bandwidth[6] = 38400; marc->bandwidth[7] = 38400;
+	narc->bandwidth[0] = 665600; narc->bandwidth[1] = 665600; narc->bandwidth[2] = 665600; narc->bandwidth[3] = 665600;
+	narc->bandwidth[4] = 665600; narc->bandwidth[5] = 665600; narc->bandwidth[6] = 665600; narc->bandwidth[7] = 665600;
+	for (int j = 0; j < slotNum; ++j)
+		marc->flow[j] = narc->flow[j] = 1;
+	__calcChosenPathPostFlow(cslots, marc, narc, true);
+
+	debug_log("marc->flow:");
+	int i = 0;
+	for (i = 0; i < slotNum; ++i)
+		printf(" %d", marc->flow[i]);
+	printf("\n");
+	debug_log("narc->flow:");
+	for (i = 0; i < slotNum; ++i)
+		printf(" %d", narc->flow[i]);
+	printf("\n");
+#endif
+
+	// test calculate segment offset
+#if 0
+	delete []arcTable;
+	arcIDIncrement = 0;
+	arcTable = new Arc[3];
+	nodeNum = 3;
+
+	struct Arc *parc = &arcTable[0];
+	parc->srcID = 0; parc->dstID = 2; parc->flow[0] = 2; parc->flow[4] = 4; parc->flow[7] = 3; parc->downloader[0] = 2; parc->downloader[4] = 2; parc->downloader[7] = 2;
+	std::vector<int> arcPath;
+	arcPath.push_back(parc->arcID);
+	arcPath.push_back(2);
+	arcPathList.push_back(arcPath);
+	arcPath.clear();
+
+	parc = &arcTable[1];
+	parc->srcID = 0; parc->dstID = 1; parc->flow[1] = 3; parc->flow[2] = 4; parc->flow[5] = 4; parc->downloader[1] = 2; parc->downloader[2] = 2; parc->downloader[5] = 2;
+	arcPath.push_back(parc->arcID);
+	parc = &arcTable[2];
+	parc->srcID = 1; parc->dstID = 2; parc->flow[3] = 5; parc->flow[6] = 6; parc->downloader[3] = 2; parc->downloader[6] = 2;
+	arcPath.push_back(parc->arcID);
+	arcPath.push_back(2);
+	arcPathList.push_back(arcPath);
+	arcPath.clear();
+
+	arcPathRange.push_back(std::pair<int, int>(0, 2));
+	downloaderNum = 1;
+	downloaderArray[0] = 2;
+	_recordFluxScheme();
+#endif
+
+	// test class Segment
+#if 0
+	FluxScheme schemes[3];
+	schemes[0].slot = 3;
+	struct Segment *pSeg = &schemes[0].segment;
+	pSeg->begin = 0;
+	pSeg->end = 3;
+	pSeg->next = new struct Segment;
+	pSeg = pSeg->next;
+	pSeg->begin = 6;
+	pSeg->end = 8;
+	pSeg->next = new struct Segment;
+	pSeg = pSeg->next;
+	pSeg->begin = 11;
+	pSeg->end = 14;
+	schemes[1].slot = 5;
+	struct Segment *qSeg = &schemes[1].segment;
+	qSeg->begin = 2;
+	qSeg->end = 5;
+	qSeg->next = new struct Segment;
+	qSeg = qSeg->next;
+	qSeg->begin = 7;
+	qSeg->end = 9;
+	schemes[2].slot = 4;
+	struct Segment *rSeg = &schemes[2].segment;
+	rSeg->begin = 1;
+	rSeg->end = 4;
+	rSeg->next = new struct Segment;
+	rSeg = rSeg->next;
+	rSeg->begin = 5;
+	rSeg->end = 9;
+	info_log("before swap\n");
+	schemes[0].segment.print();
+	schemes[1].segment.print();
+	schemes[2].segment.print();
+	info_log("after swap\n");
+	schemes[2] = schemes[0];
+	schemes[0] = schemes[1];
+	schemes[1] = schemes[2];
+	schemes[0].segment.print();
+	schemes[1].segment.print();
+	schemes[2].segment.print();
+
+	std::vector<FluxScheme> FluxSchemeList;
+	FluxSchemeList.push_back(schemes[0]);
+	FluxSchemeList.push_back(schemes[1]);
+	FluxSchemeList.push_back(schemes[2]);
+	std::sort(FluxSchemeList.begin(), FluxSchemeList.end(), FluxSchemeCmp());
+	info_log("after std::sort\n");
+	FluxSchemeList[0].segment.print();
+	FluxSchemeList[1].segment.print();
+	FluxSchemeList[2].segment.print();
+#endif
 }
 
 void STAG::_obtainArcPathList()
@@ -308,13 +503,9 @@ void STAG::_obtainArcPathList()
 		return lhs.back() < rhs.back();
 	});
 
-	EV << "===== Arc path list =====\n";
+	info_log("===== Arc path list =====\n");
 	for (itAPL = arcPathList.begin(); itAPL != arcPathList.end(); ++itAPL)
-	{
-		for (size_t k = 0; k < itAPL->size(); ++k)
-			EV << itAPL->at(k) << " ";
-		EV << std::endl;
-	}
+		printVector(*itAPL, "", INFO_LEVEL);
 
 	int arcPathListSize = static_cast<int>(arcPathList.size());
 	int downloaderIdx = 0;
@@ -328,11 +519,10 @@ void STAG::_obtainArcPathList()
 		}
 	}
 
-#if INFO_STAG
-	EV << "===== Arc path range =====\n";
-	for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
-		EV << "downloader " << downloaderArray[downloaderIdx] << ": [" << arcPathRange[downloaderIdx].first << "," << arcPathRange[downloaderIdx].second << ")\n";
-#endif
+	debug_log("===== Arc path range =====\n");
+	if (log_level >= DEBUG_LEVEL)
+		for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+			printf("downloader %d: [%d,%d)\n", downloaderArray[downloaderIdx], arcPathRange[downloaderIdx].first, arcPathRange[downloaderIdx].second);
 }
 
 void STAG::_obtainInitialScheme()
@@ -499,7 +689,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 							alternativeFlow -= collisionArc->flow[m];
 						else // the relay arc path
 						{
-							if (ContentUtils::vectorFind(chosenPaths[n], chosenPath))
+							if (vectorFind(chosenPaths[n], chosenPath))
 								alternativeFlow += __calcDecreasedFlow(chosenPath, m, n);
 							else if (collisionArc->srcID == 0) // first arc in the relay arc path
 								alternativeFlow += __calcDecreasedFlow(chosenPath, m, -1);
@@ -517,7 +707,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 							alternativeFlow -= collisionArc->flow[n];
 						else // the relay arc path
 						{
-							if (ContentUtils::vectorFind(chosenPaths[m], chosenPath))
+							if (vectorFind(chosenPaths[m], chosenPath))
 								; // avoid calculating twice
 							else if (collisionArc->srcID == 0) // first arc in the relay arc path
 								alternativeFlow += __calcDecreasedFlow(chosenPath, n, -1);
@@ -525,8 +715,10 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 								alternativeFlow += __calcDecreasedFlow(chosenPath, -1, n);
 						}
 					}
-					if (ContentUtils::vectorFind(chosenPaths[m], i) && ContentUtils::vectorFind(chosenPaths[n], i))
-						alternativeFlow = -999999;
+					if (vectorFind(chosenPaths[m], i) && vectorFind(chosenPaths[n], i))
+						alternativeFlow = -99999999;
+					if (log_level >= DEBUG_LEVEL)
+						printf(", alternativeFlow is %d\n", alternativeFlow);
 					if (maxAlternativeFlow < alternativeFlow)
 					{
 						maxAlternativeFlow = alternativeFlow;
@@ -543,7 +735,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 		n = storeN;
 		marc = &arcTable[arcPathList[i][0]];
 		narc = &arcTable[arcPathList[i][1]];
-		EV << "path: " << i << ", m: " << m+1 << ", n: " << n+1 << std::endl;
+		debug_log("path %d, marc %d, narc %d, m %d, n %d\n", i, marc->arcID, narc->arcID, m, n);
 
 		// update chosenLinks, chosenPaths, chosenSlots
 		std::vector<int> tmpChosenLink;
@@ -560,7 +752,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 			else if (chosenPath != i)
 			{
 				__eraseChosenSlot(chosenSlots[chosenPath], m);
-				if (ContentUtils::vectorFind(chosenPaths[n], chosenPath))
+				if (vectorFind(chosenPaths[n], chosenPath))
 					storeChosenPath = chosenPaths[m]; // reserve to be done when check slot n
 				else
 					_checkChosenSlots(collisionArc, m, chosenPath);
@@ -586,7 +778,7 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 			else if (chosenPath != i)
 			{
 				__eraseChosenSlot(chosenSlots[chosenPath], n);
-				if (arcPathList[chosenPath].size() > 2 && ContentUtils::vectorFind(storeChosenPath, chosenPath))
+				if (arcPathList[chosenPath].size() > 2 && vectorFind(storeChosenPath, chosenPath))
 				{
 					struct Arc *farc = &arcTable[arcPathList[chosenPath][0]], *sarc = &arcTable[arcPathList[chosenPath][1]];
 					__calcChosenPathPostFlow(chosenSlots[chosenPath], farc, sarc, true);
@@ -615,7 +807,11 @@ bool STAG::_optimizeInterruptTime(const int curDownloaderIdx)
 
 bool STAG::_optimizeReceivedAmount(const int curDownloaderIdx)
 {
-	ASSERT( lackSlotsTable[curDownloaderIdx].empty() );
+	if (!lackSlotsTable[curDownloaderIdx].empty())
+	{
+		error_log("assert lackSlotsTable[curDownloaderIdx].empty() == true failed.\n");
+		exit(EXIT_FAILURE);
+	}
 
 	lackSlotsTable[curDownloaderIdx].push_back(slotNum-1);
 
@@ -640,8 +836,8 @@ void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, 
 					decreasedFlow -= checkingArc->flow[j];
 					checkingArc->flow[j] = 0;
 					checkingArc->downloader[j] = -1;
-					ContentUtils::vectorRemove(chosenLinks[j], checkingArc->arcID);
-					ContentUtils::vectorRemove(chosenPaths[j], chosenPath);
+					vectorRemove(chosenLinks[j], checkingArc->arcID);
+					vectorRemove(chosenPaths[j], chosenPath);
 					__eraseChosenSlot(chosenSlots[chosenPath], j);
 				}
 				else // needn't to erase this slot, but need to adjust flow
@@ -665,8 +861,8 @@ void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, 
 					decreasedFlow -= checkingArc->flow[j];
 					checkingArc->flow[j] = 0;
 					checkingArc->downloader[j] = -1;
-					ContentUtils::vectorRemove(chosenLinks[j], checkingArc->arcID);
-					ContentUtils::vectorRemove(chosenPaths[j], chosenPath);
+					vectorRemove(chosenLinks[j], checkingArc->arcID);
+					vectorRemove(chosenPaths[j], chosenPath);
 					__eraseChosenSlot(chosenSlots[chosenPath], j);
 				}
 				else // needn't to erase this slot, but need to adjust flow
@@ -683,20 +879,18 @@ void STAG::_checkChosenSlots(struct Arc *collisionArc, const int collisionSlot, 
 
 void STAG::_calcNodeStorage()
 {
-#if DEBUG_STAG
-	EV << "===== chosen links =====\n";
-#endif
+	debug_log("===== chosen links =====\n");
 	int j = 0, downloaderIdx = 0;
 	for (j = 0; j < slotNum; ++j)
 	{
 		std::vector<int> &chosenLink = chosenLinks[j];
-#if DEBUG_STAG
-			EV << "slot " << j+1 << ":";
+		if (log_level >= DEBUG_LEVEL)
+		{
+			printf("slot %d:", j+1);
 			for (size_t l = 0; l < chosenLink.size(); ++l)
-				EV << " " << chosenLink[l] << "(" << arcTable[chosenLink[l]].srcID << "->" << arcTable[chosenLink[l]].dstID << ")";
-			EV << std::endl;
+				printf(" %d(%d->%d)[%d]", chosenLink[l], arcTable[chosenLink[l]].srcID, arcTable[chosenLink[l]].dstID, arcTable[chosenLink[l]].flow[j]);
+			printf("\n");
 		}
-#endif
 
 		// handle with data storage process
 		for (int i = 0; i <= nodeNum; ++i)
@@ -765,19 +959,53 @@ void STAG::_obtainSchemeIndicators(double& totalInterruptTime, int& totalReceive
 		int playRate = playTable[downloader];
 		int receivedAmount  = NodeList[downloader].S[slotNum][downloaderIdx].size - NodeList[downloader].S[0][downloaderIdx].size + NodeList[superSink].S[slotNum][downloaderIdx].size;
 		int lack = slotNum*playRate - NodeList[superSink].S[slotNum][downloaderIdx].size;
-		double interruptTime = static_cast<double>(lack) / playRate;
+		double interruptTime = playRate > 0 ? static_cast<double>(lack) / playRate : 0;
+		debug_log("Interrupt time of downloader [%d] is %f delta, received data amount of it is %d.\n", downloader, interruptTime, receivedAmount);
 		interruptTimeTable[downloaderIdx] = interruptTime;
 		receivedAmountTable[downloaderIdx] = receivedAmount;
 		totalInterruptTime += interruptTime;
 		totalReceivedAmount += receivedAmount;
-#if INFO_STAG
-		EV << "Interrupt time of downloader [" << downloader << "] is " << interruptTime << " delta, received data amount of it is " << receivedAmount << ".\n";
-#endif
 	}
-#if INFO_STAG
-	EV << "Current total interrupt time is " << totalInterruptTime << ", total received data amount is " << totalReceivedAmount << ".\n";
-#endif
+
+	debug_log("Current total interrupt time is %f, total received data amount is %d.\n", totalInterruptTime, totalReceivedAmount);
 }
+
+#if VERIFY_SCHEME
+void STAG::_recordFluxPath()
+{
+	std::vector<int> fluxPath;
+	fluxPath.reserve(2 + 3*slotNum);
+	for (itAPL = arcPathList.begin(); itAPL != arcPathList.end(); ++itAPL)
+	{
+		std::vector<int> &arcPath = *itAPL; // alias
+		for (size_t i = 0; i < arcPath.size()-1; ++i)
+		{
+			struct Arc *parc = &arcTable[arcPath[i]];
+			bool hasAddedNode = false;
+			for (int j = 0; j < slotNum; ++j)
+			{
+				if (parc->flow[j] > 0 && parc->downloader[j] == arcPath.back())
+				{
+					if (!hasAddedNode)
+					{
+						hasAddedNode = true;
+						fluxPath.push_back(parc->srcID);
+						fluxPath.push_back(parc->dstID);
+					}
+					fluxPath.push_back(j+1);
+					fluxPath.push_back(parc->downloader[j]);
+					fluxPath.push_back(parc->flow[j]);
+				}
+			}
+			if (!fluxPath.empty())
+			{
+				fluxPathList.push_back(fluxPath);
+				fluxPath.clear();
+			}
+		}
+	}
+}
+#endif
 
 void STAG::_recordFluxScheme()
 {
@@ -803,21 +1031,27 @@ void STAG::_recordFluxScheme()
 			for (k = 0; k < arcPathList[pathIdx].size()-1; ++k)
 			{
 				struct Arc *parc = &arcTable[arcPathList[pathIdx][k]];
-				for (int j = 0; j < slotNum; ++j)
+				int j = 0;
+				for (j = 0; j < slotNum; ++j)
 				{
-					if (parc->flow[j] > 0 && parc->dstID == parc->downloader[j]) // && parc->downloader[j] == arcPathList[pathIdx].back()
+					if (parc->flow[j] > 0 && parc->dstID == parc->downloader[j]) // && parc->downloader[j] == arcPathList[pathIdx].back())
 					{
 						sortReceivedSlot.push_back(std::pair<int, int>(j, parc->flow[j]));
 						sortReceivedPath.push_back(std::pair<int, int>(j, pathIdx));
 					}
 				}
+				info_log("flow:");
+				if (log_level >= INFO_LEVEL)
+				{
+					for (j = 0; j < slotNum; ++j)
+						printf(" (%d,%d)", j+1, parc->flow[j]);
+					printf("\n");
+				}
 			}
 		}
 		std::sort(sortReceivedSlot.begin(), sortReceivedSlot.end());
 		int accumulatedOffset = 0;
-#if INFO_STAG
-		EV << "arrival (slot,amount)[offset]:";
-#endif
+		info_log("arrival (slot,amount)[offset]:");
 		for (k = 0; k < sortReceivedSlot.size(); ++k)
 		{
 			segmentOffsets[sortReceivedSlot[k].first].begin = accumulatedOffset;
@@ -825,23 +1059,18 @@ void STAG::_recordFluxScheme()
 			accumulatedOffset += sortReceivedSlot[k].second;
 			segmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
 			dupSegmentOffsets[sortReceivedSlot[k].first].end = accumulatedOffset;
-#if INFO_STAG
-			EV << " (" << sortReceivedSlot[k].first+1 << ',' << sortReceivedSlot[k].second << ")[" << segmentOffsets[sortReceivedSlot[k].first].begin << ',' << segmentOffsets[sortReceivedSlot[k].first].end << ']';
+			if (log_level >= INFO_LEVEL)
+				printf(" (%d,%d)[%d,%d]", sortReceivedSlot[k].first+1, sortReceivedSlot[k].second, segmentOffsets[sortReceivedSlot[k].first].begin, segmentOffsets[sortReceivedSlot[k].first].end);
 		}
-		EV << "\n";
-#else
-		}
-#endif
-		prefetchAmountTable.insert(std::pair<int, int>(downloaderArray[downloaderIdx], accumulatedOffset));
+		if (log_level >= INFO_LEVEL)
+			printf("\n");
 
-		// modify prefetching amount if necessary in order to avoid exceeding total content size
-#if INFO_STAG
-		EV << "prefetch amount is " << accumulatedOffset << " bytes, demanding amount is " << demandingAmountTable[downloaderArray[downloaderIdx]] << " bytes.\n";
-#endif
-		int decreasingAmount = prefetchAmountTable[downloaderArray[downloaderIdx]] - demandingAmountTable[downloaderArray[downloaderIdx]]; // alias
+#if 0
+		// this #if ... #endif part is left for test, beacuse we need to modify prefetching amount in order to avoid exceeding total content size
+		int prefetchAmount = 1164800, demandingAmount = 8338800; // set these two variables to test, note prefetchAmount >= demandingAmount
+		int decreasingAmount = prefetchAmount - demandingAmount;
 		if (decreasingAmount > 0)
 		{
-			prefetchAmountTable[downloaderArray[downloaderIdx]] = demandingAmountTable[downloaderArray[downloaderIdx]];
 			// in order to modify flux scheme list, thus remove slot scheme in segmentOffsets reversely by slot index
 			std::sort(sortReceivedPath.begin(), sortReceivedPath.end());
 			int sIdx = static_cast<int>(sortReceivedPath.size()) - 1;
@@ -912,6 +1141,7 @@ void STAG::_recordFluxScheme()
 				} // if (segmentLength <= decreasingAmount)
 			}
 		}
+#endif
 
 		pathIdx = arcPathRange[downloaderIdx].first; // handle with the direct download arc path
 		for (k = 0; k < arcPathList[pathIdx].size()-1; ++k)
@@ -941,7 +1171,7 @@ void STAG::_recordFluxScheme()
 			if (marcSlotFlow.empty() || narcSlotFlow.empty())
 				continue;
 			bool uncontinuousAppend = true;
-			Segment *mSeg = &segmentOffsets[marcSlotFlow[0].first], *nSeg = &dupSegmentOffsets[narcSlotFlow[0].first];
+			struct Segment *mSeg = &segmentOffsets[marcSlotFlow[0].first], *nSeg = &dupSegmentOffsets[narcSlotFlow[0].first];
 			for (size_t m = 0, n = 0; m < marcSlotFlow.size() && n < narcSlotFlow.size();)
 			{
 				int mflow = marcSlotFlow[m].second, nflow = narcSlotFlow[n].second; // alias
@@ -964,7 +1194,7 @@ void STAG::_recordFluxScheme()
 					nSeg = &dupSegmentOffsets[narcSlotFlow[++n].first];
 					if (mSeg->end < nSeg->begin) // uncontinuous segment, append to next field
 					{
-						mSeg->next = new Segment;
+						mSeg->next = new struct Segment;
 						mSeg = mSeg->next;
 						uncontinuousAppend = true;
 					}
@@ -988,13 +1218,15 @@ void STAG::_recordFluxScheme()
 			{
 				if (marc->flow[j] > 0 && marc->downloader[j] == arcPathList[pathIdx].back())
 				{
-					fluxSchemeList[marc->srcID].push_back(FluxScheme(j+1, marc->dstID, marc->downloader[j], marc->flow[j]));
+					FluxScheme fluxS(j+1, marc->dstID, marc->downloader[j], marc->flow[j]);
+					fluxSchemeList[marc->srcID].push_back(fluxS);
 					fluxSchemeList[marc->srcID].back().segment = segmentOffsets[j];
 					fluxSchemeList[marc->srcID].back().segment.print();
 				}
 				if (narc->flow[j] > 0)
 				{
-					fluxSchemeList[narc->srcID].push_back(FluxScheme(j+1, narc->dstID, narc->downloader[j], narc->flow[j]));
+					FluxScheme fluxS(j+1, narc->dstID, narc->downloader[j], narc->flow[j]);
+					fluxSchemeList[narc->srcID].push_back(fluxS);
 					fluxSchemeList[narc->srcID].back().segment = segmentOffsets[j];
 					fluxSchemeList[narc->srcID].back().segment.print();
 				}
@@ -1008,12 +1240,13 @@ void STAG::_recordFluxScheme()
 	for (int i = 0; i < nodeNum; ++i)
 	{
 		std::sort(fluxSchemeList[i].begin(), fluxSchemeList[i].end(), FluxSchemeCmp());
-#if INFO_STAG
-		EV << i << " |";
-		for (k = 0; k < fluxSchemeList[i].size(); ++k)
-			EV << " " << fluxSchemeList[i][k].slot << " " << fluxSchemeList[i][k].dest << " " << fluxSchemeList[i][k].downloader << " " << fluxSchemeList[i][k].flow;
-		EV << "\n";
-#endif
+		if (log_level >= INFO_LEVEL)
+		{
+			printf("%d |", i);
+			for (k = 0; k < fluxSchemeList[i].size(); ++k)
+				printf(" %d %d %d %d", fluxSchemeList[i][k].slot, fluxSchemeList[i][k].dest, fluxSchemeList[i][k].downloader, fluxSchemeList[i][k].flow);
+			printf("\n");
+		}
 	}
 }
 
@@ -1058,7 +1291,7 @@ void STAG::_addSuperSink()
 
 	int arcID = 2*linkNum;
 
-	for (std::map<int, int>::iterator itPT = playTable.begin(); itPT != playTable.end(); ++itPT)
+	for (itPT = playTable.begin(); itPT != playTable.end(); ++itPT)
 	{
 		int curNode = itPT->first; // downloader node ID
 
@@ -1070,9 +1303,9 @@ void STAG::_addSuperSink()
 		parc->nextArc = NULL;
 
 		// if (NodeList[curNode].firstArc == NULL)
-		//  NodeList[curNode].firstArc = parc;
+		//	NodeList[curNode].firstArc = parc;
 		// else
-		//  NodeList[curNode].lastArc->nextArc = parc; // append to the last
+		//	NodeList[curNode].lastArc->nextArc = parc; // append to the last
 		// NodeList[curNode].lastArc = parc;  // update lastArc too
 	}
 
@@ -1087,7 +1320,7 @@ void STAG::_addSuperSink()
 void STAG::_delSuperSink()
 {
 	/*
-	for (std::map<int, int>::iterator itPT = playTable.begin(); itPT != playTable.end(); ++itPT)
+	for (itPT = playTable.begin(); itPT != playTable.end(); ++itPT)
 	{
 		struct Arc *freearc = NodeList[itPT->first].firstArc, *prevarc = NULL;
 
@@ -1134,8 +1367,11 @@ int STAG::__calcAlternativeFlow(const int curPath, const int m, const int n, con
 		else if (chosenSlot[i] == m)
 			erasureM = true;
 	}
-
-	ASSERT(firstArcFlow == secondArcFlow);
+	if (firstArcFlow != secondArcFlow)
+	{
+		error_log("assert firstArcFlow == secondArcFlow failed.\n");
+		exit(EXIT_FAILURE);
+	}
 	preFlow = firstArcFlow;
 
 	if (erasureM)
@@ -1161,13 +1397,14 @@ int STAG::__calcAlternativeFlow(const int curPath, const int m, const int n, con
 	if (!collisionN)
 		__insertChosenSlot(chosenSlot, n, false);
 
-#if DEBUG_STAG
+	debug_log("%s choose slot:", setFlow ? "so" : "if");
 	__printChosenSlot(chosenSlot);
-#endif
 
 	postFlow = __calcChosenPathPostFlow(chosenSlot, marc, narc, setFlow);
 	if (setFlow)
 		chosenSlots[curPath] = chosenSlot; // assign back
+	else
+		debug_log("then preFlow is %d, postFlow is %d", preFlow, postFlow);
 
 	return postFlow - preFlow;
 }
@@ -1183,8 +1420,11 @@ int STAG::__calcDecreasedFlow(const int curPath, const int m, const int n)
 		firstArcFlow += marc->flow[chosenSlot[i]];
 	for (i = indicator; i < vecSize-1; ++i)
 		secondArcFlow += narc->flow[chosenSlot[i]];
-
-	ASSERT(firstArcFlow == secondArcFlow);
+	if (firstArcFlow != secondArcFlow)
+	{
+		error_log("assert firstArcFlow == secondArcFlow failed.\n");
+		exit(EXIT_FAILURE);
+	}
 	preFlow = firstArcFlow;
 
 	if (firstCollision)
@@ -1242,7 +1482,11 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 	for (j = indicator; j < vecSize-1; ++j)
 		secondArcRestCap += narcBandwidth[chosenSlot[j]];
 
-	ASSERT(firstArcBW - firstArcRestCap == secondArcBW - secondArcRestCap);
+	if (firstArcBW - firstArcRestCap != secondArcBW - secondArcRestCap)
+	{
+		error_log("assert firstArcFlow == secondArcFlow failed.\n");
+		exit(EXIT_FAILURE);
+	}
 	int maxFlow = firstArcBW - firstArcRestCap;
 
 	if (setFlow)
@@ -1261,88 +1505,96 @@ int STAG::__calcChosenPathPostFlow(std::vector<int>& chosenSlot, struct Arc *&ma
 
 void STAG::__printNodeStorage()
 {
-#if DEBUG_STAG
+	if (log_level < DEBUG_LEVEL)
+		return;
+
 	for (int i = 0; i <= nodeNum; ++i)
 	{
-		EV << "node [" << i << "]:  " << downloaderArray[0] << "$(" << NodeList[i].S[0][0].size;
+		printf("node [%d]:  %d$(%d", i, downloaderArray[0], NodeList[i].S[0][0].size);
 		int j = 0;
 		for (j = 1; j <= slotNum; ++j)
-			EV << "," << NodeList[i].S[j][0].size;
+			printf(",%d", NodeList[i].S[j][0].size);
 		for (int d = 1; d < downloaderNum; ++d)
 		{
-			EV << ")  |  " << downloaderArray[d] << "$(" << NodeList[i].S[0][d].size;
+			printf(")  |  %d$(%d", downloaderArray[d], NodeList[i].S[0][d].size);
 			for (j = 1; j <= slotNum; ++j)
-				EV << "," << NodeList[i].S[j][d].size;
+				printf(",%d", NodeList[i].S[j][d].size);
 		}
-		EV << ")\n";
+		printf(")\n");
 	}
-#endif
 }
 
 void STAG::__printChannelStatus()
 {
-#if DEBUG_STAG
+	if (log_level < DEBUG_LEVEL)
+		return;
+
 	for (int i = 0; i < nodeNum; i++)
 	{
-		EV << "node [" << i << "]";
+		printf("node [%d]", i);
 		for (struct Arc *darc = NodeList[i].firstArc; darc != NULL; darc = darc->nextArc)
 		{
-			EV << " -> " << darc->dstID << "(";
+			printf(" -> %d(", darc->dstID);
 			for (int j = 0; j < slotNum-1; ++j)
-				EV << darc->idle[j] << ",";
-			EV << darc->idle[slotNum-1] << ")";
+				printf("%d,", darc->idle[j]);
+			printf("%d)", darc->idle[slotNum-1]);
 		}
-		EV << std::endl;
+		printf("\n");
 	}
-#endif
 }
 
 void STAG::__printChosenSlots()
 {
-#if INFO_STAG
-	EV << "===== chosen slots =====\n";
+	if (log_level < DEBUG_LEVEL)
+		return;
+
+	debug_log("===== chosen slots =====\n");
 	for (size_t k = 0; k < chosenSlots.size(); ++k)
 	{
-		EV << "path " << k << ":";
+		printf("path %lu:", k);
 		__printChosenSlot(chosenSlots[k]);
 	}
-#endif
 }
 
 void STAG::__printChosenSlot(std::vector<int>& vec)
 {
-	ASSERT(!vec.empty());
+	if (vec.empty())
+	{
+		error_log("chosen slot is empty!\n");
+		exit(EXIT_FAILURE);
+	}
 
-#if INFO_STAG
+	if (log_level < DEBUG_LEVEL)
+		return;
+
 	int i = 0, indicator = vec.back(), vecSize = static_cast<int>(vec.size());
 	if (indicator != -1) // relay arc path
 	{
 		for (i = 0; i < indicator; ++i)
 		{
-			EV << " " << vec[i]+1;
+			printf(" %d", vec[i]+1);
 			if (i == indicator-1)
-				EV << " |";
+				printf(" |");
 		}
 		for (i = indicator; i < vecSize-1; ++i)
 		{
-			EV << " " << vec[i]+1;
+			printf(" %d", vec[i]+1);
 			if (i == vecSize-2)
-				EV << " |";
+				printf(" |");
 		}
-		EV << " " << indicator;
+		printf(" %d", indicator);
 	}
 	else // direct arc path
 	{
 		for (i = 0; i < vecSize-1; ++i)
 		{
-			EV << " " << vec[i]+1;
+			printf(" %d", vec[i]+1);
 			if (i == vecSize-2)
-				EV << " |";
+				printf(" |");
 		}
-		EV << " " << indicator;
+		printf(" %d", indicator);
 	}
-	EV << std::endl;
-#endif
+	printf("\n");
 }
 
 void STAG::__eraseChosenSlot(std::vector<int>& vec, const int slot)
@@ -1378,20 +1630,20 @@ void STAG::__eraseChosenSlot(std::vector<int>& vec, const int slot)
 	}
 	else
 	{
-		EV_ERROR << "erase the slot that hasn't been chosen!\n";
-		ASSERT(false);
+		error_log("erase the slot that hasn't been chosen!\n");
+		exit(EXIT_FAILURE);
 	}
 }
 
-void STAG::__insertChosenSlot(std::vector<int>& vec, const int slot, const bool firstArc)
+void STAG::__insertChosenSlot(std::vector<int>& vec, const int slot, bool firstArc)
 {
 	int i = 0, pos = -1, vecSize = static_cast<int>(vec.size());
 	for (i = 0; i < vecSize-1; ++i)
 	{
 		if (vec[i] == slot)
 		{
-			EV_ERROR << "insert the same slot as the slot that has been chosen!\n";
-			ASSERT(false);
+			error_log("insert the same slot as the slot that has been chosen!\n");
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -1485,13 +1737,9 @@ void STAG::__eraseUnchosenArcPath()
 			arcPathList.pop_back();
 	}
 
-	EV << "===== chosen arc path list =====\n";
+	info_log("===== chosen arc path list =====\n");
 	for (itAPL = arcPathList.begin(); itAPL != arcPathList.end(); ++itAPL)
-	{
-		for (size_t k = 0; k < itAPL->size(); ++k)
-			EV << itAPL->at(k) << " ";
-		EV << std::endl;
-	}
+		printVector(*itAPL, "", INFO_LEVEL);
 
 	// update arc path range for each downloader
 	int arcPathListSize = static_cast<int>(arcPathList.size());
@@ -1506,11 +1754,10 @@ void STAG::__eraseUnchosenArcPath()
 	}
 	arcPathRange[downloaderIdx].second = arcPathListSize;
 
-#if INFO_STAG
-	EV << "===== chosen arc path range =====\n";
-	for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
-		EV << "downloader " << downloaderArray[downloaderIdx] << ": [" << arcPathRange[downloaderIdx].first << "," << arcPathRange[downloaderIdx].second << ")\n";
-#endif
+	info_log("===== chosen arc path range =====\n");
+	if (log_level >= INFO_LEVEL)
+		for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+			printf("downloader %d: [%d,%d)\n", downloaderArray[downloaderIdx], arcPathRange[downloaderIdx].first, arcPathRange[downloaderIdx].second);
 }
 
 bool STAG::__isCollision(struct Arc *parc, struct Arc *qarc, const int slot)
@@ -1518,3 +1765,303 @@ bool STAG::__isCollision(struct Arc *parc, struct Arc *qarc, const int slot)
 	return true;
 }
 
+
+////////////////    scheme verification part    ////////////////
+#if VERIFY_SCHEME
+enum VState {
+	I, ///< Idle
+	T, ///< Transmit
+	R, ///< Receive
+	C  ///< Collision
+};
+
+inline const char VStateStr(VState state)
+{
+	if (state == VState::I)
+		return 'I';
+	else if (state == VState::T)
+		return 'T';
+	else if (state == VState::R)
+		return 'R';
+	else
+		return 'C';
+}
+
+/** verification of the file segment transmition scheme. */
+bool verifyScheme(STAG& graph, double& totalInterruptTime, int& totalReceivedAmount)
+{
+	uncond_log("\n====================    Enter scheme verification category    ====================\n");
+	std::list<std::vector<int> > &transmitionList = graph.fluxPathList;
+	std::list<std::vector<int> >::iterator itTL = transmitionList.begin();
+	bool ok = true;
+	int i = 0, j = 0;
+	size_t k = 0;
+	struct Arc *parc = NULL;
+
+	// 1. ====================    check the validity of scheme    ====================
+	VState *channelOccupied = new VState[nodeNum*slotNum];
+	VState **occupied = new VState*[nodeNum];
+	for (i = 0; i < nodeNum; ++i)
+		occupied[i] = channelOccupied + i*slotNum;
+	for (i = 0; i < nodeNum*slotNum; ++i)
+		channelOccupied[i] = VState::I;
+	int *oppositeEnd = new int[nodeNum*slotNum];
+	int **opposite = new int*[nodeNum];
+	for (i = 0; i < nodeNum; ++i)
+		opposite[i] = oppositeEnd + i*slotNum;
+	for (i = 0; i < nodeNum*slotNum; ++i)
+		oppositeEnd[i] = 0;
+	Data *dataInfo = new Data[nodeNum*slotNum];
+	Data **info = new Data*[nodeNum];
+	for (i = 0; i < nodeNum; ++i)
+		info[i] = dataInfo + i*slotNum;
+
+	// 1.1. ===========    collect channel occupiation statistics    ==========
+	int from = 0, to = 0, slot = 0;
+	if (log_level >= INFO_LEVEL)
+		printf("===== transmition scheme =====\n");
+	for (; itTL != transmitionList.end(); ++itTL)
+	{
+		std::vector<int> &transmition = *itTL; // alias
+		if (log_level >= INFO_LEVEL)
+		{
+			for (k = 0; k < transmition.size(); ++k)
+				printf("%d ", transmition[k]);
+			printf("\n");
+		}
+		from = transmition[0];
+		to = transmition[1];
+		for (k = 2; k < transmition.size(); k += 3)
+		{
+			slot = transmition[k] - 1;
+			if (occupied[from][slot] == VState::I)
+				occupied[from][slot] = VState::T;
+			else
+				occupied[from][slot] = VState::C;
+			opposite[from][slot] = to;
+			info[from][slot].downloader = transmition[k+1];
+			info[from][slot].size = transmition[k+2];
+			if (occupied[to][slot] == VState::I)
+				occupied[to][slot] = VState::R;
+			else
+				occupied[to][slot] = VState::C;
+			opposite[to][slot] = from;
+			info[to][slot].downloader = transmition[k+1];
+			info[to][slot].size = transmition[k+2];
+		}
+	}
+	// 1.2. ==========    check whether there exists the following situations    ==========
+	//     1) a vehicle transmit and receive at the same time;
+	//     2) a vehicle transmit to more than one vehicle at the same time;
+	//     3) a vehicle receive from more than one vehicle at the same time.
+	std::list<std::pair<int, int> > transmitionPairs;
+	for (i = 0; i < nodeNum; ++i)
+		for (j = 0; j < slotNum; ++j)
+			if (occupied[i][j] == VState::C)
+				transmitionPairs.push_back(std::pair<int, int>(i, j+1));
+
+	if (log_level >= DEBUG_LEVEL)
+	{
+		printf("===== vehicle state =====\n");
+		for (i = 0; i < nodeNum; ++i)
+		{
+			for (j = 0; j < slotNum; ++j)
+				printf("%c ", VStateStr(occupied[i][j]));
+			printf("\n");
+		}
+		printf("===== opposite end =====\n");
+		for (i = 0; i < nodeNum; ++i)
+		{
+			for (j = 0; j < slotNum; ++j)
+				printf("%d ", opposite[i][j]);
+			printf("\n");
+		}
+		printf("===== transmitted =====\n");
+		for (i = 0; i < nodeNum; ++i)
+		{
+			for (j = 0; j < slotNum; ++j)
+				printf("%d ", info[i][j].size);
+			printf("\n");
+		}
+	}
+	while (!transmitionPairs.empty())
+	{
+		error_log("node [%d] in time slot [%d] break the channel contention rule.\n", transmitionPairs.front().first, transmitionPairs.front().second);
+		transmitionPairs.pop_front();
+		ok = false;
+	}
+
+	// 1.3. ==========    check whether there exists the following situations    ==========
+	//     when a vehicle is transmiting, its neighbor or its receiver's neighbor is transmiting at the same time.
+	if (ok)
+	{
+		for (j = 0; j < slotNum; ++j)
+		{
+			for (i = 0; i < nodeNum; ++i)
+			{
+				if (occupied[i][j] == VState::T)
+				{
+					int receiver = opposite[i][j];
+					for (parc = graph.NodeList[i].firstArc; parc != NULL; parc = parc->nextArc)
+					{
+						if (parc->bandwidth[j] && occupied[parc->dstID][j] == VState::T)
+						{
+							transmitionPairs.push_back(std::pair<int, int>(i, j+1));
+							ok = false;
+						}
+						if (parc->bandwidth[j] && occupied[parc->dstID][j] == VState::R && opposite[parc->dstID][j] != i)
+						{
+							transmitionPairs.push_back(std::pair<int, int>(i, j+1));
+							ok = false;
+						}
+					}
+					for (parc = graph.NodeList[receiver].firstArc; parc != NULL; parc = parc->nextArc)
+					{
+						if (parc->bandwidth[j] && occupied[parc->dstID][j] == VState::T && opposite[parc->dstID][j] != receiver)
+						{
+							transmitionPairs.push_back(std::pair<int, int>(i, j+1));
+							ok = false;
+						}
+					}
+				}
+				if (!ok)
+					break;
+			}
+			if (!ok)
+				break;
+		}
+	}
+
+	if (!ok)
+	{
+		while (!transmitionPairs.empty())
+		{
+			error_log("node [%d] in time slot [%d] break the channel contention rule.\n", transmitionPairs.front().first, transmitionPairs.front().second);
+			transmitionPairs.pop_front();
+		}
+
+		delete []info;
+		delete []dataInfo;
+		delete []opposite;
+		delete []oppositeEnd;
+		delete []occupied;
+		delete []channelOccupied;
+
+		uncond_log("====================    Exit scheme verification category    ====================\n\n");
+		return false;
+	}
+
+	// 2. ====================    summarize the indicators of scheme    ====================
+	int downloaderIdx = 0, downloader = 0, playRate = 0;
+
+	for (j = 0; j < slotNum; ++j)
+	{
+		for (i = 0; i < nodeNum; ++i)
+		{
+			if (occupied[i][j] == VState::I)
+				for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+					graph.NodeList[i].S[j+1][downloaderIdx].size = graph.NodeList[i].S[j][downloaderIdx].size;
+			else if (occupied[i][j] == VState::T)
+			{
+				to = opposite[i][j]; // alias
+				for (parc = graph.NodeList[i].firstArc; parc != NULL; parc = parc->nextArc)
+					if (parc->dstID == to)
+						break;
+				if (info[i][j].size <= parc->bandwidth[j])
+				{
+					downloaderIdx = downloaderTable[info[i][j].downloader]; // alias
+					// debug_log("original: %d, transmitted: %d, downloader: %d\n", graph.NodeList[i].S[j][downloader].size, info[i][j].size, downloader);
+					graph.NodeList[i].S[j+1][downloaderIdx].size = graph.NodeList[i].S[j][downloaderIdx].size - info[i][j].size;
+					graph.NodeList[to].S[j+1][downloaderIdx].size = graph.NodeList[to].S[j][downloaderIdx].size + info[i][j].size;
+					if (graph.NodeList[i].S[j+1][downloaderIdx].size < 0)
+					{
+						error_log("transmitted data size from [%d] to [%d] beyond transmitter's original storage in slot [%d]\n", i, to, j+1);
+						ok = false;
+					}
+					for (int d = 0; d < downloaderNum; ++d)
+					{
+						if (d != downloaderIdx) // as for other downloaders' data storage, reserve to next slot
+						{
+							graph.NodeList[i].S[j+1][d].size = graph.NodeList[i].S[j][d].size;
+							graph.NodeList[to].S[j+1][d].size = graph.NodeList[to].S[j][d].size;
+						}
+					}
+				}
+				else
+				{
+					error_log("transmitted data size from [%d] to [%d] beyond link bandwidth in slot [%d]\n", i, to, j+1);
+					ok = false;
+				}
+			}
+			if (!ok)
+				break;
+		}
+		if (!ok)
+			break;
+		// handle data consumption through play process of downloaders
+		for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+		{
+			downloader = downloaderArray[downloaderIdx]; // alias
+			playRate = playTable[downloader]; // alias
+			if (graph.NodeList[downloader].S[j+1][downloaderIdx].size >= playRate)
+			{
+				graph.NodeList[graph.superSink].S[j+1][downloaderIdx].size = graph.NodeList[graph.superSink].S[j][downloaderIdx].size + playRate;
+				graph.NodeList[downloader].S[j+1][downloaderIdx].size -= playRate;
+			}
+			else
+			{
+				graph.NodeList[graph.superSink].S[j+1][downloaderIdx].size = graph.NodeList[graph.superSink].S[j][downloaderIdx].size + graph.NodeList[downloader].S[j+1][downloaderIdx].size;
+				graph.NodeList[downloader].S[j+1][downloaderIdx].size = 0;
+			}
+		}
+	}
+
+	if (ok)
+	{
+		for (j = 0; j <= slotNum; ++j)
+			for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+				graph.NodeList[0].S[j][downloaderIdx].size -= graph.NodeList[0].S[slotNum][downloaderIdx].size;
+
+		if (log_level >= DEBUG_LEVEL)
+		{
+			for (i = 0; i <= nodeNum; ++i)
+			{
+				printf("node [%d]:  %d$(%d", i, downloaderArray[0], graph.NodeList[i].S[0][0].size);
+				for (j = 1; j <= slotNum; ++j)
+					printf(",%d", graph.NodeList[i].S[j][0].size);
+				for (int d = 1; d < downloaderNum; ++d)
+				{
+					printf(")  |  %d$(%d", downloaderArray[d], graph.NodeList[i].S[0][d].size);
+					for (j = 1; j <= slotNum; ++j)
+						printf(",%d", graph.NodeList[i].S[j][d].size);
+				}
+				printf(")\n");
+			}
+		}
+
+		for (downloaderIdx = 0; downloaderIdx < downloaderNum; ++downloaderIdx)
+		{
+			downloader = downloaderArray[downloaderIdx];
+			playRate = playTable[downloader];
+			int receivedAmount  = graph.NodeList[downloader].S[slotNum][downloaderIdx].size
+								- graph.NodeList[downloader].S[0][downloaderIdx].size
+								+ graph.NodeList[graph.superSink].S[slotNum][downloaderIdx].size;
+			int lack = slotNum*playRate - graph.NodeList[graph.superSink].S[slotNum][downloaderIdx].size;
+			double interruptTime = static_cast<double>(lack) / playRate;
+			info_log("Interrupt time of downloader [%d] is %f delta, received data amount of it is %d.\n", downloader, interruptTime, receivedAmount);
+			totalInterruptTime += interruptTime;
+			totalReceivedAmount += receivedAmount;
+		}
+	}
+
+	delete []info;
+	delete []dataInfo;
+	delete []opposite;
+	delete []oppositeEnd;
+	delete []occupied;
+	delete []channelOccupied;
+
+	uncond_log("====================    Exit scheme verification category    ====================\n\n");
+	return ok;
+}
+#endif

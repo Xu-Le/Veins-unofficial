@@ -88,7 +88,7 @@ public:
 		}
 		return false;
 	}
-	/** @brief remove an element in std::vector<T>. */
+	/** @brief find an element in std::vector<T>. */
 	template <typename T>
 	static bool vectorFind(std::vector<T>& vec, const T key)
 	{

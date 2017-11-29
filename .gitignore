@@ -30,4 +30,10 @@ tests/traci
 tests/netedit.exe.lnk
 tests/sumo-gui.exe.lnk
 
+testSTAG/*.o
+testSTAG/STAG
+testSTAG/cases/genCases
+testSTAG/cases/genCasesGUI
+testSTAG/results/*
+
 /examples
