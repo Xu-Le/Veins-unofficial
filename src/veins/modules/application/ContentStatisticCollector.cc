@@ -26,12 +26,8 @@ long ContentStatisticCollector::globalContentSize = 0;
 double ContentStatisticCollector::globalDirectFlux = 0.0;
 double ContentStatisticCollector::globalRelayFlux = 0.0;
 double ContentStatisticCollector::globalCarryFlux = 0.0;
-double ContentStatisticCollector::globalCellularFlux = 0.0;
 double ContentStatisticCollector::globalStorageAmount = 0.0;
-double ContentStatisticCollector::globalConsumingTime = 0.0;
 double ContentStatisticCollector::globalDownloadingTime = 0.0;
-double ContentStatisticCollector::globalInterruptedTime = 0.0;
-double ContentStatisticCollector::globalConsumptionStartingDelay = 0.0;
 
 void ContentStatisticCollector::initialize(int stage)
 {
@@ -43,8 +39,6 @@ void ContentStatisticCollector::initialize(int stage)
 
 		slotNum = par("slotNum").longValue();
 		contentSize = par("contentSize").longValue();
-		contentQuality = par("contentQuality").longValue();
-		cellularRate = par("cellularRate").longValue();
 		trafficDensity = par("trafficDensity").longValue();
 		deployInterval = par("deployInterval").longValue();
 		isComparison = par("isComparison").boolValue();
@@ -61,17 +55,12 @@ void ContentStatisticCollector::finish()
 	recordScalar("globalDirectFlux", globalDirectFlux);
 	recordScalar("globalRelayFlux", globalRelayFlux);
 	recordScalar("globalCarryFlux", globalCarryFlux);
-	recordScalar("globalCellularFlux", globalCellularFlux);
 	recordScalar("globalStorageAmount", globalStorageAmount);
-	recordScalar("globalConsumingTime", globalConsumingTime);
 	recordScalar("globalDownloadingTime", globalDownloadingTime);
-	recordScalar("globalInterruptedTime", globalInterruptedTime);
 
-	double globalTotalFlux = globalDirectFlux + globalRelayFlux + globalCarryFlux + globalCellularFlux;
+	double globalTotalFlux = globalDirectFlux + globalRelayFlux + globalCarryFlux;
 	if (globalTotalFlux < 1e-6)
 		globalTotalFlux = 1.0;
-	if (globalConsumingTime < 1e-6)
-		globalConsumingTime = 1.0;
 	if (globalDownloadingTime < 1e-6)
 		globalDownloadingTime = 1.0;
 	if (globalContentRequests == 0)
@@ -79,23 +68,17 @@ void ContentStatisticCollector::finish()
 	if (globalContentSize == 0)
 		globalContentSize = 1;
 
-	double averageDownloadingRate = globalContentSize / globalDownloadingTime / 128.0; // measured in kbps
+	double averageDownloadingTime = globalDownloadingTime / globalContentRequests;
 	double directFluxRatio = globalDirectFlux / globalTotalFlux;
 	double relayFluxRatio = globalRelayFlux / globalTotalFlux;
 	double carryFluxRatio = globalCarryFlux / globalTotalFlux;
-	double cellularFluxRatio = globalCellularFlux / globalTotalFlux;
 	double redundantStorageRatio = globalStorageAmount / globalContentSize - 1.0;
-	double interruptedTimeRatio = globalInterruptedTime / globalConsumingTime;
-	double averageConsumptionStartingDelay = globalConsumptionStartingDelay / globalContentRequests;
 
-	recordScalar("averageDownloadingRate", averageDownloadingRate);
+	recordScalar("averageDownloadingTime", averageDownloadingTime);
 	recordScalar("directFluxRatio", directFluxRatio);
 	recordScalar("relayFluxRatio", relayFluxRatio);
 	recordScalar("carryFluxRatio", carryFluxRatio);
-	recordScalar("cellularFluxRatio", cellularFluxRatio);
 	recordScalar("redundantStorageRatio", redundantStorageRatio);
-	recordScalar("interruptedTimeRatio", interruptedTimeRatio);
-	recordScalar("averageConsumptionStartingDelay", averageConsumptionStartingDelay);
 
 	// append statistic to file for figuring in MATLAB
 	const char *resultFile = isComparison ? "contentStatistics_cmp.csv" : "contentStatistics.csv";
@@ -106,10 +89,9 @@ void ContentStatisticCollector::finish()
 	}
 	else
 	{
-		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << trafficDensity << ',' << deployInterval << ',';
-		fout << globalContentRequests << ',' << globalContentSize << ',' << globalConsumingTime << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
-		fout << averageDownloadingRate << ',' << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << ',' << cellularFluxRatio << ',';
-		fout << redundantStorageRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;
+		fout << slotNum << ',' << contentSize << ',' << trafficDensity << ',' << deployInterval << ',';
+		fout << globalContentRequests << ',' << globalDownloadingTime << ',' << averageDownloadingTime << ',';
+		fout << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << std::endl;
 	}
 	fout.close();
 

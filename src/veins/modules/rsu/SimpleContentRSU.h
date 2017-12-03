@@ -37,6 +37,7 @@ public:
 		DISTRIBUTE_EVT = LAST_BASE_RSU_MESSAGE_KIND,
 		FETCH_REQUEST_EVT,
 		LINK_BROKEN_EVT,
+		NOTIFY_TIMEOUT_EVT,
 		LAST_CONTENT_RSU_MESSAGE_KIND
 	};
 
@@ -69,6 +70,8 @@ private:
 
 	/** @brief fetch proper amount data from the content server for distributing in a short time. */
 	void _sendFetchingRequest(const LAddress::L3Type downloader, const int curFetchStartOffset);
+	/** @brief send link break notification to downloader to fetch its current downloading status. */
+	void _notifyLinkBreak(const LAddress::L3Type downloader);
 	/** @brief filling cooperative notification message, and then send it to neighbor RSU. */
 	void _sendCooperativeNotification(const LAddress::L3Type downloader, ContentMessage *reportMsg);
 
@@ -109,10 +112,12 @@ private:
 	int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
 	SimTime distributePeriod;    ///< period to handle self message distributeEvt.
 	///@}
-	SimTime wiredTxDuration;  ///< transmission delay of a wired packet.
+	SimTime wiredTxDuration; ///< transmission delay of a wired packet.
+	SimTime notifyTimeoutPeriod; ///< period to handle self message notifyTimeoutEvt.
 
-	cMessage *fetchRequestEvt; ///< self message used to handle with when to send the prefetch request.
-	cMessage *linkBrokenEvt;  ///< self message used to handle with communication link broken event.
+	cMessage *fetchRequestEvt;  ///< self message used to handle with when to send the prefetch request.
+	cMessage *linkBrokenEvt;    ///< self message used to handle with communication link broken event.
+	cMessage *notifyTimeoutEvt; ///< self message used to handle with link break notification time out event.
 
 	cQueue fetchMsgQueue; ///< the queue of fetching messages.
 

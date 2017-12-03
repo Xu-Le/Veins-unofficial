@@ -43,8 +43,6 @@ public:
 private:
 	int slotNum;        ///< predication slot number used by ContentRSU.
 	int contentSize;    ///< total content size required by ContentClient.
-	int contentQuality; ///< content consuming rate of ContentClient.
-	int cellularRate;   ///< average cellular downloading rate in the simulation.
 	int trafficDensity; ///< traffic flow density measured in vph.
 	int deployInterval; ///< deploy interval of RSUs measured in meters.
 	bool isComparison;  ///< indicates whether are SimpleContentRSU's results.
@@ -55,12 +53,8 @@ public:
 	static double globalDirectFlux; ///< accumulated amount of flux measured in bytes produced by direct downloading approach.
 	static double globalRelayFlux;  ///< accumulated amount of flux measured in bytes produced by relay approach.
 	static double globalCarryFlux;  ///< accumulated amount of flux measured in bytes produced by carry-and-forward approach.
-	static double globalCellularFlux;  ///< accumulated amount of flux measured in bytes produced by cellular approach.
 	static double globalStorageAmount; ///< accumulated storage amount measured in bytes in all nodes, it is used to calculate redundant data amount.
-	static double globalConsumingTime; ///< accumulated total time cost in data consuming process.
 	static double globalDownloadingTime; ///< accumulated total time cost in cooperative downloading process.
-	static double globalInterruptedTime; ///< accumulated interrupted time in cooperative downloading process.
-	static double globalConsumptionStartingDelay; ///< accumulated time delay from content request to content consumption starting.
 };
 
 #endif /* __CONTENTSTATISTICCOLLECTOR_H__ */

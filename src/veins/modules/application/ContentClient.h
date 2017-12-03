@@ -20,6 +20,7 @@
 #define __CONTENTCLIENT_H__
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
+#include "veins/modules/application/ContentStatisticCollector.h"
 
 #define STRANGER      1
 #define RELAY         2
@@ -45,9 +46,7 @@ public:
 		SCHEME_SWITCH_EVT,
 		SEGMENT_ADVANCE_EVT,
 		REPORT_STATUS_EVT,
-		DATA_CONSUMPTION_EVT,
 		REQUEST_TIMEOUT_EVT,
-		INTERRUPT_TIMEOUT_EVT,
 		LINK_BROKEN_EVT,
 		REBROADCAST_BEACON_EVT,
 		LAST_CONTENT_CLIENT_MESSAGE_KIND
@@ -83,6 +82,8 @@ private:
 
 	/** @brief call a content request for certain size determined by contentPlanList. */
 	void callContent(int size) override;
+	/** @brief send or resend a content request, called by function callContent(). */
+	void sendContentRequest();
 
 	/** @brief relay or carrier cache data segment for downloader. */
 	void _cacheDataSegment(const int downloader, const int startOffset, const int endOffset);
@@ -96,23 +97,10 @@ private:
 	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver);
 	/** @brief filling downloading status report message, and then send it to RSU. */
 	void _reportDownloadingStatus2(const int contentMsgCC, const LAddress::L3Type receiver);
-	/** @brief open cellular connection, start downloading data from cellular network. */
-	void _openCellularConnection();
-	/** @brief cut off cellular connection, stop downloading data from cellular network. */
-	void _closeCellularConnection();
 	/** @brief notify base station, RSUs and other vehicles that downloading process has completed. */
 	void _notifyDownloadingCompletion();
 
 private:
-	/** @brief Data consuming rate of some common video quality kinds. */
-	enum VideoQuailty {
-		_QCIF = 30720, // 240kbps
-		_CIF = 89600,  // 700kbps
-		_VGA = 217600, // 1700kbps
-		_480P = 230400,  // 1800kbps
-		_720P = 448000,  // 3500kbps
-		_1080P = 1088000 // 8500kbps
-	};
 	/** @brief The class to store other downloader's information. */
 	class DownloaderInfo
 	{
@@ -133,7 +121,7 @@ private:
 	class DownloadingInfo
 	{
 	public:
-		DownloadingInfo() : totalContentSize(-1), availableOffset(-1), consumedOffset(-1), consumingRate(-1), segmentNum(0) {}
+		DownloadingInfo() : totalContentSize(-1), availableOffset(-1), segmentNum(0) {}
 
 		void reset();
 		void eraseSegment();
@@ -144,13 +132,9 @@ private:
 
 		int totalContentSize;
 		int availableOffset;
-		int consumedOffset;
-		int consumingRate;
 		int segmentNum;
 		SimTime requestAt;  ///< statistic, the time made the content request.
 		SimTime completeAt; ///< statistic, the time completed the downloading process.
-		SimTime consumingBeginAt; ///< statistic, the time consuming process began.
-		SimTime consumingEndAt;   ///< statistic, the time consuming process ended.
 		std::list<std::pair<int /* start offset */, int /* end offset */> > segments;
 		std::list<std::pair<int, int> >::iterator itS; // static iterator used to read or find.
 		std::list<std::pair<int, int> >::iterator itD; // dynamic iterator used to insert or erase.
@@ -160,21 +144,12 @@ private:
 		DownloadingInfo& operator=(const DownloadingInfo&);
 	};
 
-	BaseStation *baseStation;
-	cGate *baseStationGate;
-
-	int cellularHeaderLength; ///< length of the cellular packet header measured in bits.
-	int cellularBitsRate; ///< data transmission rate measured in bps of cellular radio.
-
-	bool startConsuming; ///< whether the consuming process has started.
 	bool carrierDownloading; ///< whether is downloading from carrier currently.
-	bool cellularDownloading; ///< whether is downloading from cellular network currently.
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
 	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
 	LAddress::L3Type rebroadcastDownloader; ///< the downloader whose beacon message should be rebroadcast.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
-	int codeRate; ///< code rate of the videos measured in kbps.
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
 
 	/** @name performance consideration. */
@@ -185,17 +160,15 @@ private:
 	SimTime schemeSwitchInterval; ///< interval from current time to the time schemeSwitchEvt happens(this interval is time-varying).
 	///@}
 
-	SimTime requestTimeoutDuration;   ///< when the request timer elapsed this duration, timeout event happens.
-	SimTime interruptTimeoutDuration; ///< when the interrupt timer elapsed this duration, timeout event happens.
+	SimTime requestTimeoutDuration; ///< when the request timer elapsed this duration, timeout event happens.
+	SimTime requestTimeoutPeriod;   ///< period to handle self message requestTimeoutEvt.
 
 	cMessage *relayEvt;             ///< self message used to handle with relay data packets to downloader.
 	cMessage *forwardEvt;           ///< self message used to handle with forward data packets to downloader.
 	cMessage *schemeSwitchEvt;      ///< self message used to handle with transmission scheme switch in different time slot.
 	cMessage *segmentAdvanceEvt;    ///< self message used to handle with segment advance in same time slot.
 	cMessage *reportStatusEvt;      ///< self message used to handle with report downloading status to RSU.
-	cMessage *dataConsumptionEvt;   ///< self message used to handle with data consumption process after a slot elapsed.
 	cMessage *requestTimeoutEvt;    ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
-	cMessage *interruptTimeoutEvt;  ///< self message used to handle with download interrupt timeout event.
 	cMessage *linkBrokenEvt;        ///< self message used to handle with communication link broken event.
 	cMessage *rebroadcastBeaconEvt; ///< self message used to handle with rebroadcast downloader's beacon message(ensure cooperative RSU knows the position of the co-downloader).
 

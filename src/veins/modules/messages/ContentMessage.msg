@@ -89,8 +89,6 @@ packet ContentMessage extends WaveShortMessage
 	long downloader;  // which downloader this content message aims to
 	int contentSize; // content size of request large-volume file (controlCode: 0)
 	int receivedOffset; // data amount received offset (controlCode: 2,7,8,9)
-	int consumedOffset; // data amount consumed offset (controlCode: 2,7,8,9)
-	int consumingRate;  // data amount consuming rate measured in Bytes each second (controlCode: 0)
 	simtime_t reportAt; // RSU tells downloader when to report its downloading status (controlCode: 1)
 	Segment lackOffset; // lacking data segment's offset (controlCode: 3)
 	SchemeItems scheme; // transmission scheme each vehicle should obey (controlCode: 2)

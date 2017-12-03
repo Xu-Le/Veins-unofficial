@@ -20,7 +20,6 @@
 #define __BASESTATION_H__
 
 #include "veins/base/utils/SimpleAddress.h"
-#include "veins/modules/application/ContentStatisticCollector.h"
 #include "veins/modules/messages/CellularMessage_m.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 

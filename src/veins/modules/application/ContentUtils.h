@@ -23,9 +23,6 @@
 #include "veins/base/utils/Coord.h"
 #include "veins/base/utils/SimpleAddress.h"
 
-#define BUFFER_TIME_BEFORE_PLAY    5
-#define STALLING_TIME_LIMIT        3
-
 typedef std::list<LAddress::L3Type> NeighborItems;
 typedef std::list<std::pair<LAddress::L3Type, Coord /* speed */> > DownloaderItems;
 

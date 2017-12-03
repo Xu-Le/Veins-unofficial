@@ -27,8 +27,6 @@ simple ContentServer
 		int headerLength = 224bit @unit(bit); // header length of the wired UDP/IP packet
 
 	gates:
-		input cellularIn;   // cellularIn gate connected to cellular base station
-		output cellularOut; // cellularOut gate connected to cellular base station
 		input rsuIn[rsuNum]; // rsuIn gates connected to road side units
 		output rsuOut[rsuNum]; // rsuOut gates connected to road side units
 }

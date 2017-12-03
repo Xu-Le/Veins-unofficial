@@ -87,8 +87,6 @@ private:
 	///@{
 	int *rsuIn;      ///< receive packets from road side units.
 	int *rsuOut;     ///< send packets to road side units.
-	int cellularIn;  ///< receive packets from cellular base station.
-	int cellularOut; ///< send packets to cellular base station.
 	///@}
 	int headerLength; ///< header length of the wired UDP/IP packet in bits.
 

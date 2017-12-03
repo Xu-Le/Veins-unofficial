@@ -106,8 +106,8 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t, int c) : notifiedLinkBreak(false), sentCoNotification(false), noticeEntering(false), totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0),
-				distributedOffset(0), acknowledgedOffset(0), remainingDataAmount(0), consumingRate(c), prefetchDataAmount(0),
+		DownloaderInfo(int t) : notifiedLinkBreak(false), sentCoNotification(false), noticeEntering(false), totalContentSize(t), cacheStartOffset(-1), cacheEndOffset(0),
+				distributedOffset(0), acknowledgedOffset(0), remainingDataAmount(0), prefetchDataAmount(0),
 				distributedAt(), acknowledgedAt(), _lackOffset(), lackOffset(&_lackOffset) {}
 
 		bool notifiedLinkBreak;
@@ -119,7 +119,6 @@ private:
 		int distributedOffset;
 		int acknowledgedOffset;
 		int remainingDataAmount;
-		int consumingRate;
 		int prefetchDataAmount;
 		SimTime distributedAt;
 		SimTime acknowledgedAt;
@@ -153,7 +152,6 @@ private:
 	std::vector<int> downloaderArray;
 	std::map<int, int> downloaderTable;
 	std::map<int, int> remainingTable;
-	std::map<int, int> playTable;
 	std::map<int, int> demandingAmountTable; ///< avoid prefetched offset exceeding the whole content size.
 	std::list<LinkTuple> linkTuples;
 	///@}

@@ -25,8 +25,6 @@ simple ContentStatisticCollector
 
 	int slotNum = default(8);
 	int contentSize = default(30MB) @unit(MB);
-	int contentQuality = default(2400kbps) @unit(kbps);
-	int cellularRate = default(3000kbps) @unit(kbps);
 	int trafficDensity = default(720vph) @unit(vph);
 	int deployInterval = default(1500m) @unit(m);
 	bool isComparison = default(false);

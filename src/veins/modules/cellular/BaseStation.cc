@@ -122,7 +122,6 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 					cellularMsg->setControlCode(CellularMsgCC::DATA_PACKET_NORMAL);
 					cellularMsg->setDownloader(itDL->first);
 					cellularMsg->addBitLength(8 * distributeLinkBytesOnce);
-					ContentStatisticCollector::globalCellularFlux += distributeApplBytesOnce;
 					downloaderInfo->distributedOffset += distributeApplBytesOnce;
 					if (downloaderInfo->transmissionActive)
 						scheduleAt(downloaderInfo->distributedAt, downloaderInfo->distributeEvt);
@@ -147,7 +146,6 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 						int lastPktAmount = distributedEndOffset - downloaderInfo->distributedOffset; // alias
 						int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, wirelessHeaderLength/8, wirelessDataLength/8);
 						cellularMsg->addBitLength(8 * totalLinkBytes);
-						ContentStatisticCollector::globalCellularFlux += lastPktAmount;
 						downloaderInfo->distributedOffset = distributedEndOffset;
 						cellularMsg->setCurOffset(downloaderInfo->distributedOffset);
 						EV << "downloader [" << itDL->first << "]'s distributed offset updates to " << downloaderInfo->distributedOffset << ".\n";
@@ -270,7 +268,6 @@ void BaseStation::handleWiredIncomingMsg(WiredMessage *wiredMsg)
 	LAddress::L3Type downloader = wiredMsg->getDownloader();   // alias
 	DownloaderInfo *downloaderInfo = downloaders[downloader];  // this downloader's record certainly exists
 	downloaderInfo->cacheEndOffset = wiredMsg->getCurOffset(); // the order of data is assured due to wired link
-	ContentStatisticCollector::globalStorageAmount += wiredMsg->getBytesNum();
 	EV << "downloader [" << downloader << "]'s cache end offset updates to " << downloaderInfo->cacheEndOffset << " bytes.\n";
 
 	if (!downloaderInfo->distributeEvt->isScheduled())

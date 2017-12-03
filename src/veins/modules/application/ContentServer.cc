@@ -38,8 +38,6 @@ void ContentServer::initialize(int stage)
 			popQueueRSUEvts.push_back(new cMessage("pop queue rsu evt", SelfMsgKinds::POP_QUEUE_RSU_EVT));
 		}
 		prefetchingQs.resize(rsuNum);
-		cellularIn = findGate("cellularIn");
-		cellularOut = findGate("cellularOut");
 		headerLength = par("headerLength").longValue();
 
 		distributeRSULinkBytesOnce = 500 * 1500; // MTU is 1500 bytes, distributeRSULinkPacketsOnce == 500
@@ -99,13 +97,6 @@ void ContentServer::handleMessage(cMessage *msg)
 			}
 		}
 	}
-	else if (msg->getArrivalGateId() == cellularIn)
-	{
-		WiredMessage *lteMsg = dynamic_cast<WiredMessage*>(msg);
-		handleLTEIncomingMsg(lteMsg);
-		delete lteMsg;
-		lteMsg = nullptr;
-	}
 	else if (msg->getArrivalGateId() == -1)
 		error("No self message and no gateID! Check configuration.");
 	else
@@ -158,41 +149,7 @@ void ContentServer::handleSelfMsg(cMessage *msg)
 	}
 	case SelfMsgKinds::DISTRIBUTE_BS_EVT:
 	{
-		for (itDL = downloaders.begin(); itDL != downloaders.end(); ++itDL)
-		{
-			DownloaderInfo *downloaderInfo = itDL->second; // alias
-			if (downloaderInfo->distributedBSAt == simTime()) // self message aims to this downloader
-			{
-				WiredMessage *dataMsg = new WiredMessage("data", WiredMsgCC::NORMAL_DATA_PACKET);
-				dataMsg->setDownloader(itDL->first);
-				if (downloaderInfo->requiredEndBSOffset - downloaderInfo->distributedBSOffset > distributeBSApplBytesOnce)
-				{
-					dataMsg->setControlCode(WiredMsgCC::NORMAL_DATA_PACKET);
-					dataMsg->setBytesNum(distributeBSApplBytesOnce);
-					dataMsg->addBitLength(8*distributeBSLinkBytesOnce);
-					downloaderInfo->distributedBSOffset += distributeBSApplBytesOnce;
-					downloaderInfo->distributedBSAt = simTime() + distributeBSPeriod;
-					scheduleAt(downloaderInfo->distributedBSAt, distributeBSEvt);
-				}
-				else
-				{
-					dataMsg->setControlCode(WiredMsgCC::LAST_DATA_PACKET);
-					int lastPktAmount = downloaderInfo->requiredEndBSOffset - downloaderInfo->distributedBSOffset; // alias
-					int totalLinkBytes = ContentUtils::calcLinkBytes(lastPktAmount, 28, 1472);
-					dataMsg->setBytesNum(lastPktAmount);
-					dataMsg->addBitLength(8*totalLinkBytes);
-					downloaderInfo->distributedBSOffset = downloaderInfo->requiredEndBSOffset;
-
-					SimTime transmissionDelay(8*totalLinkBytes * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
-					// pop action will be done later to ensure the correctness of judgment fetchingQ.empty() in handleLTEIncomingMsg()
-					scheduleAt(simTime() + transmissionDelay, popQueueBSEvt);
-				}
-				EV << "downloader [" << itDL->first << "]'s distributed(BS) offset updates to " << downloaderInfo->distributedBSOffset << std::endl;
-				dataMsg->setCurOffset(downloaderInfo->distributedBSOffset);
-				sendDelayed(dataMsg, SimTime::ZERO, "cellularOut");
-				break;
-			}
-		}
+		throw cRuntimeError("not connect to base station.");
 		break;
 	}
 	case SelfMsgKinds::POP_QUEUE_RSU_EVT:

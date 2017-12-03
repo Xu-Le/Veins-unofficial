@@ -26,5 +26,4 @@ simple ContentClient extends BaseWaveApplLayer
 	@display("i=block/downarrow");
 
 	int slotSpan = default(1000); // unit prediction time slot span measured in millisecond
-	int codeRate = default(1800kbps) @unit(kbps); // code rate of the videos
 }

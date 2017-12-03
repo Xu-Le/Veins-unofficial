@@ -30,13 +30,15 @@ void SimpleContentRSU::initialize(int stage)
 		activeDownloaderNum = 0;
 
 		fetchApplBytesOnce = 500 * 1472; // fetchPacketsOnce == 500
-		distributeLinkBytesOnce = 20 * (headerLength + dataLengthBits) / 8; // distributeLinkPacketsOnce == 20
-		distributeApplBytesOnce = 20 * dataLengthBits / 8;
+		distributeLinkBytesOnce = 15 * (headerLength + dataLengthBits) / 8; // distributeLinkPacketsOnce == 20
+		distributeApplBytesOnce = 15 * dataLengthBits / 8;
 		wiredTxDuration = SimTime((wiredHeaderLength + 160) * 10, SIMTIME_NS); // 100Mbps wired channel, 10 is obtained by 1e9 / 100 / 1e6
+		notifyTimeoutPeriod = SimTime(100, SIMTIME_MS);
 
 		fetchRequestEvt = new cMessage("fetch request evt", SimpleContentRSUMsgKinds::FETCH_REQUEST_EVT);
 		fetchRequestEvt->setSchedulingPriority(1); // ensure when to send the next packet, the previous packet has arrived at content server
 		linkBrokenEvt = new cMessage("link broken evt", SimpleContentRSUMsgKinds::LINK_BROKEN_EVT);
+		notifyTimeoutEvt = new cMessage("notify timeout evt", SimpleContentRSUMsgKinds::NOTIFY_TIMEOUT_EVT);
 	}
 }
 
@@ -51,6 +53,7 @@ void SimpleContentRSU::finish()
 
 	cancelAndDelete(fetchRequestEvt);
 	cancelAndDelete(linkBrokenEvt);
+	cancelAndDelete(notifyTimeoutEvt);
 
 	BaseRSU::finish();
 }
@@ -103,18 +106,9 @@ void SimpleContentRSU::handleSelfMsg(cMessage *msg)
 				EV << "estimated rate between myself and receiver [" << itDL->first << "] is " << 128*estimatedRate << " bytes per second.\n";
 				if (distance >= 200 && !downloaderInfo->notifiedLinkBreak && (curPosition.x - recevierPos.x)*receiverSpeed.x < 0)
 				{
-					EV << "the communication link between downloader and RSU will break soon, notify downloader to fetch its downloading status.\n";
-					WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
-					ASSERT( wsm != nullptr );
-					ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
-
-					notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_DIRECT);
-					notifyMsg->setReceiver(itDL->first);
-					notifyMsg->setDownloader(itDL->first);
-
-					sendWSM(notifyMsg);
-
-					downloaderInfo->notifiedLinkBreak = true;
+					_notifyLinkBreak(itDL->first);
+					notifyTimeoutEvt->setContextPointer(const_cast<LAddress::L3Type*>(&itDL->first));
+					scheduleAt(simTime() + notifyTimeoutPeriod, notifyTimeoutEvt);
 				}
 
 				if (undistributedAmount > distributeApplBytesOnce) // has enough data to filling a normal data packet
@@ -162,6 +156,13 @@ void SimpleContentRSU::handleSelfMsg(cMessage *msg)
 	case SimpleContentRSUMsgKinds::LINK_BROKEN_EVT:
 	{
 		__eraseDownloader(brokenDownloader);
+		break;
+	}
+	case SimpleContentRSUMsgKinds::NOTIFY_TIMEOUT_EVT:
+	{
+		EV << "has not received status report message from downloader within deadline, notify again.\n";
+		LAddress::L3Type *pDownloader = static_cast<LAddress::L3Type*>(notifyTimeoutEvt->getContextPointer());
+		_notifyLinkBreak(*pDownloader);
 		break;
 	}
 	default:
@@ -280,11 +281,7 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 	case ContentMsgCC::CONTENT_REQUEST: // it is a request message from a downloader
 	{
 		if ( downloaders.find(downloader) != downloaders.end() ) // update old record
-		{
 			EV << "    downloader [" << downloader << "] is an old downloader, update its info.\n";
-			downloaderInfo = downloaders[downloader];
-			downloaderInfo->acknowledgedOffset = contentMsg->getReceivedOffset();
-		}
 		else
 		{
 			// insert new record
@@ -295,19 +292,25 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 				downloaderInfo->curFetchEndOffset = downloaderInfo->totalContentSize;
 			downloaders.insert(std::pair<LAddress::L3Type, DownloaderInfo*>(downloader, downloaderInfo));
 
-			// response to the request vehicle
-			WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
-			ASSERT( wsm != nullptr );
-			ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
-
-			responseMsg->setControlCode(ContentMsgCC::CONTENT_RESPONSE);
-			responseMsg->setDownloader(downloader);
-
-			sendWSM(responseMsg);
+			if (vehicles.find(downloader) == vehicles.end()) // insert downloader's mobility information into container vehicles
+			{
+				EV << "    vehicle [" << downloader << "] is a new vehicle, insert its info.\n";
+				VehicleInfo *vehicleInfo = new VehicleInfo(contentMsg->getPosition(), contentMsg->getSpeed(), simTime());
+				vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(downloader, vehicleInfo));
+			}
 
 			EV << "current fetching start offset: 0, end offset: " << downloaderInfo->curFetchEndOffset << ".\n";
 			_sendFetchingRequest(downloader, 0);
 		}
+		// response to the request vehicle
+		WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
+		ASSERT( wsm != nullptr );
+		ContentMessage *responseMsg = dynamic_cast<ContentMessage*>(wsm);
+
+		responseMsg->setControlCode(ContentMsgCC::CONTENT_RESPONSE);
+		responseMsg->setDownloader(downloader);
+
+		sendWSM(responseMsg);
 		break;
 	}
 	case ContentMsgCC::CONTENT_RESPONSE: // it is a response message from RSU
@@ -331,6 +334,7 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::LINK_BREAK_DIRECT: // it is a link break notification - the communication link between downloader and RSU will break soon
 	{
+		cancelEvent(notifyTimeoutEvt);
 		_sendCooperativeNotification(downloader, contentMsg);
 		break;
 	}
@@ -393,6 +397,23 @@ void SimpleContentRSU::_sendFetchingRequest(const LAddress::L3Type downloader, c
 		scheduleAt(simTime(), fetchRequestEvt);
 
 	downloaderInfo->fetchingActive = true;
+}
+
+void SimpleContentRSU::_notifyLinkBreak(const LAddress::L3Type downloader)
+{
+	EV << "the communication link between downloader and RSU will break soon, notify downloader to fetch its downloading status.\n";
+
+	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
+	ASSERT( wsm != nullptr );
+	ContentMessage *notifyMsg = dynamic_cast<ContentMessage*>(wsm);
+
+	notifyMsg->setControlCode(ContentMsgCC::LINK_BREAK_DIRECT);
+	notifyMsg->setReceiver(downloader);
+	notifyMsg->setDownloader(downloader);
+
+	sendWSM(notifyMsg);
+
+	downloaders[downloader]->notifiedLinkBreak = true;
 }
 
 void SimpleContentRSU::_sendCooperativeNotification(const LAddress::L3Type downloader, ContentMessage *reportMsg)
