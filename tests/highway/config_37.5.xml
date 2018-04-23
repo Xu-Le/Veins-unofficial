@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+	<AnalogueModels>
+		<AnalogueModel type="SimplePathlossModel">
+			<parameter name="alpha" type="double" value="2.0"/>
+			<parameter name="carrierFrequency" type="double" value="5.890e+9"/>
+		</AnalogueModel>
+	</AnalogueModels>
+	<Decider type="Decider80211p">
+		<!-- The center frequency on which the phy listens-->
+		<parameter name="centerFrequency" type="double" value="5.890e9"/>
+	</Decider>
+	<RoutingPlans>
+		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
+		<RoutingPlan type="4">
+			<parameter name="simtime" type="double" value="90.1"/>
+			<parameter name="receiver" type="long" value="16"/>
+		</RoutingPlan>
+	</RoutingPlans>
+	<WarningPlans>
+		<!-- Notes: Ensure simtime is written increasely, or simulation will crash, however the order of WarningPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime, the warning message's distance of vehicles can be both positive and negative, the latter indicates the warning message aims to vehicles which are driving opposite since vehicle possibly turn around, whereas the warning message's distance of RSUs can only be positive -->
+		<WarningPlan type="3">
+			<parameter name="simtime" type="double" value="100.1"/>
+			<parameter name="distance" type="double" value="600"/>
+		</WarningPlan>
+		<!-- RSUs' type start from 10000, make sure keep consistent with macro RSU_ADDRESS_OFFSET in BaseRSU.h -->
+		<WarningPlan type="10000">
+			<parameter name="simtime" type="double" value="120.1"/>
+			<parameter name="distance" type="double" value="600"/>
+		</WarningPlan>
+	</WarningPlans>
+	<ContentPlans>
+		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of ContentPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
+		
+		<ContentPlan type="61">
+			<parameter name="simtime" type="double" value="330.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="65">
+			<parameter name="simtime" type="double" value="360.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="74">
+			<parameter name="simtime" type="double" value="390.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="82">
+			<parameter name="simtime" type="double" value="420.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="90">
+			<parameter name="simtime" type="double" value="450.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="93">
+			<parameter name="simtime" type="double" value="480.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="102">
+			<parameter name="simtime" type="double" value="510.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="110">
+			<parameter name="simtime" type="double" value="540.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="112">
+			<parameter name="simtime" type="double" value="570.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		<ContentPlan type="122">
+			<parameter name="simtime" type="double" value="600.1"/>
+			<parameter name="size" type="int" value="30720"/>
+		</ContentPlan>
+		
+	</ContentPlans>
+</root>

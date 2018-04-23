@@ -46,6 +46,7 @@ void ContentStatisticCollector::initialize(int stage)
 		contentQuality = par("contentQuality").longValue();
 		cellularRate = par("cellularRate").longValue();
 		trafficDensity = par("trafficDensity").longValue();
+		vehicleSpeed = par("vehicleSpeed").longValue();
 		deployInterval = par("deployInterval").longValue();
 		isComparison = par("isComparison").boolValue();
 	}
@@ -106,7 +107,7 @@ void ContentStatisticCollector::finish()
 	}
 	else
 	{
-		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << trafficDensity << ',' << deployInterval << ',';
+		fout << slotNum << ',' << contentSize << ',' << contentQuality << ',' << trafficDensity << ',' << vehicleSpeed << ',' << deployInterval << ',';
 		fout << globalContentRequests << ',' << globalContentSize << ',' << globalConsumingTime << ',' << globalDownloadingTime << ',' << globalInterruptedTime << ',';
 		fout << averageDownloadingRate << ',' << directFluxRatio << ',' << relayFluxRatio << ',' << carryFluxRatio << ',' << cellularFluxRatio << ',';
 		fout << redundantStorageRatio << ',' << interruptedTimeRatio << ',' << averageConsumptionStartingDelay << std::endl;

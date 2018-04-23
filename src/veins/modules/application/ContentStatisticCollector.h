@@ -46,6 +46,7 @@ private:
 	int contentQuality; ///< content consuming rate of ContentClient.
 	int cellularRate;   ///< average cellular downloading rate in the simulation.
 	int trafficDensity; ///< traffic flow density measured in vph.
+	int vehicleSpeed;   ///< vehicle speed measured in km/h.
 	int deployInterval; ///< deploy interval of RSUs measured in meters.
 	bool isComparison;  ///< indicates whether are SimpleContentRSU's results.
 

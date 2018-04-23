@@ -362,7 +362,8 @@ void ContentClient::handleSelfMsg(cMessage* msg)
 			if ( !fout.is_open() )
 				throw cRuntimeError("cannot open file stalling_time.txt!");
 			else
-				fout << "Downloader " << myAddr << ": " << totalInterruptedTime << ' ' << downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl() << ".\n";
+				fout << "Downloader " << myAddr << ": " << totalInterruptedTime << ' ' << downloadingStatus.consumingBeginAt.dbl() - downloadingStatus.requestAt.dbl()
+					<< ' ' << downloadingStatus.completeAt.dbl() - downloadingStatus.requestAt.dbl() << ".\n";
 			fout.close();
 #endif
 		}
@@ -1391,6 +1392,8 @@ void ContentClient::_closeCellularConnection()
 void ContentClient::_notifyDownloadingCompletion()
 {
 	cancelEvent(interruptTimeoutEvt);
+	if (downloadingStatus.completeAt != SimTime::ZERO)
+		return;
 
 	WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, type_CCH, contentPriority, -1);
 	ASSERT( wsm != nullptr );
@@ -1470,8 +1473,13 @@ void ContentClient::DownloadingInfo::insertSegment(int startOffset, int endOffse
 				++itL;
 			bool eraseItL = itL != segments.end() && itL->first >= endOffset;
 			itS->second = eraseItL ? itL->second : endOffset;
-			while ((itD = ++itS) != itL)
+			while (true)
+			{
+				itD = itS;
+				if (++itD == itL)
+					break;
 				eraseSegment();
+			}
 			if (eraseItL)
 				eraseSegment();
 		}
