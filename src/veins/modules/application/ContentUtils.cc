@@ -31,8 +31,7 @@ Segment::Segment() : begin(-1), end(-1), next(nullptr)
 
 Segment::~Segment()
 {
-	if (next != nullptr) // delete recursively
-		delete next;
+	delete next; // delete recursively
 }
 
 Segment& Segment::operator=(const Segment& rhs)
@@ -46,8 +45,8 @@ Segment& Segment::operator=(const Segment& rhs)
 
 void Segment::clear()
 {
-	if (next != nullptr) // delete recursively
-		delete next;
+	delete next; // delete recursively
+	next = nullptr;
 }
 
 void Segment::assign(const Segment *rhs)

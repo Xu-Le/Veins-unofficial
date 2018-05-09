@@ -341,30 +341,27 @@ void SimpleContentRSU::onContent(ContentMessage *contentMsg)
 	}
 	case ContentMsgCC::DISCOVERY_RESPONSE: // it is a response to relay discovery message from relay vehicle
 	{
-		if (contentMsg->getNeighbors().empty() == false) // received response is yes, otherwise still paying attention to entering vehicles
+		coDownloaders.erase(downloader);
+
+		if (contentMsg->getReceivedOffset() == contentMsg->getContentSize())
 		{
-			coDownloaders.erase(downloader);
-
-			if (contentMsg->getReceivedOffset() == contentMsg->getContentSize())
-			{
-				EV << "    downloader [" << downloader << "]'s downloading process has completed, erase its info.\n";
-				__eraseDownloader(downloader);
-				return;
-			}
-
-			downloaderInfo = downloaders[downloader];
-			downloaderInfo->cacheEndOffset = downloaderInfo->cacheStartOffset = contentMsg->getReceivedOffset();
-			downloaderInfo->distributedOffset = contentMsg->getReceivedOffset();
-			downloaderInfo->acknowledgedOffset = contentMsg->getReceivedOffset();
-			downloaderInfo->_lackOffset = contentMsg->getLackOffset();
-			downloaderInfo->lackOffset = &downloaderInfo->_lackOffset;
-			downloaderInfo->curFetchEndOffset = downloaderInfo->distributedOffset + fetchApplBytesOnce;
-			if (downloaderInfo->curFetchEndOffset > downloaderInfo->totalContentSize)
-				downloaderInfo->curFetchEndOffset = downloaderInfo->totalContentSize;
-
-			EV << "current fetching start offset: " << downloaderInfo->distributedOffset << ", end offset: " << downloaderInfo->curFetchEndOffset << ".\n";
-			_sendFetchingRequest(downloader, downloaderInfo->distributedOffset);
+			EV << "    downloader [" << downloader << "]'s downloading process has completed, erase its info.\n";
+			__eraseDownloader(downloader);
+			return;
 		}
+
+		downloaderInfo = downloaders[downloader];
+		downloaderInfo->cacheEndOffset = downloaderInfo->cacheStartOffset = contentMsg->getReceivedOffset();
+		downloaderInfo->distributedOffset = contentMsg->getReceivedOffset();
+		downloaderInfo->acknowledgedOffset = contentMsg->getReceivedOffset();
+		downloaderInfo->_lackOffset = contentMsg->getLackOffset();
+		downloaderInfo->lackOffset = &downloaderInfo->_lackOffset;
+		downloaderInfo->curFetchEndOffset = downloaderInfo->distributedOffset + fetchApplBytesOnce;
+		if (downloaderInfo->curFetchEndOffset > downloaderInfo->totalContentSize)
+			downloaderInfo->curFetchEndOffset = downloaderInfo->totalContentSize;
+
+		EV << "current fetching start offset: " << downloaderInfo->distributedOffset << ", end offset: " << downloaderInfo->curFetchEndOffset << ".\n";
+		_sendFetchingRequest(downloader, downloaderInfo->distributedOffset);
 		break;
 	}
 	default:

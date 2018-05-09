@@ -31,11 +31,10 @@ enum ContentMsgCC {
 	LINK_BREAK_DIRECT,     ///< link break notify - the communication link between downloader and RSU will break soon;
 	LINK_BREAK_DR,         ///< link break notify - the communication link between downloader and relay will break soon;
 	LINK_BREAK_RR,         ///< link break notify - the communication link between relay and RSU will break soon;
+	LINK_BREAK_ACK,        ///< acknowledgment to link break notification;
 	LINK_BROKEN_DR,        ///< link broken notify - the communication link between downloader and relay has broken already;
 	DOWNLOADER_DISCOVERY,  ///< cooperative RSU's discover notification sends to the entering co-downloader;
-	RELAY_DISCOVERY,       ///< cooperative RSU's discover notification sends to the first entering relay;
-	DISCOVERY_RESPONSE,    ///< the first entering relay response to cooperative RSU's discover notification;
-	STATUS_QUERY,          ///< query downloading status of downloader,
+	DISCOVERY_RESPONSE,    ///< the response to cooperative RSU's discover notification;
 	STATUS_REPORT,         ///< report downloading status to RSU (used only in multi-downloader scenarios);
 	REBROADCAST_BEACON     ///< rebroadcast co-downloader's beacon message to ensure co-RSU knows the latest position of the co-downloader.
 };
@@ -78,7 +77,6 @@ typedef std::map<long /* addr */, std::list<SchemeTuple> > SchemeItems;
 class WaveShortMessage;
 class noncobject Coord;
 class noncobject Segment;
-class noncobject NeighborItems;
 class noncobject DownloaderItems;
 class noncobject SchemeItems;
 
@@ -96,6 +94,5 @@ packet ContentMessage extends WaveShortMessage
 	SchemeItems scheme; // transmission scheme each vehicle should obey (controlCode: 2)
 	Coord position;  // position of the co-downloader (controlCode: 7,8,9)
 	Coord speed;     // speed of the co-downloader (controlCode: 7,8,9)
-	NeighborItems neighbors; // neighbors of the co-downloader (controlCode: 7,8,9)
 	DownloaderItems downloaders; // downloader list in transmission scheme distribution message (controlCode: 2)
 }

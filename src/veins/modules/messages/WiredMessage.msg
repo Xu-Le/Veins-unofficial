@@ -31,7 +31,6 @@ enum WiredMsgCC {
 }}
 
 class noncobject Coord;
-class noncobject NeighborItems;
 
 packet WiredMessage
 {
@@ -44,5 +43,4 @@ packet WiredMessage
 	int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
 	Coord position;  // position of the co-downloader
 	Coord speed;     // speed of the co-downloader
-	NeighborItems neighbors; // neighbors of the co-downloader
 }

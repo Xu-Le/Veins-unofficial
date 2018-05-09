@@ -21,6 +21,8 @@
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
 
+// #define USE_MMCD
+
 #define STRANGER      1
 #define RELAY         2
 #define CARRIER       3
@@ -48,8 +50,9 @@ public:
 		DATA_CONSUMPTION_EVT,
 		REQUEST_TIMEOUT_EVT,
 		INTERRUPT_TIMEOUT_EVT,
+		WAITSTART_TIMEOUT_EVT,
+		LINK_BREAK_RETX_EVT,
 		LINK_BROKEN_EVT,
-		REBROADCAST_BEACON_EVT,
 		LAST_CONTENT_CLIENT_MESSAGE_KIND
 	};
 
@@ -69,9 +72,10 @@ private:
 
 	/** @brief Handle wireless cellular incoming messages. */
 	void handleCellularMsg(CellularMessage *cellularMsg) override;
-
+#ifndef USE_MMCD
 	/** @brief call-back method of receiving beacon message. */
 	void onBeacon(BeaconMessage *beaconMsg) override;
+#endif
 	/** @brief call-back method of receiving routing message(aims to unicast protocols). */
 	void onRouting(RoutingMessage *routingMsg) override;
 	/** @brief call-back method of receiving warning message(aims to broadcast and geocast protocols). */
@@ -86,16 +90,16 @@ private:
 
 	/** @brief relay or carrier cache data segment for downloader. */
 	void _cacheDataSegment(const int downloader, const int startOffset, const int endOffset);
-	/** @brief delete cached data segment that has been acknowledged by downloader and reset pointer DownloaderInfo->cacheOffset. */
-	void _adjustCachedSegment();
 	/** @brief handle with transmission scheme switch preparation. */
 	void _prepareSchemeSwitch();
+#ifndef USE_MMCD
+	/** @brief delete cached data segment that has been acknowledged by downloader and reset pointer DownloaderInfo->cacheOffset. */
+	void _adjustCachedSegment();
 	/** @brief correct planned transmission offset determined by RSU according to current cached segments. */
 	void _correctPlannedOffset();
+#endif
 	/** @brief filling downloading status report message, and then send it to RSU. */
-	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver);
-	/** @brief filling downloading status report message, and then send it to RSU. */
-	void _reportDownloadingStatus2(const int contentMsgCC, const LAddress::L3Type receiver);
+	void _reportDownloadingStatus(const int contentMsgCC, const LAddress::L3Type receiver, bool entering = false);
 	/** @brief open cellular connection, start downloading data from cellular network. */
 	void _openCellularConnection();
 	/** @brief cut off cellular connection, stop downloading data from cellular network. */
@@ -117,20 +121,27 @@ private:
 	class DownloaderInfo
 	{
 	public:
-		DownloaderInfo(int t) : myRole(STRANGER), totalContentSize(t), distributedOffset(0), acknowledgedOffset(0),
+		DownloaderInfo(int t, int c = 0) : myRole(STRANGER), totalContentSize(t), distributedOffset(0), acknowledgedOffset(0),
+#ifdef USE_MMCD
+				remainingDataAmount(0), consumingRate(c),
+#endif
 				notifiedLinkBreak(false), _cacheOffset(), cacheOffset(&_cacheOffset) {}
 
 		int myRole;
 		int totalContentSize;
 		int distributedOffset;
 		int acknowledgedOffset;
+#ifdef USE_MMCD
+		int remainingDataAmount;
+		int consumingRate;
+#endif
 		bool notifiedLinkBreak;
 		SimTime distributedAt;
 		Segment _cacheOffset; ///< internal variable, head node of segment list, thus the whole list can be cleared when its destructor automatically called.
 		Segment *cacheOffset; ///< external variable, use cacheOffset = cacheOffset->next to iterate the segment list.
 	};
 	/** @brief The class to store self downloading information. */
-	class DownloadingInfo
+	class DownloadingInfo : public ::omnetpp::noncopyable
 	{
 	public:
 		DownloadingInfo() : totalContentSize(-1), availableOffset(-1), consumedOffset(-1), consumingRate(-1), segmentNum(0) {}
@@ -154,10 +165,6 @@ private:
 		std::list<std::pair<int /* start offset */, int /* end offset */> > segments;
 		std::list<std::pair<int, int> >::iterator itS; // static iterator used to read or find.
 		std::list<std::pair<int, int> >::iterator itD; // dynamic iterator used to insert or erase.
-
-	private:
-		DownloadingInfo(const DownloadingInfo&);
-		DownloadingInfo& operator=(const DownloadingInfo&);
 	};
 
 	BaseStation *baseStation;
@@ -167,15 +174,22 @@ private:
 	int cellularBitsRate; ///< data transmission rate measured in bps of cellular radio.
 
 	bool startConsuming; ///< whether the consuming process has started.
-	bool carrierDownloading; ///< whether is downloading from carrier currently.
 	bool cellularDownloading; ///< whether is downloading from cellular network currently.
+#ifndef USE_MMCD
+	bool carrierDownloading; ///< whether is downloading from carrier currently.
 	bool encounteredDownloader; ///< whether has encountered the downloader who is the carried data belongs to.
 	LAddress::L3Type carriedDownloader; ///< the downloader who is the carried data belongs to.
-	LAddress::L3Type brokenDownloader;  ///< the downloader who is disconnected from.
-	LAddress::L3Type rebroadcastDownloader; ///< the downloader whose beacon message should be rebroadcast.
+#else
+	LAddress::L3Type scheduledDownloader; ///< the downloader who is scheduled currently.
+#endif
+	LAddress::L3Type brokenDownloader;    ///< the downloader who is disconnected from.
 	int slotSpan; ///< unit prediction time slot span measured in millisecond.
 	int codeRate; ///< code rate of the videos measured in kbps.
+#ifndef USE_MMCD
 	SimTime prevSlotStartTime; ///< store the time when transmission in previous slot is started.
+#else
+	SimTime slotEndAt;         ///< the ended time instant of current flow scheduling period.
+#endif
 
 	/** @name performance consideration. */
 	///@{
@@ -188,20 +202,29 @@ private:
 	SimTime requestTimeoutDuration;   ///< when the request timer elapsed this duration, timeout event happens.
 	SimTime interruptTimeoutDuration; ///< when the interrupt timer elapsed this duration, timeout event happens.
 
-	cMessage *relayEvt;             ///< self message used to handle with relay data packets to downloader.
-	cMessage *forwardEvt;           ///< self message used to handle with forward data packets to downloader.
-	cMessage *schemeSwitchEvt;      ///< self message used to handle with transmission scheme switch in different time slot.
-	cMessage *segmentAdvanceEvt;    ///< self message used to handle with segment advance in same time slot.
-	cMessage *reportStatusEvt;      ///< self message used to handle with report downloading status to RSU.
-	cMessage *dataConsumptionEvt;   ///< self message used to handle with data consumption process after a slot elapsed.
-	cMessage *requestTimeoutEvt;    ///< self message used to handle with content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
-	cMessage *interruptTimeoutEvt;  ///< self message used to handle with download interrupt timeout event.
-	cMessage *linkBrokenEvt;        ///< self message used to handle with communication link broken event.
-	cMessage *rebroadcastBeaconEvt; ///< self message used to handle with rebroadcast downloader's beacon message(ensure cooperative RSU knows the position of the co-downloader).
+	cMessage *relayEvt;             ///< self message - relay data packets to downloader.
+#ifndef USE_MMCD
+	cMessage *forwardEvt;           ///< self message - forward data packets to downloader.
+#endif
+	cMessage *schemeSwitchEvt;      ///< self message - transmission scheme switch in different time slot.
+	cMessage *segmentAdvanceEvt;    ///< self message - segment advance in same time slot.
+	cMessage *reportStatusEvt;      ///< self message - report downloading status to RSU.
+	cMessage *dataConsumptionEvt;   ///< self message - data consumption process after a slot elapsed.
+	cMessage *requestTimeoutEvt;    ///< self message - content request timeout event(this happens when the vehicle is not in any RSU's communication range area).
+	cMessage *interruptTimeoutEvt;  ///< self message - download interrupt timeout event.
+#ifdef USE_MMCD
+	cMessage *waitStartTimeoutEvt;  ///< self message - wait consuming starting timeout event.
+	cMessage *linkBreakReTxEvt;     ///< self message - retransmit downloading status to RSU when the link is to be broken.
+#endif
+	cMessage *linkBrokenEvt;        ///< self message - communication link broken event.
 
 	DownloadingInfo downloadingStatus; ///< store self downloading status information.
+#ifndef USE_MMCD
 	std::list<SchemeTuple> schemeList; ///< describe how this vehicle transmit in each slot.
 	std::list<SchemeTuple>::iterator itSL; ///< an iterator used to iterate container schemeList.
+#else
+
+#endif
 	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all my related its info.
 	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.
 };

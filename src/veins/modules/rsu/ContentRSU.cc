@@ -17,7 +17,7 @@
 //
 
 #include "veins/modules/rsu/ContentRSU.h"
-#if !DEBUG_STAG
+#if DEBUG_STAG
 #include <fstream>
 #endif
 
@@ -371,13 +371,6 @@ void ContentRSU::handleRSUMsg(WiredMessage *wiredMsg, int direction)
 	{
 		EV << "vehicle [" << downloader << "] is a co-downloader, insert its info.\n";
 		CoDownloaderInfo *coDownloaderInfo = new CoDownloaderInfo(wiredMsg->getPosition(), wiredMsg->getSpeed());
-		NeighborItems &neighborItems = wiredMsg->getNeighbors();
-		for (NeighborItems::iterator itNI = neighborItems.begin(); itNI != neighborItems.end(); ++itNI)
-		{
-			EV << "vehicle [" << *itNI << "] is a neighbor of co-downloader, append it to co-downloader's neighbor vector.\n";
-			coDownloaderInfo->neighbors.push_back(*itNI);
-		}
-		std::sort(coDownloaderInfo->neighbors.begin(), coDownloaderInfo->neighbors.end());
 		coDownloaders.insert(std::pair<LAddress::L3Type, CoDownloaderInfo*>(downloader, coDownloaderInfo));
 
 		EV << "downloader [" << downloader << "] is a co-downloader, insert its info.\n";
@@ -500,24 +493,6 @@ void ContentRSU::onBeacon(BeaconMessage *beaconMsg)
 				--noticeEnteringNum;
 				break;
 			}
-#if 0
-			std::vector<LAddress::L3Type> &potentialRelays = itCDL->second->neighbors;
-			if (ContentUtils::vectorSearch(potentialRelays, sender))
-			{
-				EV << "noticing vehicle [" << sender << "] is entering communication range.\n";
-
-				WaveShortMessage *wsm = prepareWSM("content", contentLengthBits, t_channel::type_CCH, contentPriority, -1);
-				ASSERT( wsm != nullptr );
-				ContentMessage *discoveryMsg = dynamic_cast<ContentMessage*>(wsm);
-
-				discoveryMsg->setControlCode(ContentMsgCC::RELAY_DISCOVERY);
-				discoveryMsg->setReceiver(sender);
-				discoveryMsg->setDownloader(itCDL->first);
-
-				sendWSM(discoveryMsg);
-				break;
-			}
-#endif
 		}
 	}
 }
@@ -630,8 +605,9 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 				return;
 			}
 
-			if (vehicles.find(downloader) == vehicles.end() || (sender != downloader && downloaderInfo->sentCoNotification)
-				|| (sender == downloader && (curPosition.x - vehicles[downloader]->pos.x)*vehicles[downloader]->speed.x < 0 && RoutingUtils::_length(curPosition, vehicles[downloader]->pos) >= 225))
+			VehicleInfo *info = vehicles.find(downloader) != vehicles.end() ? vehicles[downloader] : nullptr;
+			if (info == nullptr || (sender != downloader && downloaderInfo->sentCoNotification)
+				|| (sender == downloader && (curPosition.x - info->pos.x)*info->speed.x < 0 && RoutingUtils::_length(curPosition, info->pos) >= 225))
 			{
 				EV << "downloader [" << downloader << "] has driven away RSU's communication area, erase its info.\n";
 				delete itDL->second;
@@ -785,16 +761,8 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 		EV_WARN << "RSU should not receive a message sent by itself.\n";
 		break;
 	}
-	case ContentMsgCC::RELAY_DISCOVERY: // it is a relay discovery message from RSU
-	{
-		EV_WARN << "RSU should not receive a message sent by itself.\n";
-		break;
-	}
 	case ContentMsgCC::DISCOVERY_RESPONSE: // it is a response to relay discovery message from relay vehicle
 	{
-		if (contentMsg->getNeighbors().empty()) // received response is no, still paying attention to entering vehicles
-			ContentUtils::vectorRemove(coDownloaders[downloader]->neighbors, sender);
-		else // received response is yes, now start to execute STAG algorithm
 		{
 			itCDL = coDownloaders.find(downloader);
 			itCDL->second->neighbors.clear();
@@ -846,11 +814,6 @@ void ContentRSU::onContent(ContentMessage *contentMsg)
 			else // no need to prefetch data
 				_broadcastTransmissionScheme();
 		}
-		break;
-	}
-	case ContentMsgCC::STATUS_QUERY:
-	{
-		EV << "it is a downloading status query/report message, ignore it.\n";
 		break;
 	}
 	case ContentMsgCC::STATUS_REPORT:
@@ -1108,7 +1071,7 @@ void ContentRSU::predictLinkBandwidth()
 	if (downloaderNum > 1)
 		srcNode = 0;
 
-#if !DEBUG_STAG
+#if DEBUG_STAG
 	std::ofstream fout("STAG_input.txt", std::ios_base::out | std::ios_base::trunc);
 	if ( !fout.is_open() )
 	{
@@ -1443,7 +1406,6 @@ void ContentRSU::_sendCooperativeNotification(const LAddress::L3Type downloader,
 	coNotifyMsg->setBytesNum(reportMsg->getConsumingRate()); // reuse function name
 	coNotifyMsg->setPosition(reportMsg->getPosition());
 	coNotifyMsg->setSpeed(reportMsg->getSpeed());
-	coNotifyMsg->setNeighbors(reportMsg->getNeighbors());
 	coNotifyMsg->addBitLength(wiredHeaderLength);
 	sendDelayed(coNotifyMsg, SimTime::ZERO, reportMsg->getSpeed().x < 0 ? westOut : eastOut);
 

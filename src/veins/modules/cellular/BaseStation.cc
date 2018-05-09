@@ -132,7 +132,7 @@ void BaseStation::handleSelfMsg(cMessage *msg)
 				}
 				else if (remainingAmount > 0) // has data but not enough to filling a cellular normal data packet
 				{
-					 // data fetch process has finished or cellular connection is closed by downloader, thus send the last half-filled cellular data packet
+					// data fetch process has finished or cellular connection is closed by downloader, thus send the last half-filled cellular data packet
 					if (downloaderInfo->cacheEndOffset >= downloaderInfo->requiredEndOffset || !downloaderInfo->transmissionActive)
 					{
 						if (downloaderInfo->transmissionActive)
