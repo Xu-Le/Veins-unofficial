@@ -31,20 +31,11 @@ public:
 	virtual void initialize(int) override;
 	virtual void finish() override;
 
-	virtual void nextPosition(const Coord& position, double speed, double angle);
-
 private:
-	void updateDisplayString();
-
-	/**< called after each read to check for (and handle) invalid positions */
+	void makeMove() override;
 	void fixIfHostGetsOutside() override;
 
 private:
-	Coord curPos; ///< updated by updatePosition()
-
-	double speed; ///< updated by updatePosition()
-	double angle; ///< updated by updatePosition()
-
 	cOutVector currentPosXVec;  ///< vector plotting posx
 	cOutVector currentPosYVec;  ///< vector plotting posy
 	cOutVector currentPosZVec;  ///< vector plotting posz

@@ -28,17 +28,6 @@ void AircraftMobility::initialize(int stage)
 		currentPosYVec.setName("posy");
 		currentPosZVec.setName("posz");
 		currentSpeedVec.setName("speed");
-
-		curPos.x = par("x").doubleValue();
-		curPos.y = par("y").doubleValue();
-		curPos.z = par("z").doubleValue();
-
-		move.setStart(curPos);
-		move.setDirectionByVector(Coord(cos(angle), -sin(angle)));
-		move.setSpeed(0);
-
-		WATCH(speed);
-		WATCH(angle);
 	}
 }
 
@@ -47,95 +36,34 @@ void AircraftMobility::finish()
 	BaseModule::finish();
 }
 
-void AircraftMobility::nextPosition(const Coord& position, double speed, double angle)
+void AircraftMobility::makeMove()
 {
-	curPos = position;
-	this->speed = speed;
-	this->angle = angle;
-
 	// keep statistics (for current step)
 	currentPosXVec.record(move.getStartPos().x);
 	currentPosYVec.record(move.getStartPos().y);
 	currentPosZVec.record(move.getStartPos().z);
-	currentSpeedVec.record(speed);
+	currentSpeedVec.record(move.getSpeed());
 
-	move.setStart(position);
-	move.setDirectionByVector(Coord(cos(angle), -sin(angle)));
-	move.setSpeed(speed);
+	move.setDirectionByVector(Coord(1.0, 0.0));
+	move.setSpeed(uniform(5.0, 10.0));
+	SimTime nextInstant = simTime() + updateInterval;
+	Coord nextPosition = move.getPositionAt(nextInstant);
+	move.setStart(nextPosition);
 
-	if (hasGUI()) updateDisplayString();
 	fixIfHostGetsOutside();
-
-	updatePosition();
-}
-
-void AircraftMobility::updateDisplayString()
-{
-	ASSERT(angle >= -M_PI && angle < M_PI);
-
-	getParentModule()->getDisplayString().setTagArg("b", 2, "rect");
-	getParentModule()->getDisplayString().setTagArg("b", 3, "red");
-	getParentModule()->getDisplayString().setTagArg("b", 4, "red");
-	getParentModule()->getDisplayString().setTagArg("b", 5, "0");
-
-	if (angle < -M_PI + 0.5 * M_PI_4 * 1) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2190");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "4");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "2");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 3) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2199");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "3");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "3");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 5) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2193");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "2");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "4");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 7) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2198");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "3");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "3");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 9) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2192");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "4");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "2");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 11) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2197");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "3");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "3");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 13) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2191");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "2");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "4");
-	}
-	else if (angle < -M_PI + 0.5 * M_PI_4 * 15) {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2196");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "3");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "3");
-	}
-	else {
-		getParentModule()->getDisplayString().setTagArg("t", 0, "\u2190");
-		getParentModule()->getDisplayString().setTagArg("b", 0, "4");
-		getParentModule()->getDisplayString().setTagArg("b", 1, "2");
-	}
 }
 
 void AircraftMobility::fixIfHostGetsOutside()
 {
 	Coord pos = move.getStartPos();
-	Coord dummy = Coord::ZERO;
-	double dum;
 
-	bool outsideX = (pos.x < 0) || (pos.x >= playgroundSizeX());
-	bool outsideY = (pos.y < 0) || (pos.y >= playgroundSizeY());
-	bool outsideZ = (!world->use2D()) && ((pos.z < 0) || (pos.z >= playgroundSizeZ()));
+	bool outsideX = pos.x < 0 || pos.x >= playgroundSizeX();
+	bool outsideY = pos.y < 0 || pos.y >= playgroundSizeY();
+	bool outsideZ = !world->use2D() && (pos.z < 0 || pos.z >= playgroundSizeZ());
 	if (outsideX || outsideY || outsideZ)
 		error("Tried moving host to (%f, %f) which is outside the playground", pos.x, pos.y);
 
-	handleIfOutside(RAISEERROR, pos, dummy, dummy, dum);
+	Coord dummy = Coord::ZERO;
+	double dummyAngle = -1.0;
+	handleIfOutside(BorderPolicy::RAISEERROR, pos, dummy, dummy, dummyAngle);
 }

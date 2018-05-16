@@ -25,4 +25,5 @@ simple AircraftMobility extends BaseMobility
 	parameters:
 		@class(AircraftMobility);
 		@display("i=block/cogwheel");
+		double updateInterval = default(1s) @unit(s);
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,17 +18,17 @@
 
 package org.car2x.veins.modules.application;
 
-simple ContentStatisticCollector
+simple BaseServer
 {
-	@class(ContentStatisticCollector);
-	@display("i=abstract/db");
+	parameters:
+		@class(BaseServer);
+		@display("i=device/server2");
+		int rsuNum; // number of RSUs in current scenario
+		int headerLength = 224bit @unit(bit); // header length of the wired UDP/IP packet
 
-	int slotNum = default(8);
-	int contentSize = default(30MB) @unit(MB);
-	int contentQuality = default(2400kbps) @unit(kbps);
-	int cellularRate = default(3000kbps) @unit(kbps);
-	int trafficDensity = default(720vph) @unit(vph);
-	int deployInterval = default(1500m) @unit(m);
-	bool isComparison = default(false);
+	gates:
+		input cellularIn;   // cellularIn gate connected to cellular base station
+		output cellularOut; // cellularOut gate connected to cellular base station
+		input rsuIn[rsuNum]; // rsuIn gates connected to road side units
+		output rsuOut[rsuNum]; // rsuOut gates connected to road side units
 }
-

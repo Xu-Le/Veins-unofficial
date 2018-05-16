@@ -45,11 +45,11 @@ protected:
 	/** @name Common interfaces. */
 	///@{
 	/** @brief Select a next hop from one-hop neighbors and deliver routing request to it, return -1 if there is no neighbors. */
-	virtual LAddress::L3Type selectNextHop(RoutingMessage* wsm) = 0;
+	virtual LAddress::L3Type selectNextHop(RoutingMessage *wsm) = 0;
 	/** @brief Received a response message carried with routing path. */
-	virtual void onRoutingSuccess(RoutingMessage* wsm) = 0;
+	virtual void onRoutingSuccess(RoutingMessage *wsm) = 0;
 	/** @brief Received a response message indicating cannot find a routing path. */
-	virtual void onRoutingFail(RoutingMessage* wsm) = 0;
+	virtual void onRoutingFail(RoutingMessage *wsm) = 0;
 	/**
 	 * @brief Check if the route path to destination is already maintained in the routing table.
 	 *
@@ -78,7 +78,7 @@ protected:
 	/** @name Reactive protocol interfaces. */
 	///@{
 	/** @brief A reactive protocol creates a new route only when the existing one is broken. */
-	virtual void onPathBroken(RoutingMessage* wsm) {};
+	virtual void onPathBroken(RoutingMessage *wsm) {};
 	///@}
 
 	/** @name Prediction-based protocol interfaces. */
@@ -97,9 +97,9 @@ protected:
 	/** @name Opportunistic protocol interfaces. */
 	///@{
 	/** @brief Notified that cannot find a reachable route when the only way is to store messages until a destination is reachable. */
-	virtual void onRouteUnreachable(RoutingMessage* wsm) {};
+	virtual void onRouteUnreachable(RoutingMessage *wsm) {};
 	/** @brief Come across a opportunity and try to seize it. */
-	virtual void seizeOpportunity(RoutingMessage* wsm) {};
+	virtual void seizeOpportunity(RoutingMessage *wsm) {};
 	///@}
 };
 

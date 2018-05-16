@@ -47,13 +47,10 @@ void BaseRSU::initialize(int stage)
 
 		helpRoutings = par("helpRoutings").boolValue();
 		sendWarnings = par("sendWarnings").boolValue();
-		sendContents = par("sendContents").boolValue();
 		dataOnSch = par("dataOnSch").boolValue();
 
 		warningLengthBits = par("warningLengthBits").longValue();
 		warningPriority = par("warningPriority").longValue();
-		contentLengthBits = par("contentLengthBits").longValue();
-		contentPriority = par("contentPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
 		dataPriority = par("dataPriority").longValue();
 		maxHopConstraint = par("maxHopConstraint").longValue();
@@ -167,12 +164,6 @@ void BaseRSU::handleLowerMsg(cMessage *msg)
 	}
 	else if (strcmp(msg->getName(), "warning") == 0)
 		EV << "RSU doesn't relay warning message received from vehicles.\n";
-	else if (strcmp(msg->getName(), "content") == 0)
-	{
-		ContentMessage* contentMsg = dynamic_cast<ContentMessage*>(msg);
-		ASSERT(contentMsg);
-		onContent(contentMsg);
-	}
 	else if (strcmp(msg->getName(), "data") == 0)
 	{
 		DataMessage* dataMsg = dynamic_cast<DataMessage*>(msg);
@@ -195,11 +186,6 @@ WaveShortMessage* BaseRSU::prepareWSM(std::string name, int dataLength, t_channe
 	{
 		EV << "Creating Warning with Priority " << priority << " at BaseRSU at " << simTime() << std::endl;
 		wsm = new WarningMessage("warning");
-	}
-	else if (name == "content")
-	{
-		EV << "Creating Content with Priority " << priority << " at BaseRSU at " << simTime() << std::endl;
-		wsm = new ContentMessage("content");
 	}
 	else if (name == "data")
 	{
@@ -268,10 +254,6 @@ void BaseRSU::decorateWSM(WaveShortMessage *wsm)
 		HopItems &hopInfo = warningMsg->getHopInfo();
 		HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, 0.0, 0.0, 0.0);
 		hopInfo.push_back(hopItem);
-	}
-	else if (strcmp(wsm->getName(), "content") == 0)
-	{
-		// Unused now
 	}
 	else if (strcmp(wsm->getName(), "data") == 0)
 	{

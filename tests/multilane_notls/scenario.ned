@@ -24,13 +24,8 @@ import org.car2x.veins.modules.routing.WarningStatisticCollector;
 
 network scenario extends Scenario
 {
-    submodules:
-		//rsu[3]: RSU {
-        //    parameters:
-        //        @display("p=$posX,$posY;b=10,10,oval");
-        //}
-        warningCollector: WarningStatisticCollector {
-            parameters:
-                @display("p=500,24");
-        }
+	submodules:
+		warningCollector: WarningStatisticCollector {
+			@display("p=500,24");
+		}
 }

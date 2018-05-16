@@ -74,11 +74,6 @@ void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 	sendWSM(dupWSM);
 }
 
-void RoutingRSU::onContent(ContentMessage* contentMsg)
-{
-	EV << "RoutingRSUs don't react to content messages since they don't provide content service.\n";
-}
-
 void RoutingRSU::onData(DataMessage* dataMsg)
 {
 	EV << "RoutingRSUs don't react to data messages since they don't provide content service.\n";

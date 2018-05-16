@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #define __BASESTATION_H__
 
 #include "veins/base/utils/SimpleAddress.h"
-#include "veins/modules/application/ContentStatisticCollector.h"
 #include "veins/modules/messages/CellularMessage_m.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 
@@ -45,8 +44,7 @@ public:
 private:
 	/** @brief The self message kinds. */
 	enum SelfMsgKinds {
-		DISTRIBUTE_EVT,
-		FETCH_REQUEST_EVT
+		LAST_BASE_STATION_MESSAGE_KIND
 	};
 
 	/** @brief Called every time a message arrives. */
@@ -59,27 +57,13 @@ private:
 	/** @brief Handle wired incoming messages. */
 	void handleWiredIncomingMsg(WiredMessage *wiredMsg);
 
-	/** @brief fetch proper amount data from the content server for distributing in a short time. */
-	void _sendFetchingRequest(const LAddress::L3Type downloader, const int curFetchStartOffset);
-
 public:
 	/** @brief The class to store downloader's information. */
-	class DownloaderInfo
+	class VehicleInfo
 	{
 	public:
-		DownloaderInfo(int t, int s, int r);
+		VehicleInfo();
 
-		bool transmissionActive;
-		bool fetchingActive;
-		bool closingWhileFetching;
-		int totalContentSize;
-		int cacheStartOffset;
-		int cacheEndOffset;
-		int distributedOffset;
-		int requiredEndOffset;
-		int curFetchEndOffset;
-		SimTime distributedAt;
-		cMessage *distributeEvt;  ///< self message used to periodically distribute data to vehicle.
 		cGate *correspondingGate;
 	};
 
@@ -95,23 +79,10 @@ public:
 	int wirelessDataLength; ///< length of the cellular packet data measured in bits.
 	int wirelessBitsRate; ///< data transmission rate measured in bps of wireless radio.
 
-	/** @name performance consideration. */
-	///@{
-	int fetchApplBytesOnce; ///< how many bytes measured in application layer to fetch from content server once.
-	int distributeLinkBytesOnce; ///< how many bytes measured in link layer to distribute to vehicle once in transmission.
-	int distributeApplBytesOnce; ///< how many bytes measured in application layer to distribute to vehicle once in transmission.
-	SimTime distributePeriod;  ///< period to handle self message distributeEvt.
-	///@}
-	SimTime wiredTxDuration;  ///< transmission delay of a wired packet.
-
-	cMessage *fetchRequestEvt; ///< self message used to handle with when to send the fetch request.
-
 	cModule *rootModule; ///< store the pointer to system module to find the sender vehicle's compound module.
 
-	cQueue fetchMsgQueue; ///< the queue of fetching messages.
-
-	std::map<LAddress::L3Type, DownloaderInfo*> downloaders; ///< a map from a downloader's identifier to all its related info.
-	std::map<LAddress::L3Type, DownloaderInfo*>::iterator itDL; ///< a iterator used to traverse container downloaders.
+	std::map<LAddress::L3Type, VehicleInfo*> vehicles; ///< a map from a vehicle's identifier to all its related info.
+	std::map<LAddress::L3Type, VehicleInfo*>::iterator itV; ///< a iterator used to traverse container vehicles.
 };
 
 #endif /* __BASESTATION_H__ */

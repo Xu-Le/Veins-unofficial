@@ -45,9 +45,9 @@ protected:
 	 *
 	 * reference: BROADCAST STORM MITIGATION TECHNIQUES IN VEHICULAR AD HOC NETWORKS, IEEE Wireless Communications, December 2007
 	 */
-	virtual void broadcastSuppression(WarningMessage* wsm) = 0;
+	virtual void broadcastSuppression(WarningMessage *wsm) = 0;
 	/** @brief Rebroadcast the packet received from neighbors. */
-	virtual void rebroadcast(WarningMessage* wsm) = 0;
+	virtual void rebroadcast(WarningMessage *wsm) = 0;
 	///@}
 };
 

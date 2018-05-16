@@ -21,9 +21,8 @@ package org.car2x.veins.tests.highway_notls;
 import org.car2x.veins.nodes.Scenario;
 
 import org.car2x.veins.modules.routing.WarningStatisticCollector;
-import org.car2x.veins.modules.application.ContentStatisticCollector;
 import org.car2x.veins.modules.cellular.BaseStation;
-import org.car2x.veins.modules.application.ContentServer;
+import org.car2x.veins.modules.application.BaseServer;
 import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
 
@@ -33,13 +32,10 @@ network scenario extends Scenario
 		int numRSU = 7; // number of RSUs
 
 	submodules:
-		contentCollector: ContentStatisticCollector {
-			@display("p=750,24");
-		}
 		BS: BaseStation {
 			@display("p=4500,24");
 		}
-		contentServer: ContentServer {
+		server: BaseServer {
 			parameters:
 				rsuNum = numRSU;
 			@display("p=5000,24");
@@ -52,11 +48,11 @@ network scenario extends Scenario
 		}
 
 	connections:
-		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- contentServer.cellularOut;
-		BS.wiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> contentServer.cellularIn;
+		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.cellularOut;
+		BS.wiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.cellularIn;
 		for i = 0..numRSU-1 {
-			rsu[i].veinswiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- contentServer.rsuOut[i];
-			rsu[i].veinswiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> contentServer.rsuIn[i];
+			rsu[i].veinswiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.rsuOut[i];
+			rsu[i].veinswiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.rsuIn[i];
 		}
 		for i = 0..numRSU-2 {
 			rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;

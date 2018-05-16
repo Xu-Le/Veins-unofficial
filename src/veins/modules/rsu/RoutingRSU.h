@@ -50,8 +50,6 @@ private:
 
 	/** @brief call-back method of receiving routing message. */
 	void onRouting(RoutingMessage *routingMsg) override;
-	/** @brief call-back method of receiving content message. */
-	void onContent(ContentMessage *contentMsg) override;
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg) override;
 

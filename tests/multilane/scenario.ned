@@ -19,18 +19,49 @@ package org.car2x.veins.tests.multilane;
 
 import org.car2x.veins.nodes.Scenario;
 
+import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
+import org.car2x.veins.modules.cellular.BaseStation;
+import org.car2x.veins.modules.application.BaseServer;
 import org.car2x.veins.modules.routing.WarningStatisticCollector;
 
 network scenario extends Scenario
 {
-    submodules:
-		//rsu[3]: RSU {
-        //    parameters:
-        //        @display("p=$posX,$posY;b=10,10,oval");
-        //}
-        warningCollector: WarningStatisticCollector {
-            parameters:
-                @display("p=500,24");
-        }
+	parameters:
+		int numRSU = 2; // number of RSUs
+
+	submodules:
+		BS: BaseStation {
+			@display("p=1500,24");
+		}
+		server: BaseServer {
+			parameters:
+				rsuNum = numRSU;
+			@display("p=2000,24");
+		}
+		rsu[numRSU]: RSU {
+			@display("p=$posX,$posY;b=10,10,oval");
+		}
+		warningCollector: WarningStatisticCollector {
+			@display("p=500,24");
+		}
+		dummyRSU: DummyRSU {
+			@display("p=$posX,$posY");
+		}
+
+	connections:
+		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.cellularOut;
+		BS.wiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.cellularIn;
+		for i = 0..numRSU-1 {
+			rsu[i].veinswiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.rsuOut[i];
+			rsu[i].veinswiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.rsuIn[i];
+		}
+		for i = 0..numRSU-2 {
+			rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;
+			rsu[i].veinseastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[i+1].veinswestIn;
+		}
+		dummyRSU.eastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[0].veinswestOut;
+		dummyRSU.eastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[0].veinswestIn;
+		dummyRSU.westIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[numRSU-1].veinseastOut;
+		dummyRSU.westOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[numRSU-1].veinseastIn;
 }

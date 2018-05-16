@@ -23,8 +23,6 @@
 const simsignalwrap_t BaseWaveApplLayer::mobilityStateChangedSignal = simsignalwrap_t(MIXIM_SIGNAL_MOBILITY_CHANGE_NAME);
 const simsignalwrap_t BaseWaveApplLayer::parkingStateChangedSignal = simsignalwrap_t(TRACI_SIGNAL_PARKING_CHANGE_NAME);
 
-extern std::map<int /* GUID */, LAddress::L3Type> warningMaxDelayHelper;
-
 void BaseWaveApplLayer::initialize(int stage)
 {
 	BaseApplLayer::initialize(stage);
@@ -60,7 +58,6 @@ void BaseWaveApplLayer::initialize(int stage)
 		sendBeacons = par("sendBeacons").boolValue();
 		callRoutings = par("callRoutings").boolValue();
 		callWarnings = par("callWarnings").boolValue();
-		callContents = par("callContents").boolValue();
 		dataOnSch = par("dataOnSch").boolValue();
 
 		beaconLengthBits = par("beaconLengthBits").longValue();
@@ -69,8 +66,6 @@ void BaseWaveApplLayer::initialize(int stage)
 		routingPriority = par("routingPriority").longValue();
 		warningLengthBits = par("warningLengthBits").longValue();
 		warningPriority = par("warningPriority").longValue();
-		contentLengthBits = par("contentLengthBits").longValue();
-		contentPriority = par("contentPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
 		dataPriority = par("dataPriority").longValue();
 		maxHopConstraint = par("maxHopConstraint").longValue();
@@ -90,8 +85,6 @@ void BaseWaveApplLayer::initialize(int stage)
 			initializeRoutingPlanList(par("routingPlan").xmlValue());
 		if ( callWarnings )
 			initializeWarningPlanList(par("warningPlan").xmlValue());
-		if ( callContents )
-			initializeContentPlanList(par("contentPlan").xmlValue());
 
 		// simulate asynchronous channel access
 		double offSet = static_cast<double>(myAddr%100)/100.0 * (beaconInterval/2);
@@ -119,13 +112,6 @@ void BaseWaveApplLayer::initialize(int stage)
 			}
 			else
 				callWarningEvt = nullptr;
-			if ( !contentPlanList.empty() )
-			{
-				callContentEvt = new cMessage("call content evt", WaveApplMsgKinds::CALL_CONTENT_EVT);
-				scheduleAt(contentPlanList.front().first, callContentEvt);
-			}
-			else
-				callContentEvt = nullptr;
 		}
 		else
 		{
@@ -133,7 +119,6 @@ void BaseWaveApplLayer::initialize(int stage)
 			examineNeighborsEvt = nullptr;
 			callRoutingEvt = nullptr;
 			callWarningEvt = nullptr;
-			callContentEvt = nullptr;
 			forgetMemoryEvt = nullptr;
 			recycleGUIDEvt = nullptr;
 		}
@@ -150,7 +135,6 @@ void BaseWaveApplLayer::finish()
 	guidUsed.clear();
 	routingPlanList.clear();
 	warningPlanList.clear();
-	contentPlanList.clear();
 	for (std::map<LAddress::L3Type, NeighborInfo*>::iterator iter = neighbors.begin(); iter != neighbors.end(); ++iter)
 		delete iter->second;
 	neighbors.clear();
@@ -163,7 +147,6 @@ void BaseWaveApplLayer::finish()
 	cancelAndDelete(examineNeighborsEvt);
 	cancelAndDelete(callRoutingEvt);
 	cancelAndDelete(callWarningEvt);
-	cancelAndDelete(callContentEvt);
 	cancelAndDelete(forgetMemoryEvt);
 	cancelAndDelete(recycleGUIDEvt);
 	for (std::map<simtime_t, PacketExpiredMessage*>::iterator iter = packetExpiresEvts.begin(); iter != packetExpiresEvts.end(); ++iter)
@@ -248,14 +231,6 @@ void BaseWaveApplLayer::handleSelfMsg(cMessage* msg)
 			scheduleAt(warningPlanList.front().first, callWarningEvt);
 		break;
 	}
-	case WaveApplMsgKinds::CALL_CONTENT_EVT:
-	{
-		callContent(contentPlanList.front().second);
-		contentPlanList.pop_front();
-		if (!contentPlanList.empty())
-			scheduleAt(contentPlanList.front().first, callContentEvt);
-		break;
-	}
 	case WaveApplMsgKinds::FORGET_MEMORY_EVT:
 	{
 		forgetMemory();
@@ -309,12 +284,6 @@ void BaseWaveApplLayer::handleLowerMsg(cMessage* msg)
 			BeaconMessage *beaconMessage = dynamic_cast<BeaconMessage*>(msg);
 			onBeacon(beaconMessage);
 		}
-		else if (strcmp(msg->getName(), "content") == 0)
-		{
-			ContentMessage *contentMessage = dynamic_cast<ContentMessage*>(msg);
-			ASSERT(contentMessage);
-			onContent(contentMessage);
-		}
 		else if (strcmp(msg->getName(), "data") == 0)
 		{
 			DataMessage *dataMessage = dynamic_cast<DataMessage*>(msg);
@@ -347,11 +316,6 @@ WaveShortMessage* BaseWaveApplLayer::prepareWSM(std::string name, int dataLength
 	{
 		EV << "Creating Warning with Priority " << priority << " at BaseWaveApplLayer at " << simTime() << std::endl;
 		wsm = new WarningMessage("warning");
-	}
-	else if (name == "content")
-	{
-		EV << "Creating Content with Priority " << priority << " at BaseWaveApplLayer at " << simTime() << std::endl;
-		wsm = new ContentMessage("content");
 	}
 	else if (name == "data")
 	{
@@ -400,10 +364,6 @@ void BaseWaveApplLayer::decorateWSM(WaveShortMessage* wsm)
 	else if (strcmp(wsm->getName(), "warning") == 0)
 	{
 		// Determined by concrete broadcast or geocast routing protocols
-	}
-	else if (strcmp(wsm->getName(), "content") == 0)
-	{
-		// Determined by download application
 	}
 	else if (strcmp(wsm->getName(), "data") == 0)
 	{
@@ -515,11 +475,7 @@ void BaseWaveApplLayer::handleMobilityUpdate(cObject* obj)
 		fromRoadhead = roadheads.front();
 		toRoadhead = roadheads.back();
 		if ((curSpeed.x >= 0 && fromRoadhead.x > toRoadhead.x) || (curSpeed.x < 0 && fromRoadhead.x < toRoadhead.x))
-		{
-			Coord tmp = fromRoadhead;
-			fromRoadhead = toRoadhead;
-			toRoadhead = tmp;
-		}
+			std::swap(fromRoadhead, toRoadhead);
 #if ROUTING_DEBUG_LOG
 		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
 		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
@@ -545,22 +501,6 @@ void BaseWaveApplLayer::handleMobilityUpdate(cObject* obj)
 		oldAngle = curAngle;
 
 	MobilityObserver::Instance()->update(myAddr, curPosition, curSpeed);
-
-	calculateVehicleGap();
-
-	// stopped for for at least 10s?
-	/*
-	if (mobility->getSpeed() < 1)
-	{
-		if (simTime() - lastDroveAt >= 10)
-		{
-			EV << "send data message." << std::endl;
-			findHost()->getDisplayString().updateWith("r=16,red");
-			if (!sentMessage)
-				sendMessage(mobility->getRoadId());
-		}
-	}
-	*/
 }
 
 void BaseWaveApplLayer::handleParkingUpdate(cObject* obj)
@@ -579,155 +519,6 @@ void BaseWaveApplLayer::handleParkingUpdate(cObject* obj)
 			(FindModule<BaseConnectionManager*>::findGlobalModule())->registerNic(this->getParentModule()->getSubmodule("nic"), (ChannelAccess*) this->getParentModule()->getSubmodule("nic")->getSubmodule("phy80211p"), &pos);
 		}
 	}
-}
-
-void BaseWaveApplLayer::callRouting(LAddress::L3Type receiver)
-{
-
-}
-
-void BaseWaveApplLayer::callWarning(double distance)
-{
-	bubble("call warning");
-	// create message by factory method
-	WaveShortMessage *wsm = prepareWSM("warning", warningLengthBits, type_CCH, warningPriority, -1);
-	if (wsm == nullptr) return;
-	WarningMessage *warningMessage = dynamic_cast<WarningMessage*>(wsm);
-	// handle utils about message's GUID
-	int guid = RoutingUtils::generateGUID();
-	EV << "GUID = " << guid << ", distance = " << distance << std::endl;
-	guidUsed.push_back(guid);
-	scheduleAt(simTime() + guidUsedTime, recycleGUIDEvt);
-	// set necessary warning info
-	warningMessage->setGUID(guid);
-	if (distance > 0)
-	{
-		warningMessage->setDirection(false);
-		warningMessage->setLaneId(laneId.c_str());
-	}
-	else
-	{
-		warningMessage->setDirection(true);
-		std::string tmpLaneId("-");
-		if (laneId[0] == '-') // remove front '-'
-		{
-			tmpLaneId = laneId.substr(1, laneId.size() - 1);
-			warningMessage->setLaneId(tmpLaneId.c_str());
-		}
-		else // add '-' to front
-		{
-			tmpLaneId.append(laneId);
-			warningMessage->setLaneId(tmpLaneId.c_str());
-		}
-	}
-	double farthestDistance = fabs(distance); // the farthest target vehicle for warning message in ROI
-	warningMessage->setFarthestDistance(farthestDistance);
-	warningMessage->setHopCount(0);
-	// insert into message memory to avoid relaying the message that is rebroadcast back to self by others
-	messageMemory.insert(std::pair<int, WaveShortMessage*>(guid, warningMessage));
-	// what to send is a duplication of wsm, because it will be encapsulated into Mac80211Pkt as well as be delete when this message memory forgets,
-	// however if send the wsm, it will cannot be deleted when memory forgets.
-	WarningMessage *dupWSM = new WarningMessage(*warningMessage);
-	decorateWSM(dupWSM);
-	sendWSM(dupWSM);
-
-	++WarningStatisticCollector::globalNotifications;
-
-	// calculate the number of target vehicles and the farthest one in ROI
-	bool plusX = (curSpeed.x >= 0 && distance > 0) || (curSpeed.x < 0 && distance < 0);
-	Coord xMin, xMax;
-	LAddress::L3Type farthestOne = -1;
-	if (distance > 0)
-	{
-		double distFromRoadhead = sqrt(square(curPosition.x - fromRoadhead.x) + square(curPosition.y - fromRoadhead.y) + square(curPosition.z - fromRoadhead.z));
-		if (distFromRoadhead <= farthestDistance)
-		{
-			EV << "distFromRoadhead = " << distFromRoadhead << " <= " << farthestDistance << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = fromRoadhead;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = fromRoadhead;
-			}
-		}
-		else
-		{
-			EV << "distFromRoadhead = " << distFromRoadhead << " > " << farthestDistance << std::endl;
-			Coord farthestPos;
-			farthestPos.x = curPosition.x + farthestDistance/distFromRoadhead * (fromRoadhead.x - curPosition.x);
-			farthestPos.y = curPosition.y + farthestDistance/distFromRoadhead * (fromRoadhead.y - curPosition.y);
-			farthestPos.z = curPosition.z + farthestDistance/distFromRoadhead * (fromRoadhead.z - curPosition.z);
-			EV << "farthestPos.x: " << farthestPos.x << ", farthestPos.y: " << farthestPos.y << ", farthestPos.z: " << farthestPos.z << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = farthestPos;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = farthestPos;
-			}
-		}
-	}
-	else
-	{
-		double distToRoadhead = sqrt(square(curPosition.x - toRoadhead.x) + square(curPosition.y - toRoadhead.y) + square(curPosition.z - toRoadhead.z));
-		if (distToRoadhead <= farthestDistance)
-		{
-			EV << "distToRoadhead = " << distToRoadhead << " <= " << farthestDistance << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = toRoadhead;
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = toRoadhead;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-		}
-		else
-		{
-			EV << "distToRoadhead = " << distToRoadhead << " > " << farthestDistance << std::endl;
-			Coord farthestPos;
-			farthestPos.x = curPosition.x + farthestDistance/distToRoadhead * (toRoadhead.x - curPosition.x);
-			farthestPos.y = curPosition.y + farthestDistance/distToRoadhead * (toRoadhead.y - curPosition.y);
-			farthestPos.z = curPosition.z + farthestDistance/distToRoadhead * (toRoadhead.z - curPosition.z);
-			EV << "farthestPos.x: " << farthestPos.x << ", farthestPos.y: " << farthestPos.y << ", farthestPos.z: " << farthestPos.z << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = farthestPos;
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = farthestPos;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-		}
-	}
-
-	WarningStatisticCollector::globalTargets += targetVehicles(plusX, xMin, xMax, farthestOne);
-
-	warningMaxDelayHelper.insert(std::pair<int, LAddress::L3Type>(guid, farthestOne));
-}
-
-void BaseWaveApplLayer::callContent(int size)
-{
-
 }
 
 void BaseWaveApplLayer::initializeRoutingPlanList(cXMLElement* xmlConfig)
@@ -839,62 +630,6 @@ void BaseWaveApplLayer::initializeWarningPlanList(cXMLElement* xmlConfig)
 
 				EV << "    simtime: " << simtime << ", distance: " << distance << std::endl;
 				warningPlanList.push_back(std::pair<double, double>(simtime, distance));
-			}
-
-			break;
-		}
-	}
-}
-
-void BaseWaveApplLayer::initializeContentPlanList(cXMLElement* xmlConfig)
-{
-	if (xmlConfig == 0)
-		throw cRuntimeError("No content plan configuration file specified.");
-
-	cXMLElementList planList = xmlConfig->getElementsByTagName("ContentPlan");
-
-	if (planList.empty())
-		EV << "No content plan configuration items specified.\n";
-
-	for (cXMLElementList::iterator iter = planList.begin(); iter != planList.end(); ++iter)
-	{
-		cXMLElement *contentPlan = *iter;
-
-		const char* name = contentPlan->getAttribute("type");
-
-		if (atoi(name) == myAddr)
-		{
-			cXMLElementList parameters = contentPlan->getElementsByTagName("parameter");
-
-			ASSERT( parameters.size() % 2 == 0 );
-
-			EV << logName() << "'s content plan list as follows:\n";
-
-			for (size_t i = 0; i < parameters.size(); i += 2)
-			{
-				double simtime = 0.0;
-				int size = 0;
-
-				const char *name = parameters[i]->getAttribute("name");
-				const char *type = parameters[i]->getAttribute("type");
-				const char *value = parameters[i]->getAttribute("value");
-				if (name == 0 || type == 0 || value == 0)
-					throw cRuntimeError("Invalid parameter, could not find name, type or value");
-
-				if (strcmp(name, "simtime") == 0 && strcmp(type, "double") == 0)
-					simtime = atof(value);
-
-				name = parameters[i+1]->getAttribute("name");
-				type = parameters[i+1]->getAttribute("type");
-				value = parameters[i+1]->getAttribute("value");
-				if (name == 0 || type == 0 || value == 0)
-					throw cRuntimeError("Invalid parameter, could not find name, type or value");
-
-				if (strcmp(name, "size") == 0 && strcmp(type, "int") == 0)
-					size = 1024*atoi(value); // configured value is measured in KB, thus here need to multiply 1024
-
-				EV << "    simtime: " << simtime << ", size: " << size << std::endl;
-				contentPlanList.push_back(std::pair<double, int>(simtime, size));
 			}
 
 			break;

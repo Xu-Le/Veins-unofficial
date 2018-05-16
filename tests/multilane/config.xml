@@ -36,9 +36,8 @@
 			-->
 		</WarningPlan>
 		<!-- RSUs' type start from 10000, make sure keep consistent with macro RSU_ADDRESS_OFFSET in BaseRSU.h -->
-		<!--
 		<WarningPlan type="10000">
-			<parameter name="simtime" type="double" value="120.1"/>
+			<parameter name="simtime" type="double" value="115.1"/>
 			<parameter name="distance" type="double" value="600"/>
 		</WarningPlan>
 		<WarningPlan type="10001">
@@ -51,6 +50,5 @@
 			<parameter name="simtime" type="double" value="105.1"/>
 			<parameter name="distance" type="double" value="750"/>
 		</WarningPlan>
-		-->
 	</WarningPlans>
 </root>

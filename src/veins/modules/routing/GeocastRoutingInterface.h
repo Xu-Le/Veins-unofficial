@@ -41,9 +41,9 @@ protected:
 	/** @name Common interfaces. */
 	///@{
 	/** @brief ROI shape is rectangle. */
-	virtual void disseminateROI(WaveShortMessage* wsm, Coord p1, Coord p2, Coord p3, Coord p4) = 0;
+	virtual void disseminateROI(WaveShortMessage *wsm, Coord p1, Coord p2, Coord p3, Coord p4) = 0;
 	/** @brief ROI shape is round. */
-	virtual void disseminateROI(WaveShortMessage* wsm, Coord center, double radius) = 0;
+	virtual void disseminateROI(WaveShortMessage *wsm, Coord center, double radius) = 0;
 	///@}
 };
 

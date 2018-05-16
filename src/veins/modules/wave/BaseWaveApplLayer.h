@@ -28,7 +28,6 @@
 #include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/modules/messages/RoutingMessage_m.h"
 #include "veins/modules/messages/WarningMessage_m.h"
-#include "veins/modules/messages/ContentMessage_m.h"
 #include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/messages/PacketExpiredMessage_m.h"
 #include "veins/modules/messages/WaitTimeElapsedMessage_m.h"
@@ -65,7 +64,6 @@ public:
 		EXAMINE_NEIGHBORS_EVT,
 		CALL_ROUTING_EVT,
 		CALL_WARNING_EVT,
-		CALL_CONTENT_EVT,
 		FORGET_MEMORY_EVT,
 		RECYCLE_GUID_EVT,
 		PACKET_EXPIRES_EVT,
@@ -112,8 +110,6 @@ protected:
 	virtual void onRouting(RoutingMessage* wsm) = 0;
 	/** @brief call-back method of receiving warning message(aims to broadcast and geocast protocols). */
 	virtual void onWarning(WarningMessage* wsm) = 0;
-	/** @brief call-back method of receiving content message(aims to download application). */
-	virtual void onContent(ContentMessage* wsm) = 0;
 	/** @brief call-back method of receiving data message. */
 	virtual void onData(DataMessage* wsm) = 0;
 	/** @brief examine whether neighbors still in connected. */
@@ -138,25 +134,18 @@ protected:
 	///@}
 
 	/** @brief call a routing request to certain receiver determined by routingPlanList(aims to unicast protocols). */
-	virtual void callRouting(LAddress::L3Type receiver);
+	virtual void callRouting(LAddress::L3Type receiver) {}
 	/** @brief call a warning notify to certain direction determined by warningPlanList(aims to broadcast and geocast protocols). */
-	virtual void callWarning(double distance);
-	/** @brief call a content request for certain size determined by contentPlanList(aims to download application). */
-	virtual void callContent(int size);
+	virtual void callWarning(double distance) {}
 	/** @brief initialize routingPlanList through configured xmlfile(aims to unicast protocols). */
 	void initializeRoutingPlanList(cXMLElement* xmlConfig);
 	/** @brief initialize warningPlanList through configured xmlfile(aims to broadcast and geocast protocols). */
 	void initializeWarningPlanList(cXMLElement* xmlConfig);
-	/** @brief initialize contentPlanList through configured xmlfile(aims to download application). */
-	void initializeContentPlanList(cXMLElement* xmlConfig);
 
 	/** @brief send beacon message(template method). */
 	void sendBeacon();
 	/** @brief return the number of target vehicles in ROI of the warning message. */
 	long targetVehicles(bool plusX, Coord xMin, Coord xMax, LAddress::L3Type& farthestOne);
-
-	/** @brief called by template method handleMobilityUpdate(). */
-	virtual void calculateVehicleGap() {}
 
 protected:
 	/** @brief The class to store neighbor's information collected by beacon message. */
@@ -186,7 +175,6 @@ protected:
 	bool sendBeacons;      ///< whether send beacons periodically.
 	bool callRoutings;     ///< whether send routing requests.
 	bool callWarnings;     ///< whether send warning notifies when emergent incident happens.
-	bool callContents;     ///< whether send data to other vehicles.
 	bool dataOnSch;        ///< whether send data on service channel.
 	int beaconLengthBits;  ///< the length of beacon message measured in bits.
 	int beaconPriority;    ///< the priority of beacon message.
@@ -194,8 +182,6 @@ protected:
 	int routingPriority;   ///< the priority of routing message.
 	int warningLengthBits; ///< the length of warning message measured in bits.
 	int warningPriority;   ///< the priority of warning message.
-	int contentLengthBits; ///< the length of content message measured in bits.
-	int contentPriority;   ///< the priority of content message.
 	int dataLengthBits;    ///< the length of data message measured in bits.
 	int dataPriority;      ///< the priority of data message.
 	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
@@ -223,7 +209,6 @@ protected:
 	std::list<int> guidUsed; ///< record GUID used before for recycle purpose.
 	std::list<std::pair<double /* simtime */, LAddress::L3Type /* destination */> > routingPlanList; ///< routing plans of all vehicles configured by a xmlfile.
 	std::list<std::pair<double /* simtime */, double /* distance */> > warningPlanList; ///< warning plans of all vehicles configured by a xmlfile.
-	std::list<std::pair<double /* simtime */, int /* size */> > contentPlanList; ///< content plans of all vehicles configured by a xmlfile.
 	std::map<LAddress::L3Type, NeighborInfo*> neighbors; ///< a map from a vehicle to all its neighbor mobility info.
 	std::map<int /* GUID */, WaveShortMessage*> messageMemory; ///< a map from a message's GUID to the point to this message.
 	std::map<LAddress::L3Type, NeighborInfo*>::iterator itN; ///< an iterator used to traverse container neighbors.
@@ -235,7 +220,6 @@ protected:
 	cMessage *examineNeighborsEvt; ///< self message event used to examine the connectivity with neighbors.
 	cMessage *callRoutingEvt;  ///< self message event used to call routing request to certain destination determined by routingPlanList.
 	cMessage *callWarningEvt;  ///< self message event used to call warning notify to certain direction determined by warningPlanList.
-	cMessage *callContentEvt;  ///< self message event used to call content request for certain size determined by contentPlanList.
 	cMessage *forgetMemoryEvt; ///< self message event used to periodically forget message received too long time ago in memory.
 	cMessage *recycleGUIDEvt;  ///< self message event used to periodically recycle GUIDs allocated before.
 	std::map<simtime_t, PacketExpiredMessage*> packetExpiresEvts; ///< self message events used to discard expired packets which exceed maxStoreTime from receiving it.

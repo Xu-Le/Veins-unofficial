@@ -42,7 +42,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 	bool sendBeacons = default(true); // tell the applayer to periodically send beacons
 	bool callRoutings = default(false); // whether send routing requests
 	bool callWarnings = default(false); // whether send warning notifies when emergent incident happens
-	bool callContents = default(false); // whether this applayer should send data
 	bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
 
 	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
@@ -51,8 +50,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 	int routingPriority = default(2); // the access category of the routing messages
 	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
 	int warningPriority = default(0); // the access category of the warning messages
-	int contentLengthBits = default(768bit) @unit(bit); // the length of a content packet
-	int contentPriority = default(3); // the access category of the content messages
 	int dataLengthBits = default(18272bit) @unit(bit); //the length of a data packet 8*(2312-20-8)
 	int dataPriority = default(3); //the access category for data packets
 	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint.
@@ -68,7 +65,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 
 	xml routingPlan;
 	xml warningPlan;
-	xml contentPlan;
 
 	gates:
 		input cellularIn @directIn; // cellularIn gate for sendDirect, receive packets from cellular base station

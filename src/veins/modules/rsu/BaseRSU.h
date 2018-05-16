@@ -25,7 +25,6 @@
 #include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/modules/messages/RoutingMessage_m.h"
 #include "veins/modules/messages/WarningMessage_m.h"
-#include "veins/modules/messages/ContentMessage_m.h"
 #include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/routing/RoutingStatisticCollector.h"
@@ -99,8 +98,6 @@ protected:
 	virtual void onBeacon(BeaconMessage *beaconMsg);
 	/** @brief call-back method of receiving routing message. */
 	virtual void onRouting(RoutingMessage *routingMsg) = 0;
-	/** @brief call-back method of receiving content message. */
-	virtual void onContent(ContentMessage *contentMsg) = 0;
 	/** @brief call-back method of receiving data message. */
 	virtual void onData(DataMessage *dataMsg) = 0;
 
@@ -146,13 +143,10 @@ protected:
 
 	bool helpRoutings; ///< whether this RSU will help vehicle rebroadcast routing messages.
 	bool sendWarnings; ///< whether this RSU is at work.
-	bool sendContents; ///< whether send data to other vehicles.
 	bool dataOnSch;    ///< whether send data on service channel.
 
 	int warningLengthBits; ///< the length of warning message measured in bits.
 	int warningPriority;   ///< the priority of warning message.
-	int contentLengthBits; ///< the length of content message measured in bits.
-	int contentPriority;   ///< the priority of content message.
 	int dataLengthBits;    ///< the length of data message measured in bits.
 	int dataPriority;      ///< the priority of data message.
 	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.

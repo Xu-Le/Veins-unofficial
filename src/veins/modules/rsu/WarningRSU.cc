@@ -112,11 +112,6 @@ void WarningRSU::onRouting(RoutingMessage *routingMsg)
 	EV << "WarningRSUs don't react to routing messages since they don't help routings.\n";
 }
 
-void WarningRSU::onContent(ContentMessage* contentMsg)
-{
-	EV << "WarningRSUs don't react to content messages since they don't provide content service.\n";
-}
-
 void WarningRSU::onData(DataMessage* dataMsg)
 {
 	EV << "WarningRSUs don't react to data messages since they don't provide content service.\n";

@@ -21,17 +21,12 @@ enum CellularMsgCC {
 	TRANSMISSION_STARTING, ///< request to start transmission;
 	TRANSMISSION_ENDING,   ///< request to end transmission;
 	DATA_PACKET_NORMAL,    ///< normal data packet transmission;
-	DATA_PACKET_LAST,      ///< last data packet transmission;
-	DOWNLOADING_COMPLETING ///< downloading process completion notification
+	DATA_PACKET_LAST       ///< last data packet transmission;
 };
 }}
 
 packet CellularMessage
 {
 	int controlCode; // express which kind of control signaling message, see enum CellularMsgCC
-	long downloader; // identifier of downloader's application
-	int contentSize; // content size of requested large volume file
-	int curOffset;   // current content offset of the data this packet contains
-	int startOffset; // start offset position of this content
-	int endOffset;   // end offset position of this content
+	int vehicle; // identifier of a vehicle
 }
