@@ -23,6 +23,9 @@ simple DV_CAST extends BaseWaveApplLayer
 {
 	@class(DV_CAST);
 	@display("i=block/routing");
-	
+	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
+	int warningPriority = default(0); // the access category of the warning messages
 	double WAIT_TIME = default(0.01s) @unit(s);
+
+	xml warningPlan;
 }

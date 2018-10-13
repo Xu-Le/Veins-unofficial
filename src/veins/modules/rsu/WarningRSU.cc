@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -28,6 +28,9 @@ void WarningRSU::initialize(int stage)
 
 	if (stage == 0)
 	{
+		warningLengthBits = par("warningLengthBits").longValue();
+		warningPriority = par("warningPriority").longValue();
+
 		fromRoadhead.x = par("fromRoadheadX").doubleValue();
 		fromRoadhead.y = par("fromRoadheadY").doubleValue();
 		fromRoadhead.z = par("fromRoadheadZ").doubleValue();
@@ -41,21 +44,14 @@ void WarningRSU::initialize(int stage)
 		laneId = par("laneId").stringValue();
 
 		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
-		if (sendWarnings)
-		{
-			initializeWarningPlanList(par("warningPlan").xmlValue());
 
-			if ( !warningPlanList.empty() )
-			{
-				callWarningEvt = new cMessage("call warning evt", RSUMessageKinds::WARNING_NOTIFY_EVT);
-				recycleGUIDEvt = new cMessage("recycle guid evt", RSUMessageKinds::RECYCLE_GUID_EVT);
-				scheduleAt(warningPlanList.front().first, callWarningEvt);
-			}
-			else
-			{
-				callWarningEvt = nullptr;
-				recycleGUIDEvt = nullptr;
-			}
+		initializeWarningPlanList(par("warningPlan").xmlValue());
+
+		if ( !warningPlanList.empty() )
+		{
+			callWarningEvt = new cMessage("call warning evt", WarningRSUMessageKinds::WARNING_NOTIFY_EVT);
+			recycleGUIDEvt = new cMessage("recycle guid evt", WarningRSUMessageKinds::RECYCLE_GUID_EVT);
+			scheduleAt(warningPlanList.front().first, callWarningEvt);
 		}
 		else
 		{
@@ -64,7 +60,6 @@ void WarningRSU::initialize(int stage)
 		}
 	}
 }
-
 
 void WarningRSU::finish()
 {
@@ -83,7 +78,7 @@ void WarningRSU::handleSelfMsg(cMessage *msg)
 {
 	switch (msg->getKind())
 	{
-	case RSUMessageKinds::WARNING_NOTIFY_EVT:
+	case WarningRSUMessageKinds::WARNING_NOTIFY_EVT:
 	{
 		callWarning(warningPlanList.front().second);
 		warningPlanList.pop_front();
@@ -91,7 +86,7 @@ void WarningRSU::handleSelfMsg(cMessage *msg)
 			scheduleAt(warningPlanList.front().first, callWarningEvt);
 		break;
 	}
-	case RSUMessageKinds::RECYCLE_GUID_EVT:
+	case WarningRSUMessageKinds::RECYCLE_GUID_EVT:
 	{
 		RoutingUtils::recycleGUID(guidUsed.front());
 		guidUsed.pop_front();
@@ -102,28 +97,13 @@ void WarningRSU::handleSelfMsg(cMessage *msg)
 	}
 }
 
-void WarningRSU::decorateWSM(WaveShortMessage *wsm)
-{
-	BaseRSU::decorateWSM(wsm);
-}
-
-void WarningRSU::onRouting(RoutingMessage *routingMsg)
-{
-	EV << "WarningRSUs don't react to routing messages since they don't help routings.\n";
-}
-
-void WarningRSU::onData(DataMessage* dataMsg)
-{
-	EV << "WarningRSUs don't react to data messages since they don't provide content service.\n";
-}
-
 void WarningRSU::callWarning(double distance)
 {
 	bubble("call warning");
 	// create message by factory method
-	WaveShortMessage *wsm = prepareWSM("warning", warningLengthBits, type_CCH, warningPriority, -1);
-	if (wsm == nullptr) return;
-	WarningMessage *warningMessage = dynamic_cast<WarningMessage*>(wsm);
+	WarningMessage *warningMessage = new WarningMessage("warning");
+	prepareWSM(warningMessage, warningLengthBits, type_CCH, warningPriority, -1);
+
 	// handle utils about message's GUID
 	int guid = RoutingUtils::generateGUID();
 	EV << "GUID = " << guid << ", distance = " << distance << std::endl;
@@ -137,7 +117,7 @@ void WarningRSU::callWarning(double distance)
 	warningMessage->setFarthestDistance(farthestDistance);
 	warningMessage->setLaneId(laneId.c_str());
 	warningMessage->setHopCount(0);
-	decorateWSM(warningMessage);
+	decorateWarning(warningMessage);
 	sendWSM(warningMessage);
 
 	++WarningStatisticCollector::globalNotifications;
@@ -191,6 +171,24 @@ void WarningRSU::callWarning(double distance)
 	WarningStatisticCollector::globalTargets += targetVehicles(plusX, xMin, xMax, farthestOne);
 
 	warningMaxDelayHelper.insert(std::pair<int, LAddress::L3Type>(guid, farthestOne));
+}
+
+void WarningRSU::decorateWarning(WarningMessage *warningMsg)
+{
+	Coord senderSpeed; // it seems strange, but vehicle need this info to determine whether it is a target vehicle of the warning message
+	if ( whichSide == (int)SideDirection::EAST_SIDE || whichSide == (int)SideDirection::SOUTH_SIDE )
+		senderSpeed.x = 1.0;
+	else // ( whichSide == (int)SideDirection::WEST_SIDE || whichSide == (int)SideDirection::NORTH_SIDE )
+		senderSpeed.x = -1.0;
+	warningMsg->setSenderSpeed(senderSpeed);
+
+	int hopCount = warningMsg->getHopCount();
+	++hopCount;
+	warningMsg->setHopCount(hopCount);
+
+	HopItems &hopInfo = warningMsg->getHopInfo();
+	HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, 0.0, 0.0, 0.0);
+	hopInfo.push_back(hopItem);
 }
 
 void WarningRSU::initializeWarningPlanList(cXMLElement* xmlConfig)

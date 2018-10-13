@@ -103,12 +103,6 @@ protected:
     /** initialize interaction with TraCI when the simulation begins. */
     virtual void initTraCI();
 
-    /** called by template method executeOneTimestep(), execute something needed by concrete routing protocol. */
-    virtual void routingMiscellany();
-
-    /** handle aircraft mobility's update. */
-    virtual void aircraftMobility();
-
 	/** read and execute all commands for the next timestep. */
 	void executeOneTimestep();
 

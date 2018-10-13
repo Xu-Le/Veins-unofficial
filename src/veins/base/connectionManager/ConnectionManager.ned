@@ -47,6 +47,8 @@ simple ConnectionManager
         double pMax @unit(mW);
         // minimum signal attenuation threshold [dBm]
         double sat @unit(dBm);
+        // minimum signal attenuation threshold (secondary use) [dBm]
+        double sat2 @unit(dBm);
         // minimum path loss coefficient
         double alpha = default(2.0);
         // minimum carrier frequency of the channel [Hz]

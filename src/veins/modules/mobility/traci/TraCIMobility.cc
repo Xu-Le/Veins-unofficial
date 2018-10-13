@@ -73,7 +73,6 @@ void TraCIMobility::initialize(int stage)
 		BaseMobility::initialize(stage);
 
 		antennaPositionOffset = par("antennaPositionOffset").doubleValue();
-		accidentCount = par("accidentCount").longValue();
 
 		currentPosXVec.setName("posx");
 		currentPosYVec.setName("posy");
@@ -100,17 +99,8 @@ void TraCIMobility::initialize(int stage)
 
 		isParking = false;
 
-		startAccidentMsg = 0;
-		stopAccidentMsg = 0;
-		manager = 0;
+		manager = nullptr;
 		last_speed = -1;
-
-		if (accidentCount > 0) {
-			simtime_t accidentStart = par("accidentStart");
-			startAccidentMsg = new cMessage("scheduledAccident");
-			stopAccidentMsg = new cMessage("scheduledAccidentResolved");
-			scheduleAt(simTime() + accidentStart, startAccidentMsg);
-		}
 	}
 	else if (stage == 1)
 	{
@@ -129,35 +119,15 @@ void TraCIMobility::finish()
 
 	// statistics.recordScalars(*this);
 
-	cancelAndDelete(startAccidentMsg);
-	cancelAndDelete(stopAccidentMsg);
-
 	isPreInitialized = false;
 
 	BaseModule::finish();
 }
 
-void TraCIMobility::handleSelfMsg(cMessage *msg)
-{
-	if (msg == startAccidentMsg) {
-		getVehicleCommandInterface()->setSpeed(0);
-		simtime_t accidentDuration = par("accidentDuration");
-		scheduleAt(simTime() + accidentDuration, stopAccidentMsg);
-		accidentCount--;
-	}
-	else if (msg == stopAccidentMsg) {
-		getVehicleCommandInterface()->setSpeed(-1);
-		if (accidentCount > 0) {
-			simtime_t accidentInterval = par("accidentInterval");
-			scheduleAt(simTime() + accidentInterval, startAccidentMsg);
-		}
-	}
-}
-
 void TraCIMobility::preInitialize(std::string external_id, const Coord& position, std::string road_id, double speed, double angle)
 {
-    commandInterface = getManager()->getCommandInterface();
-    vehicleCommandInterface = new TraCICommandInterface::Vehicle(getCommandInterface()->vehicle(external_id));
+	commandInterface = getManager()->getCommandInterface();
+	vehicleCommandInterface = new TraCICommandInterface::Vehicle(getCommandInterface()->vehicle(external_id));
 	this->lastUpdate = 0;
 	this->roadPosition = position;
 	this->road_id = road_id;
@@ -184,15 +154,15 @@ void TraCIMobility::nextPosition(const Coord& position, std::string road_id, dou
 	this->roadPosition = position;
 	if (this->road_id != road_id && road_id[0] != ':') // avoid the case that the updated lane is an internal lane
 	{
-	    this->lane_id = vehicleCommandInterface->getLaneId();
-	    atIntersection = false;
+		this->lane_id = vehicleCommandInterface->getLaneId();
+		atIntersection = false;
 	}
 	this->road_id = road_id;
 	this->speed = speed;
 	this->angle = angle;
 	this->signals = signals;
 	if (road_id[0] == ':')
-	    atIntersection = true;
+		atIntersection = true;
 
 	updatePosition();
 }

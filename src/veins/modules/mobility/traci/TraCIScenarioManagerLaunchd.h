@@ -56,22 +56,16 @@ private:
 	cXMLElement* launchConfig; /**< launch configuration to send to sumo-launchd */
 	int seed; /**< seed value to set in launch configuration, if missing (-1: current run number) */
 
-    /** called by TraCIScenarioManager::executeOneTimestep(), execute something needed by concrete routing protocol. */
-    void routingMiscellany() override;
-
-    /** handle aircraft mobility's update. */
-    virtual void aircraftMobility() override;
-
-    /** initialize interaction with TraCI when the simulation begins. */
+	/** initialize interaction with TraCI when the simulation begins. */
 	void initTraCI() override;
 };
 
 class TraCIScenarioManagerLaunchdAccess
 {
-	public:
-		TraCIScenarioManagerLaunchd* get() {
-			return FindModule<TraCIScenarioManagerLaunchd*>::findGlobalModule();
-		};
+public:
+	TraCIScenarioManagerLaunchd* get() {
+		return FindModule<TraCIScenarioManagerLaunchd*>::findGlobalModule();
+	};
 };
 
 }

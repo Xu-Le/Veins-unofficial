@@ -46,12 +46,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 
 	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
 	int beaconPriority = default(1); // the access category of the beacon messages
-	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
-	int routingPriority = default(2); // the access category of the routing messages
-	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
-	int warningPriority = default(0); // the access category of the warning messages
-	int dataLengthBits = default(18272bit) @unit(bit); //the length of a data packet 8*(2312-20-8)
-	int dataPriority = default(3); //the access category for data packets
 	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint.
 
 	double maxStoreTime = default(5s) @unit(s); // the maximum time to store routing message from others
@@ -62,9 +56,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 	double forgetMemoryInterval = default(15s) @unit(s); // the intervall between 2 forget the memory of received packets messages
 	double neighborElapsed = default(3s) @unit(s); // if exceeds this time haven't receive beacon message from neighbors, regard it turning into disconnected
 	double memoryElapsed = default(15s) @unit(s); // if exceeds this time, the memory of received packet will be forgotten
-
-	xml routingPlan;
-	xml warningPlan;
 
 	gates:
 		input cellularIn @directIn; // cellularIn gate for sendDirect, receive packets from cellular base station

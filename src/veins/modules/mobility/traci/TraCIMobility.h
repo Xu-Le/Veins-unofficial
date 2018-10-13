@@ -58,11 +58,11 @@ public:
 		public:
 			double firstRoadNumber; /**< for statistics: number of first road we encountered (if road id can be expressed as a number) */
 			simtime_t startTime; /**< for statistics: start time */
-			simtime_t totalTime; /**< for statistics: total time travelled */
+			simtime_t totalTime; /**< for statistics: total time traveled */
 			simtime_t stopTime; /**< for statistics: stop time */
 			double minSpeed; /**< for statistics: minimum value of currentSpeed */
 			double maxSpeed; /**< for statistics: maximum value of currentSpeed */
-			double totalDistance; /**< for statistics: total distance travelled */
+			double totalDistance; /**< for statistics: total distance traveled */
 			double totalCO2Emission; /**< for statistics: total CO2 emission */
 
 			void initialize();
@@ -76,7 +76,6 @@ public:
 	virtual void initialize(int) override;
 	virtual void finish() override;
 
-	virtual void handleSelfMsg(cMessage *msg) override;
 	virtual void updatePosition() override;
 
 	void preInitialize(std::string external_id, const Coord& position, std::string road_id = "", double speed = -1, double angle = -1);
@@ -128,8 +127,6 @@ public:
     }
 
 private:
-	int accidentCount; /**< number of accidents */
-
 	cOutVector currentPosXVec; /**< vector plotting posx */
 	cOutVector currentPosYVec; /**< vector plotting posy */
 	cOutVector currentSpeedVec; /**< vector plotting speed */
@@ -150,8 +147,6 @@ private:
 	double angle; /**< updated by nextPosition() */
 	TraCIScenarioManager::VehicleSignal signals; /**<updated by nextPosition() */
 
-	cMessage* startAccidentMsg;
-	cMessage* stopAccidentMsg;
 	mutable TraCIScenarioManager* manager;
 	mutable TraCICommandInterface* commandInterface;
 	mutable TraCICommandInterface::Vehicle* vehicleCommandInterface;
@@ -180,14 +175,13 @@ private:
 
 class TraCIMobilityAccess
 {
-	public:
-		TraCIMobility* get(cModule* host) {
-			TraCIMobility* traci = FindModule<TraCIMobility*>::findSubModule(host);
-			ASSERT(traci);
-			return traci;
-		};
+public:
+	TraCIMobility* get(cModule* host) {
+		TraCIMobility* traci = FindModule<TraCIMobility*>::findSubModule(host);
+		ASSERT(traci);
+		return traci;
+	}
 };
 }
 
 #endif
-

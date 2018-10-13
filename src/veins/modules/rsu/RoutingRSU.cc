@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,6 +26,11 @@ void RoutingRSU::initialize(int stage)
 
 	if (stage == 0)
 	{
+		routingLengthBits = par("routingLengthBits").longValue();
+		routingPriority = par("routingPriority").longValue();
+		dataLengthBits = par("dataLengthBits").longValue();
+		dataPriority = par("dataPriority").longValue();
+
 		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 	}
 }
@@ -40,14 +45,19 @@ void RoutingRSU::handleSelfMsg(cMessage *msg)
 	BaseRSU::handleSelfMsg(msg);
 }
 
-void RoutingRSU::decorateWSM(WaveShortMessage *wsm)
+void RoutingRSU::handleLowerMsg(cMessage *msg)
 {
-	BaseRSU::decorateWSM(wsm);
+	if (strcmp(msg->getName(), "routing") == 0)
+		DYNAMIC_CAST_CMESSAGE(Routing, routing)
+	else if (strcmp(msg->getName(), "data") == 0)
+		DYNAMIC_CAST_CMESSAGE(Data, data)
+
+	BaseRSU::handleLowerMsg(msg);
 }
 
 void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 {
-	EV << logName() << ": " << "onRouting!\n";
+	EV << logName() << ": onRouting!\n";
 
 	int guid = routingMsg->getGUID(); // alias
 
@@ -70,11 +80,10 @@ void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 	messageMemory.insert(std::pair<int, simtime_t>(guid, simTime()));
 
 	RoutingMessage *dupWSM = new RoutingMessage(*routingMsg);
-	decorateWSM(dupWSM);
 	sendWSM(dupWSM);
 }
 
-void RoutingRSU::onData(DataMessage* dataMsg)
+void RoutingRSU::onData(DataMessage *dataMsg)
 {
-	EV << "RoutingRSUs don't react to data messages since they don't provide content service.\n";
+	EV << logName() << ": onData!\n";
 }

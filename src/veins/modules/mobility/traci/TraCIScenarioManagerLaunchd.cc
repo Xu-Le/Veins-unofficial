@@ -27,19 +27,10 @@
 #include "veins/modules/mobility/traci/TraCIConstants.h"
 
 #define CMD_FILE_SEND 0x75
-#define YANG_PEI_ZHI    0
 
 using Veins::TraCIScenarioManagerLaunchd;
 
 Define_Module(Veins::TraCIScenarioManagerLaunchd);
-
-#if YANG_PEI_ZHI
-#define INTERVAL_NUM    16
-extern int oldGapInterval[INTERVAL_NUM];
-extern int curGapInterval[INTERVAL_NUM];
-extern int gapTransitionMatrix[INTERVAL_NUM][INTERVAL_NUM];
-extern double probabilityTransitionMatrix[INTERVAL_NUM][INTERVAL_NUM];
-#endif
 
 void TraCIScenarioManagerLaunchd::initialize(int stage)
 {
@@ -104,47 +95,6 @@ void TraCIScenarioManagerLaunchd::initTraCI()
 		EV << "Warning: Received non-OK response from TraCI server to command " << CMD_FILE_SEND << ":" << description.c_str() << std::endl;
 
 	TraCIScenarioManager::initTraCI();
-}
-
-void TraCIScenarioManagerLaunchd::routingMiscellany()
-{
-#if YANG_PEI_ZHI
-    int i = 0, j = 0;
-    EV << "display oldGapInterval:";
-    for (i = 0; i < INTERVAL_NUM; ++i)
-        EV << ' ' << oldGapInterval[i];
-
-    EV << "\ndisplay curGapInterval:";
-    for (i = 0; i < INTERVAL_NUM; ++i)
-        EV << ' ' << curGapInterval[i];
-
-    EV << "\ndisplay probabilityTransitionMatrix:\n";
-    probabilityTransitionMatrix[INTERVAL_NUM-1][INTERVAL_NUM-1] = 1.0;
-    for (i = 0; i < INTERVAL_NUM; ++i)
-    {
-        for (j = 0; j < INTERVAL_NUM; ++j)
-        {
-            if (i != INTERVAL_NUM-1 || j != INTERVAL_NUM-1)
-            {
-                if (oldGapInterval[i] != 0)
-                    probabilityTransitionMatrix[i][j] = static_cast<double>(gapTransitionMatrix[i][j]) / oldGapInterval[i];
-                else
-                    probabilityTransitionMatrix[i][j] = 0.0;
-            }
-            if (i == INTERVAL_NUM-1 && j != INTERVAL_NUM-1)
-                probabilityTransitionMatrix[INTERVAL_NUM-1][INTERVAL_NUM-1] -= probabilityTransitionMatrix[INTERVAL_NUM-1][j];
-            gapTransitionMatrix[i][j] = 0;
-            EV << probabilityTransitionMatrix[i][j] << ' ';
-        }
-        oldGapInterval[i] = curGapInterval[i];
-        EV << std::endl;
-    }
-#endif
-}
-
-void TraCIScenarioManagerLaunchd::aircraftMobility()
-{
-
 }
 
 TraCIScenarioManagerLaunchd::~TraCIScenarioManagerLaunchd()

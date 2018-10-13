@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@
 #define __WARNINGRSU_H__
 
 #include "veins/modules/rsu/BaseRSU.h"
+#include "veins/modules/messages/WarningMessage_m.h"
 #include "veins/modules/routing/MobilityObserver.h"
+#include "veins/modules/routing/WarningStatisticCollector.h"
 
 /**
  * @brief A concrete RSU class which is aware of warning protocols.
@@ -32,6 +34,13 @@
 class WarningRSU : public BaseRSU
 {
 public:
+	/** @brief The message kinds WarningRSU uses. */
+	enum WarningRSUMessageKinds {
+		WARNING_NOTIFY_EVT = LAST_BASE_RSU_MESSAGE_KIND,
+		RECYCLE_GUID_EVT,
+		LAST_WARNING_RSU_MESSAGE_KIND
+	};
+
 	/** @name constructors, destructor. */
 	///@{
 	WarningRSU() : BaseRSU() {}
@@ -46,33 +55,30 @@ private:
 	/** @brief handle self messages. */
 	void handleSelfMsg(cMessage *msg) override;
 
-	/** @brief wave short message decorate method. */
-	void decorateWSM(WaveShortMessage *wsm) override;
-
-	/** @brief call-back method of receiving routing message. */
-	void onRouting(RoutingMessage *routingMsg) override;
-	/** @brief call-back method of receiving data message. */
-	void onData(DataMessage *dataMsg) override;
-
 	/** @brief call a warning notify to a certain direction determined by warningPlanList. */
-	virtual void callWarning(double distance);
+	void callWarning(double distance);
+	/** @brief warning message decorate method. */
+	void decorateWarning(WarningMessage *warningMsg);
 	/** @brief initialize warningPlanList through configured xmlfile. */
 	void initializeWarningPlanList(cXMLElement *xmlConfig);
 	/** @brief return the number of target vehicles in ROI of the warning message. */
 	long targetVehicles(bool plusX, Coord xMin, Coord xMax, LAddress::L3Type& farthestOne);
 
 private:
-	Coord fromRoadhead;     ///< the tail of road where this RSU locate.
-	Coord toRoadhead;       ///< the head of road where this RSU locate.
-	Coord verticalPoint;    ///< the vertical point from RSU to the road center line.
+	int warningLengthBits; ///< the length of warning message measured in bits.
+	int warningPriority;   ///< the priority of warning message.
 
-	simtime_t guidUsedTime;    ///< the maximum time from a GUID's allocated time to its recycled time.
-	std::string laneId;        ///< the lane this warning message aims to.
+	Coord fromRoadhead;    ///< the tail of road where this RSU locate.
+	Coord toRoadhead;      ///< the head of road where this RSU locate.
+	Coord verticalPoint;   ///< the vertical point from RSU to the road center line.
 
-	cMessage *callWarningEvt;  ///< self message event used to call warning notify to certain direction determined by warningPlanList.
-	cMessage *recycleGUIDEvt;  ///< self message event used to periodically recycle GUIDs allocated before.
+	simtime_t guidUsedTime;   ///< the maximum time from a GUID's allocated time to its recycled time.
+	std::string laneId;       ///< the lane this warning message aims to.
 
-	std::list<int> guidUsed;   ///< record GUID used before for recycle purpose.
+	cMessage *callWarningEvt; ///< self message event used to call warning notify to certain direction determined by warningPlanList.
+	cMessage *recycleGUIDEvt; ///< self message event used to periodically recycle GUIDs allocated before.
+
+	std::list<int> guidUsed;  ///< record GUID used before for recycle purpose.
 	std::list<std::pair<double /* simtime */, double /* distance */> > warningPlanList; ///< warning plans of all RSUs configured by a xmlfile.
 };
 

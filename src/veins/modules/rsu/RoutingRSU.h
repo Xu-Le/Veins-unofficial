@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,6 +20,9 @@
 #define __ROUTINGRSU_H__
 
 #include "veins/modules/rsu/BaseRSU.h"
+#include "veins/modules/messages/RoutingMessage_m.h"
+#include "veins/modules/messages/DataMessage_m.h"
+#include "veins/modules/routing/RoutingStatisticCollector.h"
 
 /**
  * @brief A concrete RSU class which is aware of routing protocols.
@@ -44,17 +47,19 @@ public:
 private:
 	/** @brief handle self messages. */
 	void handleSelfMsg(cMessage *msg) override;
-
-	/** @brief wave short message decorate method. */
-	void decorateWSM(WaveShortMessage *wsm) override;
+	/** @brief handle messages from lower layer. */
+	void handleLowerMsg(cMessage *msg) override;
 
 	/** @brief call-back method of receiving routing message. */
-	void onRouting(RoutingMessage *routingMsg) override;
+	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
-	void onData(DataMessage *dataMsg) override;
+	void onData(DataMessage *dataMsg);
 
 private:
-
+	int routingLengthBits; ///< the length of routing message measured in bits.
+	int routingPriority;   ///< the priority of routing message.
+	int dataLengthBits;    ///< the length of data message measured in bits.
+	int dataPriority;      ///< the priority of data message.
 };
 
 #endif /* __ROUTINGRSU_H__ */

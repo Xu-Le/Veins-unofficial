@@ -24,7 +24,12 @@
 #define Epsilon    1e-8
 #define square(x)  (x) * (x)
 
-#define ROUTING_DEBUG_LOG    1
+#define ROUTING_DEBUG_LOG         1
+#define RSU_ADDRESS_OFFSET    10000
+#define UAV_ADDRESS_OFFSET    20000
+
+#define DELETE_SAFELY(obj) delete obj; obj = nullptr
+#define DYNAMIC_CAST_CMESSAGE(cls, obj) { cls##Message *obj##Msg = dynamic_cast<cls##Message*>(msg); ASSERT(obj##Msg != nullptr); on##cls(obj##Msg); }
 
 /**
  * @brief Utility class for routing protocol design.

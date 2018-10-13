@@ -19,7 +19,10 @@
 #define __DV_CAST_H__
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
+#include "veins/modules/messages/WarningMessage_m.h"
+#include "veins/modules/messages/WaitTimeElapsedMessage_m.h"
 #include "veins/modules/routing/BroadcastRoutingInterface.h"
+#include "veins/modules/routing/WarningStatisticCollector.h"
 
 #define USE_WEIGHTED_P_PERSISTENCE    1
 #define USE_SLOTTED_1_PERSISTENCE     0
@@ -52,29 +55,33 @@ public:
 private:
 	/** @brief handle self messages. */
 	void handleSelfMsg(cMessage *msg) override;
+	/** @brief handle messages from lower layer. */
+	void handleLowerMsg(cMessage *msg) override;
 
-	/** @brief wave short message decorate method. */
-	void decorateWSM(WaveShortMessage *wsm) override;
+	/** @brief warning message decorate method. */
+	void decorateWarning(WarningMessage *warningMsg);
+
 	/** @brief call-back method of receiving beacon message. */
-	void onBeacon(BeaconMessage *wsm) override;
-	/** @brief call-back method of receiving routing message. */
-	void onRouting(RoutingMessage *wsm) override;
+	void onBeacon(BeaconMessage *beaconMsg) override;
 	/** @brief call-back method of receiving warning message. */
-	void onWarning(WarningMessage *wsm) override;
-	/** @brief call-back method of receiving data message. */
-	void onData(DataMessage *wsm) override;
+	void onWarning(WarningMessage *warningMsg);
+
 	/** @brief examine whether neighbors still in connected. */
 	void examineNeighbors() override;
 
 	/** @brief call a warning notify to a certain direction determined by warningPlanList. */
-	void callWarning(double distance) override;
+	void callWarning(double distance);
+	/** @brief initialize warningPlanList through configured xmlfile. */
+	void initializeWarningPlanList(cXMLElement *xmlConfig);
+	/** @brief return the number of target vehicles in ROI of the warning message. */
+	long targetVehicles(bool plusX, Coord xMin, Coord xMax, LAddress::L3Type& farthestOne);
 
 	/** @name interfaces implementation. */
 	///@{
 	/** @brief adopt broadcast suppression method to avoid broadcast storm. */
-	void broadcastSuppression(WarningMessage *warningMessage) override;
+	void broadcastSuppression(WarningMessage *warningMsg) override;
 	/** @brief rebroadcast routing request message. */
-	void rebroadcast(WarningMessage *warningMessage) override;
+	void rebroadcast(WarningMessage *warningMsg) override;
 	///@}
 
 private:
@@ -91,15 +98,20 @@ private:
 private:
 	bool MDC;  ///< refer to routing protocol DV-CAST.
 	bool ODC;  ///< refer to routing protocol DV-CAST.
+	int warningLengthBits; ///< the length of warning message measured in bits.
+	int warningPriority;   ///< the priority of warning message.
 
-	simtime_t WAIT_TIME; ///< the waiting period before rebroadcast.
+	simtime_t WAIT_TIME;   ///< the waiting period before rebroadcast.
+
+	cMessage *callWarningEvt; ///< self message event used to call warning notify to certain direction determined by warningPlanList.
 	std::map<simtime_t, WaitTimeElapsedMessage*> waitTimeElapsedEvts; ///< how long suppress not to rebroadcast.
 
 	std::set<LAddress::L3Type> NB_FRONT;    ///< front neighbors.
 	std::set<LAddress::L3Type> NB_BACK;     ///< back neighbors.
 	std::set<LAddress::L3Type> NB_OPPOSITE; ///< opposite neighbors.
 	std::map<int /* GUID */, int> curState; ///< a certain packet's routing state.
-	std::map<int /* GUID */, bool> DFlg; ///< refer to routing protocol DV-CAST.
+	std::map<int /* GUID */, bool> DFlg;    ///< refer to routing protocol DV-CAST.
+	std::list<std::pair<double /* simtime */, double /* distance */> > warningPlanList; ///< warning plans of all vehicles configured by a xmlfile.
 };
 
 #endif /* __DV_CAST_H__ */

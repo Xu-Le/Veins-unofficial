@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,12 +19,20 @@
 #include "veins/modules/routing/MobilityObserver.h"
 
 MobilityObserver* MobilityObserver::_instance = nullptr;
+MobilityObserver* MobilityObserver::_instance2 = nullptr;
 
 MobilityObserver* MobilityObserver::Instance()
 {
 	if (_instance == nullptr) // Lazy initialization
 		_instance = new MobilityObserver;
 	return _instance;
+}
+
+MobilityObserver* MobilityObserver::Instance2()
+{
+	if (_instance2 == nullptr) // Lazy initialization
+		_instance2 = new MobilityObserver;
+	return _instance2;
 }
 
 void MobilityObserver::insert(LAddress::L3Type addr, Coord pos, Coord speed)

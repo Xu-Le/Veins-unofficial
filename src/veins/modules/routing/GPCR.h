@@ -19,7 +19,10 @@
 #define __GPCR_H__
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
+#include "veins/modules/messages/RoutingMessage_m.h"
+#include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/routing/UnicastRoutingInterface.h"
+#include "veins/modules/routing/RoutingStatisticCollector.h"
 
 /**
  * @brief A concrete routing protocol.
@@ -46,41 +49,48 @@ public:
 private:
 	/** @brief handle self messages. */
 	void handleSelfMsg(cMessage *msg) override;
+	/** @brief handle messages from lower layer. */
+	void handleLowerMsg(cMessage *msg) override;
 
-	/** @brief wave short message decorate method. */
-	void decorateWSM(WaveShortMessage *wsm) override;
-	/** @brief call-back method of receiving beacon message. */
-	void onBeacon(BeaconMessage *wsm) override;
+	/** @brief routing message decorate method. */
+	void decorateRouting(RoutingMessage *routingMsg);
+
 	/** @brief call-back method of receiving routing message. */
-	void onRouting(RoutingMessage *wsm) override;
-	/** @brief call-back method of receiving warning message. */
-	void onWarning(WarningMessage *wsm) override;
+	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
-	void onData(DataMessage *wsm) override;
-	/** @brief examine whether neighbors still in connected. */
-	void examineNeighbors() override;
+	void onData(DataMessage *dataMsg);
 
 	/** @brief call a routing request to a certain receiver determined by routingPlanList. */
-	void callRouting(long receiver) override;
+	void callRouting(long receiver);
+	/** @brief initialize routingPlanList through configured xmlfile. */
+	void initializeRoutingPlanList(cXMLElement *xmlConfig);
 
 	/** @name unicast routing interfaces implementation. */
 	///@{
 	/** @brief Select a next hop from one-hop neighbors and deliver routing request to it, return -1 if there is no neighbors. */
-	LAddress::L3Type selectNextHop(RoutingMessage *wsm) override;
+	LAddress::L3Type selectNextHop(RoutingMessage *routingMsg) override;
 	/** @brief Received a response message carried with routing path. */
-	void onRoutingSuccess(RoutingMessage *wsm) override;
+	void onRoutingSuccess(RoutingMessage *routingMsg) override;
 	/** @brief Received a response message indicating cannot find a routing path. */
-	void onRoutingFail(RoutingMessage *wsm) override;
+	void onRoutingFail(RoutingMessage *routingMsg) override;
 	/** @brief Check if the route path to destination is already maintained in the routing table. */
 	bool checkRoutingTable(LAddress::L3Type destination) override;
 	/** @brief List all the routing path maintained in the routing table. */
 	void displayRoutingTable() override;
 	/** @brief A reactive protocol creates a new route only when the existing one is broken. */
-	void onPathBroken(RoutingMessage *wsm) override;
+	void onPathBroken(RoutingMessage *routingMsg) override;
 	///@}
 
 private:
-	RoutingTable routingTable;
+	int routingLengthBits; ///< the length of routing message measured in bits.
+	int routingPriority;   ///< the priority of routing message.
+	int dataLengthBits;    ///< the length of data message measured in bits.
+	int dataPriority;      ///< the priority of data message.
+
+	cMessage *callRoutingEvt;  ///< self message event used to call routing request to certain destination determined by routingPlanList.
+
+	std::list<std::pair<double /* simtime */, LAddress::L3Type /* destination */> > routingPlanList; ///< routing plans of all vehicles configured by a xmlfile.
+	RoutingTable routingTable; ///< typedef std::map<LAddress::L3Type, std::list<LAddress::L3Type> > RoutingTable.
 };
 
 #endif /* __GPCR_H__ */

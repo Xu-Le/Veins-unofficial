@@ -40,6 +40,7 @@ namespace {
 }
 
 double BaseConnectionManager::maxInterferenceDistance = 0.0;
+double BaseConnectionManager::maxInterferenceDistance2 = 0.0;
 double BaseConnectionManager::maxDistSquared = 0.0;
 double BaseConnectionManager::transmitPower_dBm = 0.0;
 
@@ -49,14 +50,11 @@ void BaseConnectionManager::initialize(int stage)
 
 	if (stage == 0)
 	{
-	    EV << "BaseConnectionManager::initialize() called.\n";
+		EV << "BaseConnectionManager::initialize() called.\n";
 
-		if(hasPar("coreDebug"))
-			coreDebug = par("coreDebug").boolValue();
-		else
-			coreDebug = false;
-
+		coreDebug = hasPar("coreDebug") ? par("coreDebug").boolValue() : false;
 		drawMIR = hasPar("drawMaxIntfDist") ? par("drawMaxIntfDist").boolValue() : false;
+		sendDirect = hasPar("sendDirect") ? par("sendDirect").boolValue() : false;
 
 		BaseWorldUtility* world = FindModule<BaseWorldUtility*>::findGlobalModule();
 
@@ -65,11 +63,6 @@ void BaseConnectionManager::initialize(int stage)
 		playgroundSize = world->getPgs();
 		useTorus = world->useTorus();
 
-		if(hasPar("sendDirect"))
-			sendDirect = par("sendDirect").boolValue();
-		else
-			sendDirect = false;
-
 		maxInterferenceDistance = calcInterfDist();
 		maxDistSquared = maxInterferenceDistance * maxInterferenceDistance;
 
@@ -77,7 +70,7 @@ void BaseConnectionManager::initialize(int stage)
 		//step 1 - calculate dimension of grid
 		//one cell should have at least the size of maxInterferenceDistance
 		//but also should divide the playground in equal parts
-		Coord dim((*playgroundSize) / maxInterferenceDistance);
+		Coord dim((*playgroundSize) / maxInterferenceDistance2);
 		gridDim = GridCoord(dim);
 
 		//A grid smaller or equal to 3x3 would mean that every cell has every
@@ -116,9 +109,9 @@ void BaseConnectionManager::initialize(int stage)
 		//step 3 -	calculate the factor which maps the coordinate of a node
 		//			to the grid cell
 		//if we use a 1x1 grid every coordinate is mapped to (0,0, 0)
-		findDistance = Coord(std::max(playgroundSize->x, maxInterferenceDistance),
-							 std::max(playgroundSize->y, maxInterferenceDistance),
-							 std::max(playgroundSize->z, maxInterferenceDistance));
+		findDistance = Coord(std::max(playgroundSize->x, maxInterferenceDistance2),
+							 std::max(playgroundSize->y, maxInterferenceDistance2),
+							 std::max(playgroundSize->z, maxInterferenceDistance2));
 		//otherwise we divide the playground into cells of size of the maximum
 		//interference distance
 		if (gridDim.x != 1)
@@ -137,9 +130,9 @@ void BaseConnectionManager::initialize(int stage)
 
 		//findDistance (equals cell size) has to be greater or equal
 		//maxInt-distance
-		assert(findDistance.x >= maxInterferenceDistance);
-		assert(findDistance.y >= maxInterferenceDistance);
-		assert(findDistance.z >= maxInterferenceDistance);
+		assert(findDistance.x >= maxInterferenceDistance2);
+		assert(findDistance.y >= maxInterferenceDistance2);
+		assert(findDistance.z >= maxInterferenceDistance2);
 
 		//playGroundSize has to be part of the playGround
 		assert(GridCoord(*playgroundSize, findDistance).x == gridDim.x - 1);
@@ -281,12 +274,12 @@ bool BaseConnectionManager::isInRange(BaseConnectionManager::NicEntries::mapped_
 {
 	double dDistance = 0.0;
 
-    if(useTorus) {
-    	dDistance = sqrTorusDist(pFromNic->pos, pToNic->pos, *playgroundSize);
-    } else {
-    	dDistance = pFromNic->pos.sqrdist(pToNic->pos);
-    }
-    return (dDistance <= maxDistSquared);
+	if (!useTorus)
+		dDistance = pFromNic->pos.sqrdist(pToNic->pos);
+	else
+		dDistance = sqrTorusDist(pFromNic->pos, pToNic->pos, *playgroundSize);
+
+	return dDistance <= maxInterferenceDistance2*maxInterferenceDistance2;
 }
 
 void BaseConnectionManager::updateNicConnections(NicEntries& nmap, BaseConnectionManager::NicEntries::mapped_type   nic)
@@ -353,7 +346,7 @@ bool BaseConnectionManager::registerNic(cModule* nic,
 	updateConnections(nicID, nicPos, nicPos);
 
 	if(drawMIR) {
-		nic->getParentModule()->getDisplayString().setTagArg("r", 0, maxInterferenceDistance);
+		nic->getParentModule()->getDisplayString().setTagArg("r", 0, maxInterferenceDistance2);
 	}
 
 	return sendDirect;

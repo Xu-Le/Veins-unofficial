@@ -25,7 +25,22 @@ void GPCR::initialize(int stage)
 
 	if (stage == 0)
 	{
+		routingLengthBits = par("routingLengthBits").longValue();
+		routingPriority = par("routingPriority").longValue();
+		dataLengthBits = par("dataLengthBits").longValue();
+		dataPriority = par("dataPriority").longValue();
 
+		callRoutings = par("callRoutings").boolValue();
+		if (callRoutings)
+			initializeRoutingPlanList(par("routingPlan").xmlValue());
+
+		if (sendBeacons && !routingPlanList.empty())
+		{
+			callRoutingEvt = new cMessage("call routing evt", WaveApplMsgKinds::CALL_ROUTING_EVT);
+			scheduleAt(routingPlanList.front().first, callRoutingEvt);
+		}
+		else
+			callRoutingEvt = nullptr;
 	}
 }
 
@@ -35,146 +50,141 @@ void GPCR::finish()
 	for (RoutingTable::iterator iter = routingTable.begin(); iter != routingTable.end(); ++iter)
 		iter->second.clear();
 	routingTable.clear();
+	routingPlanList.clear();
+
+	cancelAndDelete(callRoutingEvt);
 
 	BaseWaveApplLayer::finish();
 }
 
-void GPCR::handleSelfMsg(cMessage* msg)
+void GPCR::handleSelfMsg(cMessage *msg)
 {
-	BaseWaveApplLayer::handleSelfMsg(msg);
-}
-
-void GPCR::decorateWSM(WaveShortMessage* wsm)
-{
-	if (std::string(wsm->getName()) == "beacon")
+	switch (msg->getKind())
 	{
-		BeaconMessage *beaconMessage = dynamic_cast<BeaconMessage*>(wsm);
-		beaconMessage->setSenderFrom(fromRoadhead);
-		beaconMessage->setSenderTo(toRoadhead);
-		// TODO: left blank now, for adaptive beaconing in the future
+	case WaveApplMsgKinds::CALL_ROUTING_EVT:
+	{
+		callRouting(routingPlanList.front().second);
+		routingPlanList.pop_front();
+		if (!routingPlanList.empty())
+			scheduleAt(routingPlanList.front().first, callRoutingEvt);
+		break;
 	}
-	else if (std::string(wsm->getName()) == "routing")
-	{
-		RoutingMessage *routingMessage = dynamic_cast<RoutingMessage*>(wsm);
-		int hopCount = routingMessage->getHopCount();
-		++hopCount;
-		routingMessage->setHopCount(hopCount);
-
-		HopItems &hopInfo = routingMessage->getHopInfo();
-		HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, curSpeed.x, curSpeed.y, curSpeed.z);
-		hopInfo.push_back(hopItem);
-	}
-	else if (std::string(wsm->getName()) == "warning")
-	{
-		EV << "GPCR doesn't decorate warning message since it is a unicast routing protocol.\n";
-		delete wsm;
-		wsm = nullptr;
-	}
-	else if (std::string(wsm->getName()) == "data")
-	{
-		// Unused
-	}
-	else
-	{
-		EV << "unknown message (" << wsm->getName() << ")  decorated, delete it\n";
-		delete wsm;
-		wsm = nullptr;
+	default:
+		BaseWaveApplLayer::handleSelfMsg(msg);
 	}
 }
 
-void GPCR::onBeacon(BeaconMessage* wsm)
+void GPCR::handleLowerMsg(cMessage *msg)
 {
-	BaseWaveApplLayer::onBeacon(wsm);
+	if (strcmp(msg->getName(), "routing") == 0)
+		DYNAMIC_CAST_CMESSAGE(Routing, routing)
+	else if (strcmp(msg->getName(), "data") == 0)
+		DYNAMIC_CAST_CMESSAGE(Data, data)
+
+	BaseWaveApplLayer::handleLowerMsg(msg);
 }
 
-void GPCR::onRouting(RoutingMessage* wsm)
+void GPCR::decorateRouting(RoutingMessage *routingMsg)
 {
+	int hopCount = routingMsg->getHopCount();
+	routingMsg->setHopCount(hopCount + 1);
+
+	HopItems &hopInfo = routingMsg->getHopInfo();
+	HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, curSpeed.x, curSpeed.y, curSpeed.z);
+	hopInfo.push_back(hopItem);
+}
+
+void GPCR::onRouting(RoutingMessage *_routingMsg)
+{
+	EV << "node[" << myAddr << "]: onRouting!\n";
+
+	// what to operate is a duplication of routingMsg, because it will be deleted in BaseWaveApplLayer::handleLowerMsg()
+	RoutingMessage *routingMsg = new RoutingMessage(*_routingMsg);
+
 	// check if I am the chosen next hop relay vehicle determined by the previous hop
-	if ( wsm->getNextHop() != myAddr )
+	if ( routingMsg->getNextHop() != myAddr )
 	{
 		EV << "I am not the chosen next hop relay vehicle determined by the previous hop, discard it.\n";
 		++RoutingStatisticCollector::globalDuplications;
-		delete wsm;
-		wsm = nullptr;
+		DELETE_SAFELY(routingMsg);
 		return;
 	}
 
-	if ( wsm->getReceiver() != myAddr )
+	if ( routingMsg->getReceiver() != myAddr )
 		EV << "I am the chosen next hop relay vehicle determined by the previous hop.\n";
 	else
 	{
 		EV << "I am the destination vehicle, search for routing path succeed, report it to request vehicle.\n";
 		// record routing statistics
 		++RoutingStatisticCollector::globalArrivals;
-		double timeDifferentia = simTime().dbl() - wsm->getTimestamp().dbl();
+		double timeDifferentia = simTime().dbl() - routingMsg->getTimestamp().dbl();
 		RoutingStatisticCollector::globalDelayAccumulation += timeDifferentia;
-		EV << "the routing path has " << wsm->getHopCount() << " hop count, search for it costs time " << timeDifferentia << "s.\n";
+		EV << "the routing path has " << routingMsg->getHopCount() << " hop count, search for it costs time " << timeDifferentia << "s.\n";
 
-		HopItems &hopInfo = wsm->getHopInfo();
+		HopItems &hopInfo = routingMsg->getHopInfo();
 		hopInfo.reverse();
-		wsm->setNextHop(hopInfo.front().addr);
+		routingMsg->setNextHop(hopInfo.front().addr);
 		HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, curSpeed.x, curSpeed.y, curSpeed.z);
 		hopInfo.push_front(hopItem);
-		wsm->setBackward(true);
-		wsm->setRoutingSuccess(true);
-		int hopCount = wsm->getHopCount();
+		routingMsg->setBackward(true);
+		routingMsg->setRoutingSuccess(true);
+		int hopCount = routingMsg->getHopCount();
 		--hopCount;
-		wsm->setHopCount(hopCount);
-		sendWSM(wsm);
+		routingMsg->setHopCount(hopCount);
+		sendWSM(routingMsg);
 		return;
 	}
 
-	if ( wsm->getHopCount() > maxHopConstraint )
+	if ( routingMsg->getHopCount() > maxHopConstraint )
 	{
 		EV << "hop count exceeds max hop constraint, search for routing path failed, report it to request vehicle.\n";
 
-		HopItems &hopInfo = wsm->getHopInfo();
+		HopItems &hopInfo = routingMsg->getHopInfo();
 		hopInfo.reverse();
-		wsm->setNextHop(hopInfo.front().addr);
+		routingMsg->setNextHop(hopInfo.front().addr);
 		HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, curSpeed.x, curSpeed.y, curSpeed.z);
 		hopInfo.push_front(hopItem);
-		wsm->setBackward(true);
-		wsm->setRoutingSuccess(false);
-		int hopCount = wsm->getHopCount();
+		routingMsg->setBackward(true);
+		routingMsg->setRoutingSuccess(false);
+		int hopCount = routingMsg->getHopCount();
 		--hopCount;
-		wsm->setHopCount(hopCount);
-		sendWSM(wsm);
+		routingMsg->setHopCount(hopCount);
+		sendWSM(routingMsg);
 		return;
 	}
 
-	if ( !wsm->getBackward() )
+	if ( !routingMsg->getBackward() )
 	{
-		LAddress::L3Type nextHop = selectNextHop(wsm);
+		LAddress::L3Type nextHop = selectNextHop(routingMsg);
 		if (nextHop == -1)
 		{
 			EV << "no neighbors fits relay condition, search for routing path failed, report it to request vehicle.\n";
 
-			HopItems &hopInfo = wsm->getHopInfo();
+			HopItems &hopInfo = routingMsg->getHopInfo();
 			hopInfo.reverse();
-			wsm->setNextHop(hopInfo.front().addr);
+			routingMsg->setNextHop(hopInfo.front().addr);
 			HopItem hopItem(myAddr, curPosition.x, curPosition.y, curPosition.z, curSpeed.x, curSpeed.y, curSpeed.z);
 			hopInfo.push_front(hopItem);
-			wsm->setBackward(true);
-			wsm->setRoutingSuccess(false);
-			sendWSM(wsm);
+			routingMsg->setBackward(true);
+			routingMsg->setRoutingSuccess(false);
+			sendWSM(routingMsg);
 			return;
 		}
 		EV << "the chosen next hop is " << nextHop << ".\n";
-		wsm->setNextHop(nextHop);
-		// add this hop info to wsm
-		decorateWSM(wsm);
+		routingMsg->setNextHop(nextHop);
+		// add this hop info to routingMsg
+		decorateRouting(routingMsg);
 	}
 	else
 	{
-		HopItems &hopInfo = wsm->getHopInfo();
+		HopItems &hopInfo = routingMsg->getHopInfo();
 		if (hopInfo.back().addr == myAddr)
 		{
-			if ( wsm->getRoutingSuccess() )
-				onRoutingSuccess(wsm);
+			if ( routingMsg->getRoutingSuccess() )
+				onRoutingSuccess(routingMsg);
 			else
-				onRoutingFail(wsm);
-			delete wsm;
-			wsm = nullptr;
+				onRoutingFail(routingMsg);
+			DELETE_SAFELY(routingMsg);
 			return;
 		}
 		for (HopItems::iterator iter = hopInfo.begin(); iter != hopInfo.end(); ++iter)
@@ -182,45 +192,123 @@ void GPCR::onRouting(RoutingMessage* wsm)
 			if (iter->addr == myAddr)
 			{
 				++iter;
-				wsm->setNextHop(iter->addr);
+				routingMsg->setNextHop(iter->addr);
 				break;
 			}
 		}
 	}
 
-	// send decorated wsm to next hop
-	sendWSM(wsm);
+	// send decorated routingMsg to next hop
+	sendWSM(routingMsg);
 }
 
-void GPCR::onWarning(WarningMessage* wsm)
+void GPCR::onData(DataMessage *dataMsg)
 {
-	EV << "GPCR doesn't handle warning message since it is a unicast routing protocol.\n";
-	delete wsm;
-	wsm = nullptr;
+	EV << "node[" << myAddr << "]: onData!\n";
 }
 
-void GPCR::onData(DataMessage* wsm)
+void GPCR::callRouting(LAddress::L3Type receiver)
 {
-	EV << "GPCR doesn't handle data message since it is a unicast routing protocol.\n";
-	delete wsm;
-	wsm = nullptr;
+	// create message by factory method
+	RoutingMessage *routingMsg = new RoutingMessage("routing");
+	prepareWSM(routingMsg, routingLengthBits, type_CCH, routingPriority, -1);
+
+	// handle utils about message's GUID
+	int guid = RoutingUtils::generateGUID();
+	EV << "GUID = " << guid << ", receiver = " << receiver << std::endl;
+	guidUsed.push_back(guid);
+	scheduleAt(simTime() + guidUsedTime, recycleGUIDEvt);
+	// set necessary routing info
+	routingMsg->setGUID(guid);
+	routingMsg->setReceiver(receiver);
+	LAddress::L3Type nextHop = selectNextHop(routingMsg);
+	if (nextHop == -1)
+	{
+		EV << "request vehicle has no neighbors, routing failed.\n";
+		DELETE_SAFELY(routingMsg);
+		return;
+	}
+	EV << "the chosen next hop is " << nextHop << ".\n";
+	routingMsg->setHopCount(0);
+	routingMsg->setNextHop(nextHop);
+	routingMsg->setBackward(false);
+	// insert into message memory to avoid relaying the message that is rebroadcast back to self by others
+	messageMemory.insert(std::pair<int, WaveShortMessage*>(guid, routingMsg));
+	// what to send is a duplication of routingMsg, because it will be encapsulated into Mac80211Pkt as well as be delete when this message memory forgets,
+	// however if send the routingMsg, it will cannot be deleted when memory forgets.
+	RoutingMessage *duproutingMsg = new RoutingMessage(*routingMsg);
+	decorateRouting(duproutingMsg);
+	sendWSM(duproutingMsg);
+
+	++RoutingStatisticCollector::globalRequests;
 }
 
-void GPCR::examineNeighbors()
+void GPCR::initializeRoutingPlanList(cXMLElement *xmlConfig)
 {
-	BaseWaveApplLayer::examineNeighbors();
+	if (xmlConfig == 0)
+		throw cRuntimeError("No routing plan configuration file specified.");
+
+	cXMLElementList planList = xmlConfig->getElementsByTagName("RoutingPlan");
+
+	if (planList.empty())
+		EV << "No routing plan configuration items specified.\n";
+
+	for (cXMLElementList::iterator iter = planList.begin(); iter != planList.end(); ++iter)
+	{
+		cXMLElement *routingPlan = *iter;
+
+		const char* name = routingPlan->getAttribute("type");
+
+		if (atoi(name) == myAddr)
+		{
+			cXMLElementList parameters = routingPlan->getElementsByTagName("parameter");
+
+			ASSERT( parameters.size() % 2 == 0 );
+
+			EV << logName() << "'s routing plan list as follows:\n";
+
+			for (size_t i = 0; i < parameters.size(); i += 2)
+			{
+				double simtime = 0.0;
+				long receiver = 0;
+
+				const char *name = parameters[i]->getAttribute("name");
+				const char *type = parameters[i]->getAttribute("type");
+				const char *value = parameters[i]->getAttribute("value");
+				if (name == 0 || type == 0 || value == 0)
+					throw cRuntimeError("Invalid parameter, could not find name, type or value");
+
+				if (strcmp(name, "simtime") == 0 && strcmp(type, "double") == 0)
+					simtime = atof(value);
+
+				name = parameters[i+1]->getAttribute("name");
+				type = parameters[i+1]->getAttribute("type");
+				value = parameters[i+1]->getAttribute("value");
+				if (name == 0 || type == 0 || value == 0)
+					throw cRuntimeError("Invalid parameter, could not find name, type or value");
+
+				if (strcmp(name, "receiver") == 0 && strcmp(type, "long") == 0)
+					receiver = atoi(value);
+
+				EV << "    simtime: " << simtime << ", receiver: " << receiver << std::endl;
+				routingPlanList.push_back(std::pair<double, LAddress::L3Type>(simtime, receiver));
+			}
+
+			break;
+		}
+	}
 }
 
-LAddress::L3Type GPCR::selectNextHop(RoutingMessage* wsm)
+LAddress::L3Type GPCR::selectNextHop(RoutingMessage *routingMsg)
 {
 	if ( neighbors.empty() )
 		return -1;
 
-	if ( neighbors.find(wsm->getReceiver()) != neighbors.end() )
-		return wsm->getReceiver();
+	if ( neighbors.find(routingMsg->getReceiver()) != neighbors.end() )
+		return routingMsg->getReceiver();
 
 	std::set<LAddress::L3Type> hopsPassed;
-	HopItems &hopInfo = wsm->getHopInfo();
+	HopItems &hopInfo = routingMsg->getHopInfo();
 	for (HopItems::iterator it = hopInfo.begin(); it != hopInfo.end(); ++it)
 		hopsPassed.insert(it->addr);
 
@@ -244,62 +332,24 @@ LAddress::L3Type GPCR::selectNextHop(RoutingMessage* wsm)
 	return nextHop;
 }
 
-void GPCR::callRouting(LAddress::L3Type receiver)
+void GPCR::onRoutingSuccess(RoutingMessage *routingMsg)
 {
-	bubble("call routing");
-	// create message by factory method
-	WaveShortMessage *wsm = prepareWSM("routing", routingLengthBits, type_CCH, routingPriority, -1);
-	if (wsm == nullptr) return;
-	RoutingMessage *routingMessage = dynamic_cast<RoutingMessage*>(wsm);
-	// handle utils about message's GUID
-	int guid = RoutingUtils::generateGUID();
-	EV << "GUID = " << guid << ", receiver = " << receiver << std::endl;
-	guidUsed.push_back(guid);
-	scheduleAt(simTime() + guidUsedTime, recycleGUIDEvt);
-	// set necessary routing info
-	routingMessage->setGUID(guid);
-	routingMessage->setReceiver(receiver);
-	LAddress::L3Type nextHop = selectNextHop(routingMessage);
-	if (nextHop == -1)
-	{
-		EV << "request vehicle has no neighbors, routing failed.\n";
-		delete routingMessage;
-		routingMessage = nullptr;
-		return;
-	}
-	EV << "the chosen next hop is " << nextHop << ".\n";
-	routingMessage->setHopCount(0);
-	routingMessage->setNextHop(nextHop);
-	routingMessage->setBackward(false);
-	// insert into message memory to avoid relaying the message that is rebroadcast back to self by others
-	messageMemory.insert(std::pair<int, WaveShortMessage*>(guid, routingMessage));
-	// what to send is a duplication of wsm, because it will be encapsulated into Mac80211Pkt as well as be delete when this message memory forgets,
-	// however if send the wsm, it will cannot be deleted when memory forgets.
-	RoutingMessage *dupWSM = new RoutingMessage(*routingMessage);
-	decorateWSM(dupWSM);
-	sendWSM(dupWSM);
+	EV << logName() << ": succeed to find a routing path to destination " << routingMsg->getReceiver() << std::endl;
 
-	++RoutingStatisticCollector::globalRequests;
-}
-
-void GPCR::onRoutingSuccess(RoutingMessage* wsm)
-{
-	EV << logName() << ": succeed to find a routing path to destination " << wsm->getReceiver() << std::endl;
-
-	HopItems &hopItems = wsm->getHopInfo();
+	HopItems &hopItems = routingMsg->getHopInfo();
 	std::list<LAddress::L3Type> routingPath;
 
 	for (HopItems::reverse_iterator iter = hopItems.rbegin(); iter != hopItems.rend(); ++iter)
 		routingPath.push_back(iter->addr);
 
-	routingTable.insert(std::pair<LAddress::L3Type, std::list<LAddress::L3Type> >(wsm->getReceiver(), routingPath));
+	routingTable.insert(std::pair<LAddress::L3Type, std::list<LAddress::L3Type> >(routingMsg->getReceiver(), routingPath));
 
 	displayRoutingTable();
 }
 
-void GPCR::onRoutingFail(RoutingMessage* wsm)
+void GPCR::onRoutingFail(RoutingMessage *routingMsg)
 {
-	EV << logName() << ": failed to find a routing path to destination " << wsm->getReceiver() << std::endl;
+	EV << logName() << ": failed to find a routing path to destination " << routingMsg->getReceiver() << std::endl;
 	// TODO: wait little time then try again?
 }
 
@@ -322,7 +372,7 @@ void GPCR::displayRoutingTable()
 	}
 }
 
-void GPCR::onPathBroken(RoutingMessage* wsm)
+void GPCR::onPathBroken(RoutingMessage *routingMsg)
 {
 	EV << "GPCR::onPathBroken() unimplemented yet!\n";
 }

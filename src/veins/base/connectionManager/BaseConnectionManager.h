@@ -199,10 +199,11 @@ private:
 public:
 	/** @name static variables needed by application layer. */
 	///@{
-    static double maxInterferenceDistance; ///< the biggest interference distance in the network.
-    static double maxDistSquared; ///< square of maxInterferenceDistance cache a value that is often used.
-    static double transmitPower_dBm; ///< transmit power measured in dBm of transmitter.
-    ///@}
+	static double maxInterferenceDistance;  ///< the biggest interference distance in the network.
+	static double maxInterferenceDistance2; ///< the biggest interference distance in the network.
+	static double maxDistSquared; ///< square of maxInterferenceDistance cache a value that is often used.
+	static double transmitPower_dBm; ///< transmit power measured in dBm of transmitter.
+	///@}
 
 protected:
 	/** @brief Type for map from nic-module id to nic-module pointer.*/

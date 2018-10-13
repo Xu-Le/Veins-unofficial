@@ -25,10 +25,12 @@ simple WarningRSU extends BaseRSU
 	@class(WarningRSU);
 	@display("i=block/broadcast");
 
+	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
+	int warningPriority = default(0); // the access category of the warning messages
+
 	double fromRoadheadX;
 	double fromRoadheadY;
 	double fromRoadheadZ = default(0);
-
 	double toRoadheadX;
 	double toRoadheadY;
 	double toRoadheadZ = default(0);

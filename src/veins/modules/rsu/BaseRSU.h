@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016-2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,16 +23,9 @@
 #include "veins/base/connectionManager/BaseConnectionManager.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
-#include "veins/modules/messages/RoutingMessage_m.h"
-#include "veins/modules/messages/WarningMessage_m.h"
-#include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/routing/RoutingUtils.h"
-#include "veins/modules/routing/RoutingStatisticCollector.h"
-#include "veins/modules/routing/WarningStatisticCollector.h"
 #include "veins/modules/mac/ieee80211p/WaveAppToMac1609_4Interface.h"
 #include "veins/modules/world/annotations/AnnotationManager.h"
-
-#define RSU_ADDRESS_OFFSET    10000
 
 /**
  * @brief Base class for RSU design.
@@ -47,13 +40,10 @@
 class BaseRSU : public BaseApplLayer
 {
 public:
-	/** @brief The message kinds routing layer uses. */
+	/** @brief The message kinds BaseRSU uses. */
 	enum RSUMessageKinds {
-		SERVICE_PROVIDER = LAST_BASE_APPL_MESSAGE_KIND,
-		EXAMINE_VEHICLES_EVT,
+		EXAMINE_VEHICLES_EVT = LAST_BASE_APPL_MESSAGE_KIND,
 		FORGET_MEMORY_EVT,
-		WARNING_NOTIFY_EVT,
-		RECYCLE_GUID_EVT,
 		LAST_BASE_RSU_MESSAGE_KIND
 	};
 
@@ -73,7 +63,7 @@ protected:
 
 	/** @brief handle self messages. */
 	virtual void handleSelfMsg(cMessage *msg) override;
-	/** @brief handle messages from below(template method, subclass should not override it). */
+	/** @brief handle messages from lower layer. */
 	virtual void handleLowerMsg(cMessage *msg) override;
 	/** @brief Handle wired incoming messages. */
 	virtual void handleWiredMsg(WiredMessage *wiredMsg) {}
@@ -88,18 +78,12 @@ protected:
 	/** @brief Handle west/east RSU messages, param 'direction': west is 1, east is 2, north is 3, south is 4. */
 	virtual void handleRSUMsg(WiredMessage *wiredMsg, int direction) {}
 
-	/** @brief wave short message factory method(template method, subclass should not override it). */
-	virtual WaveShortMessage* prepareWSM(std::string name, int dataLength, t_channel channel, int priority, int serial);
-	/** @brief wave short message decorate method. */
-	virtual void decorateWSM(WaveShortMessage *wsm);
+	/** @brief wave short message factory method. */
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
 	/** @brief wave short message send method. */
-	virtual void sendWSM(WaveShortMessage *wsm);
+	void sendWSM(WaveShortMessage *wsm);
 	/** @brief call-back method of receiving beacon message. */
 	virtual void onBeacon(BeaconMessage *beaconMsg);
-	/** @brief call-back method of receiving routing message. */
-	virtual void onRouting(RoutingMessage *routingMsg) = 0;
-	/** @brief call-back method of receiving data message. */
-	virtual void onData(DataMessage *dataMsg) = 0;
 
 	/** @brief examine whether vehicles still in connected. */
 	virtual void examineVehicles();
@@ -119,12 +103,10 @@ protected:
 	class VehicleInfo
 	{
 	public:
-		VehicleInfo(Coord& p, Coord& s, simtime_t ra) : pos(p), speed(s), prevPos(), prevSpeed(), receivedAt(ra) {}
+		VehicleInfo(Coord& p, Coord& s, simtime_t ra) : pos(p), speed(s), receivedAt(ra) {}
 
 		Coord pos;   ///< current position of the vehicle.
 		Coord speed; ///< current speed of the vehicle.
-		Coord prevPos;   ///< previous position of the vehicle.
-		Coord prevSpeed; ///< previous speed of the vehicle.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the vehicle.
 	};
 
@@ -141,16 +123,13 @@ protected:
 	int eastDist;   ///< distance between self and east neighbor RSU.
 	int wiredHeaderLength; ///< length of the IP packet header.
 
-	bool helpRoutings; ///< whether this RSU will help vehicle rebroadcast routing messages.
-	bool sendWarnings; ///< whether this RSU is at work.
-	bool dataOnSch;    ///< whether send data on service channel.
+	bool dataOnSch;   ///< whether send data on service channel.
 
-	int warningLengthBits; ///< the length of warning message measured in bits.
-	int warningPriority;   ///< the priority of warning message.
-	int dataLengthBits;    ///< the length of data message measured in bits.
-	int dataPriority;      ///< the priority of data message.
 	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 	int whichSide;         ///< which side direction relative to road this RSU locate.
+
+	double V2XRadius; ///< the biggest transmission distance of transmitter.
+	double U2URadius; ///< the biggest transmission distance of transmitter.
 
 	double examineVehiclesInterval; ///< the interval of examining the connectivity with vehicles.
 	double forgetMemoryInterval;    ///< the interval of forgetting message received too long time ago.
@@ -164,8 +143,8 @@ protected:
 	cMessage *forgetMemoryEvt;    ///< self message event used to periodically forget message received too long time ago in memory.
 
 	std::map<LAddress::L3Type, VehicleInfo*> vehicles; ///< a map from a vehicle's identifier to all its mobility info.
-	std::map<int /* GUID */, simtime_t> messageMemory; ///< a set stores a message's GUID and its received time which is received recently.
 	std::map<LAddress::L3Type, VehicleInfo*>::iterator itV; ///< an iterator used to traverse container vehicles.
+	std::map<int /* GUID */, simtime_t> messageMemory; ///< a set stores a message's GUID and its received time which is received recently.
 
 	WaveAppToMac1609_4Interface *myMac;
 	Veins::AnnotationManager *annotations;

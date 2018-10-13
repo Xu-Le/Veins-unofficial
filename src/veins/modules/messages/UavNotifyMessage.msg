@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,17 +16,15 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-package org.car2x.veins.modules.rsu;
+cplusplus {{
+#include "veins/modules/messages/WaveShortMessage_m.h"
+typedef std::list<long> AccessHopList;
+}}
 
-import org.car2x.veins.modules.rsu.BaseRSU;
+class WaveShortMessage;
+class noncobject AccessHopList;
 
-simple RoutingRSU extends BaseRSU
+packet UavNotifyMessage extends WaveShortMessage
 {
-	@class(RoutingRSU);
-	@display("i=block/routing");
-
-	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
-	int routingPriority = default(2); // the access category of the routing messages
-	int dataLengthBits = default(18272bit) @unit(bit); //the length of a data packet 8 * (2312-20-8)
-	int dataPriority = default(3); //the access category for data packets
+	AccessHopList hopList; // access hop list from the originator UAV to the RSU
 }

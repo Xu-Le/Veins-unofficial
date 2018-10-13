@@ -409,8 +409,9 @@ bool Decider80211p::cca(simtime_t_cref time, AirFrame* exclude) {
 	min.setTime(time);
 	min.setArgValue(Dimension::frequency(), centerFrequency - 5e6);
 
-	DBG_D11P << MappingUtils::findMin(*resultMap, min, min) << " > " << ccaThreshold << " = " << (bool)(MappingUtils::findMin(*resultMap, min, min) > ccaThreshold) << std::endl;
-	bool isChannelIdle = MappingUtils::findMin(*resultMap, min, min) < ccaThreshold;
+	Mapping::argument_value_t storeMin = MappingUtils::findMin(*resultMap, min, min);
+	DBG_D11P << storeMin << " > " << ccaThreshold << " = " << (bool)(storeMin > ccaThreshold) << std::endl;
+	bool isChannelIdle = storeMin < ccaThreshold;
 	delete resultMap;
 	return isChannelIdle;
 }

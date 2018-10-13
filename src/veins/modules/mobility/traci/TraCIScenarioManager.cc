@@ -522,16 +522,6 @@ void TraCIScenarioManager::initTraCI()
     }
 }
 
-void TraCIScenarioManager::routingMiscellany()
-{
-
-}
-
-void TraCIScenarioManager::aircraftMobility()
-{
-
-}
-
 void TraCIScenarioManager::executeOneTimestep()
 {
 	EV << "Triggering TraCI server simulation advance to t=" << simTime() <<endl;
@@ -549,8 +539,6 @@ void TraCIScenarioManager::executeOneTimestep()
 			processSubcriptionResult(buf);
 	}
 
-	routingMiscellany();
-
 	if (!autoShutdownTriggered)
 		scheduleAt(simTime()+updateInterval, executeOneTimestepTrigger);
 }
@@ -558,7 +546,7 @@ void TraCIScenarioManager::executeOneTimestep()
 void TraCIScenarioManager::insertNewVehicle()
 {
 	std::string type;
-	if (vehicleTypeIds.size())
+	if (!vehicleTypeIds.empty())
 	{
 		int vehTypeId = mobRng->intRand(vehicleTypeIds.size());
 		type = vehicleTypeIds[vehTypeId];
@@ -572,32 +560,28 @@ void TraCIScenarioManager::insertNewVehicle()
 
 void TraCIScenarioManager::insertVehicles()
 {
-	for (std::map<int, std::queue<std::string> >::iterator i = vehicleInsertQueue.begin(); i != vehicleInsertQueue.end(); )
+	for (std::map<int, std::queue<std::string> >::iterator it = vehicleInsertQueue.begin(); it != vehicleInsertQueue.end(); ++it)
 	{
-		std::string route = routeIds[i->first];
+		std::string route = routeIds[it->first];
 		EV << "process " << route << std::endl;
-		std::queue<std::string> vehicles = i->second;
-		while (!i->second.empty())
+		while (!it->second.empty())
 		{
-			bool suc = false;
-			std::string type = i->second.front();
+			std::string type = it->second.front();
+			it->second.pop();
 			std::stringstream veh;
 			veh << type << "_" << vehicleNameCounter;
 			EV << "trying to add " << veh.str() << " with " << route << " vehicle type " << type << std::endl;
 
-			suc = getCommandInterface()->addVehicle(veh.str(), type, route, simTime());
-			if (!suc)
-				i->second.pop();
-			else
+			bool suc = commandIfc->addVehicle(veh.str(), type, route, simTime());
+			if (suc)
 			{
 				EV << "successful inserted " << veh.str() << std::endl;
 				queuedVehicles.insert(veh.str());
-				i->second.pop();
-				vehicleNameCounter++;
+				++vehicleNameCounter;
 			}
 		}
-		vehicleInsertQueue.erase(i++);
 	}
+	vehicleInsertQueue.clear();
 }
 
 void TraCIScenarioManager::subscribeToVehicleVariables(std::string vehicleId)

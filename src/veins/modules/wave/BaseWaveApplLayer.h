@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2011 David Eckhoff <eckhoff@cs.fau.de>, 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2011 David Eckhoff <eckhoff@cs.fau.de>, 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // Documentation for these modules is at http://veins.car2x.org/
 //
@@ -26,14 +26,8 @@
 #include "veins/modules/utility/Consts80211p.h"
 #include "veins/modules/cellular/BaseStation.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
-#include "veins/modules/messages/RoutingMessage_m.h"
-#include "veins/modules/messages/WarningMessage_m.h"
-#include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/messages/PacketExpiredMessage_m.h"
-#include "veins/modules/messages/WaitTimeElapsedMessage_m.h"
 #include "veins/modules/routing/RoutingUtils.h"
-#include "veins/modules/routing/RoutingStatisticCollector.h"
-#include "veins/modules/routing/WarningStatisticCollector.h"
 #include "veins/modules/routing/MobilityObserver.h"
 #include "veins/modules/mobility/traci/TraCIMobility.h"
 #include "veins/modules/mobility/traci/TraCICommandInterface.h"
@@ -92,26 +86,23 @@ protected:
 	virtual void handleMessage(cMessage *msg) override;
 
 	/** @brief handle self messages. */
-	virtual void handleSelfMsg(cMessage* msg) override;
-	/** @brief handle messages from below(template method, subclass should not override it). */
-	virtual void handleLowerMsg(cMessage* msg) override;
+	virtual void handleSelfMsg(cMessage *msg) override;
+	/** @brief handle messages from lower layer. */
+	virtual void handleLowerMsg(cMessage *msg) override;
 	/** @brief Handle wireless cellular incoming messages. */
 	virtual void handleCellularMsg(CellularMessage *cellularMsg) {}
 
-	/** @brief wave short message factory method(template method, subclass should not override it). */
-	virtual WaveShortMessage* prepareWSM(std::string name, int dataLength, t_channel channel, int priority, int serial);
-	/** @brief wave short message decorate method. */
-	virtual void decorateWSM(WaveShortMessage* wsm);
+	/** @brief wave short message factory method. */
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
 	/** @brief wave short message send method. */
-	virtual void sendWSM(WaveShortMessage* wsm);
+	void sendWSM(WaveShortMessage *wsm);
+	/** @brief send beacon message. */
+	void sendBeacon();
+	/** @brief beacon message decorate method. */
+	virtual void decorateBeacon(BeaconMessage *beaconMsg);
 	/** @brief call-back method of receiving beacon message. */
-	virtual void onBeacon(BeaconMessage* wsm);
-	/** @brief call-back method of receiving routing message(aims to unicast protocols). */
-	virtual void onRouting(RoutingMessage* wsm) = 0;
-	/** @brief call-back method of receiving warning message(aims to broadcast and geocast protocols). */
-	virtual void onWarning(WarningMessage* wsm) = 0;
-	/** @brief call-back method of receiving data message. */
-	virtual void onData(DataMessage* wsm) = 0;
+	virtual void onBeacon(BeaconMessage *beaconMsg);
+
 	/** @brief examine whether neighbors still in connected. */
 	virtual void examineNeighbors();
 	/** @brief forget packets received long time ago. */
@@ -132,20 +123,6 @@ protected:
 	/** @brief update(register or unregister) vehicle's NIC when it parks or resumes driving. */
 	void handleParkingUpdate(cObject* obj);
 	///@}
-
-	/** @brief call a routing request to certain receiver determined by routingPlanList(aims to unicast protocols). */
-	virtual void callRouting(LAddress::L3Type receiver) {}
-	/** @brief call a warning notify to certain direction determined by warningPlanList(aims to broadcast and geocast protocols). */
-	virtual void callWarning(double distance) {}
-	/** @brief initialize routingPlanList through configured xmlfile(aims to unicast protocols). */
-	void initializeRoutingPlanList(cXMLElement* xmlConfig);
-	/** @brief initialize warningPlanList through configured xmlfile(aims to broadcast and geocast protocols). */
-	void initializeWarningPlanList(cXMLElement* xmlConfig);
-
-	/** @brief send beacon message(template method). */
-	void sendBeacon();
-	/** @brief return the number of target vehicles in ROI of the warning message. */
-	long targetVehicles(bool plusX, Coord xMin, Coord xMax, LAddress::L3Type& farthestOne);
 
 protected:
 	/** @brief The class to store neighbor's information collected by beacon message. */
@@ -178,12 +155,6 @@ protected:
 	bool dataOnSch;        ///< whether send data on service channel.
 	int beaconLengthBits;  ///< the length of beacon message measured in bits.
 	int beaconPriority;    ///< the priority of beacon message.
-	int routingLengthBits; ///< the length of routing message measured in bits.
-	int routingPriority;   ///< the priority of routing message.
-	int warningLengthBits; ///< the length of warning message measured in bits.
-	int warningPriority;   ///< the priority of warning message.
-	int dataLengthBits;    ///< the length of data message measured in bits.
-	int dataPriority;      ///< the priority of data message.
 	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 	double transmissionRadius;   ///< the biggest transmission distance of transmitter.
 	double beaconInterval; ///< the interval of sending beacon message.
@@ -207,19 +178,15 @@ protected:
 	/** @name containers. */
 	///@{
 	std::list<int> guidUsed; ///< record GUID used before for recycle purpose.
-	std::list<std::pair<double /* simtime */, LAddress::L3Type /* destination */> > routingPlanList; ///< routing plans of all vehicles configured by a xmlfile.
-	std::list<std::pair<double /* simtime */, double /* distance */> > warningPlanList; ///< warning plans of all vehicles configured by a xmlfile.
 	std::map<LAddress::L3Type, NeighborInfo*> neighbors; ///< a map from a vehicle to all its neighbor mobility info.
-	std::map<int /* GUID */, WaveShortMessage*> messageMemory; ///< a map from a message's GUID to the point to this message.
 	std::map<LAddress::L3Type, NeighborInfo*>::iterator itN; ///< an iterator used to traverse container neighbors.
+	std::map<int /* GUID */, WaveShortMessage*> messageMemory; ///< a map from a message's GUID to the point to this message.
 	///@}
 
 	/** @name messages. */
 	///@{
 	cMessage *sendBeaconEvt;       ///< self message event used to periodically send beacons.
 	cMessage *examineNeighborsEvt; ///< self message event used to examine the connectivity with neighbors.
-	cMessage *callRoutingEvt;  ///< self message event used to call routing request to certain destination determined by routingPlanList.
-	cMessage *callWarningEvt;  ///< self message event used to call warning notify to certain direction determined by warningPlanList.
 	cMessage *forgetMemoryEvt; ///< self message event used to periodically forget message received too long time ago in memory.
 	cMessage *recycleGUIDEvt;  ///< self message event used to periodically recycle GUIDs allocated before.
 	std::map<simtime_t, PacketExpiredMessage*> packetExpiresEvts; ///< self message events used to discard expired packets which exceed maxStoreTime from receiving it.

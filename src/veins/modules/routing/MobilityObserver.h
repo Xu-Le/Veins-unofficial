@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include "veins/base/utils/SimpleAddress.h"
 
 /**
- * @brief Observer class for recording the mobility of vehicles.
+ * @brief Observer class for recording the mobility of vehicles and UAVs.
  *
  * @author Xu Le
  * @ingroup routingLayer
@@ -31,8 +31,10 @@
 class MobilityObserver
 {
 public:
-	/** @brief Singleton method, return the only instance. */
+	/** @brief Singleton method, return the only instance of vehicles. */
 	static MobilityObserver* Instance();
+	/** @brief Singleton method, return the only instance of UAVs. */
+	static MobilityObserver* Instance2();
 
 	~MobilityObserver();
 
@@ -46,7 +48,8 @@ public:
 private:
 	MobilityObserver() {}
 
-	static MobilityObserver *_instance;
+	static MobilityObserver *_instance;  // for vehicles.
+	static MobilityObserver *_instance2; // for UAVs.
 
 public:
 	std::map<LAddress::L3Type, Coord> globalPosition;

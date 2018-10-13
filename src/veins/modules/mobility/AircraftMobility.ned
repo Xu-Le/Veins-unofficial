@@ -25,5 +25,11 @@ simple AircraftMobility extends BaseMobility
 	parameters:
 		@class(AircraftMobility);
 		@display("i=block/cogwheel");
+		bool staticTrajectory = default(true);
+		bool circularTrajectory = default(false);
+		double trajectoryRadius = default(50m) @unit(m); // radius of the circle if using circular trajectory
+		double flyingSpeed = default(5); // constant flying speed if using circular trajectory
 		double updateInterval = default(1s) @unit(s);
+
+		xml trajectory;
 }

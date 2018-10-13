@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016-2018 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,72 +16,86 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include "veins/modules/rsu/BaseRSU.h"
+#include "veins/modules/uav/BaseUAV.h"
 
-void BaseRSU::initialize(int stage)
+const simsignalwrap_t BaseUAV::mobilityStateChangedSignal = simsignalwrap_t(MIXIM_SIGNAL_MOBILITY_CHANGE_NAME);
+
+void BaseUAV::initialize(int stage)
 {
 	BaseApplLayer::initialize(stage);
 
 	if (stage == 0)
 	{
-		wiredIn = findGate("wiredIn");
-		wiredOut = findGate("wiredOut");
-		westIn = findGate("westIn");
-		westOut = findGate("westOut");
-		eastIn = findGate("eastIn");
-		eastOut = findGate("eastOut");
-		westDist = par("westDistance").longValue();
-		eastDist = par("eastDistance").longValue();
-		wiredHeaderLength = par("wiredHeaderLength").longValue();
+		myAddr += UAV_ADDRESS_OFFSET;
 
-		myAddr += RSU_ADDRESS_OFFSET;
-
-		curPosition.x = par("positionX").doubleValue();
-		curPosition.y = par("positionY").doubleValue();
-		curPosition.z = par("positionZ").doubleValue();
-
+		mobility = FindModule<AircraftMobility*>::findSubModule(getParentModule());
+		ASSERT(mobility);
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
 		ASSERT(annotations);
+
+		MobilityObserver::Instance2()->insert(myAddr, Coord::ZERO, Coord::ZERO);
 
 		V2XRadius = BaseConnectionManager::maxInterferenceDistance;
 		U2URadius = BaseConnectionManager::maxInterferenceDistance2;
 
 		dataOnSch = par("dataOnSch").boolValue();
 
-		maxHopConstraint = par("maxHopConstraint").longValue();
-		whichSide = par("whichSide").longValue();
+		beaconLengthBits = par("beaconLengthBits").longValue();
+		beaconPriority = par("beaconPriority").longValue();
 
+		beaconInterval = par("beaconInterval").doubleValue();
 		examineVehiclesInterval = par("examineVehiclesInterval").doubleValue();
-		forgetMemoryInterval = par("forgetMemoryInterval").doubleValue();
+		examineNeighborsInterval = par("examineNeighborsInterval").doubleValue();
 		vehicleElapsed = par("vehicleElapsed").doubleValue();
-		memoryElapsed = par("memoryElapsed").doubleValue();
+		neighborElapsed = par("neighborElapsed").doubleValue();
 
-		examineVehiclesEvt = new cMessage("examine vehicles evt", RSUMessageKinds::EXAMINE_VEHICLES_EVT);
-		forgetMemoryEvt = new cMessage("forget memory evt", RSUMessageKinds::FORGET_MEMORY_EVT); // derived classes schedule it
+		findHost()->subscribe(mobilityStateChangedSignal, this);
+
+		sendUavBeaconEvt = new cMessage("send uav beacon evt", UAVMessageKinds::SEND_UAV_BEACON_EVT);
+		examineVehiclesEvt = new cMessage("examine vehicles evt", UAVMessageKinds::EXAMINE_VEHICLES_EVT);
+		examineNeighborsEvt = new cMessage("examine neighbors evt", UAVMessageKinds::EXAMINE_NEIGHBORS_EVT);
+		scheduleAt(simTime() + dblrand()*beaconInterval, sendUavBeaconEvt);
 		scheduleAt(simTime() + dblrand()*examineVehiclesInterval, examineVehiclesEvt);
+		scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
 	}
 }
 
-void BaseRSU::finish()
+void BaseUAV::finish()
 {
-	EV << "base RSU module finish ..." << std::endl;
+	EV << "base UAV module finish ..." << std::endl;
+
+	MobilityObserver::Instance2()->erase(myAddr);
 
 	// clear containers
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
 		delete itV->second;
 	vehicles.clear();
-	messageMemory.clear();
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+		delete itN->second;
+	neighbors.clear();
 
 	// delete handle self message
+	cancelAndDelete(sendUavBeaconEvt);
 	cancelAndDelete(examineVehiclesEvt);
-	cancelAndDelete(forgetMemoryEvt);
+	cancelAndDelete(examineNeighborsEvt);
+
+	findHost()->unsubscribe(mobilityStateChangedSignal, this);
 
 	BaseLayer::finish();
 }
 
-void BaseRSU::handleMessage(cMessage *msg)
+void BaseUAV::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
+{
+	Enter_Method_Silent();
+
+	if (signalID == mobilityStateChangedSignal)
+		handleMobilityUpdate(obj);
+}
+
+/////////////////////////    protected implementations    /////////////////////////
+void BaseUAV::handleMessage(cMessage *msg)
 {
 	if (msg->isSelfMessage())
 		handleSelfMsg(msg);
@@ -101,44 +115,32 @@ void BaseRSU::handleMessage(cMessage *msg)
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_CONTROL, msg);
 		handleLowerControl(msg);
 	}
-	else if (msg->getArrivalGateId() == wiredIn)
-	{
-		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
-		handleWiredMsg(wiredMsg);
-		DELETE_SAFELY(wiredMsg);
-	}
-	else if (msg->getArrivalGateId() == westIn)
-	{
-		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
-		handleWestMsg(wiredMsg);
-		DELETE_SAFELY(wiredMsg);
-	}
-	else if (msg->getArrivalGateId() == eastIn)
-	{
-		WiredMessage *wiredMsg = dynamic_cast<WiredMessage*>(msg);
-		handleEastMsg(wiredMsg);
-		DELETE_SAFELY(wiredMsg);
-	}
 	else if (msg->getArrivalGateId() == -1)
 		throw cRuntimeError("No self message and no gateID! Check configuration.");
 	else
 		throw cRuntimeError("Unknown gateID! Check configuration or override handleMessage().");
 }
 
-void BaseRSU::handleSelfMsg(cMessage *msg)
+void BaseUAV::handleSelfMsg(cMessage *msg)
 {
 	switch (msg->getKind())
 	{
-	case RSUMessageKinds::EXAMINE_VEHICLES_EVT:
+	case UAVMessageKinds::SEND_UAV_BEACON_EVT:
+	{
+		sendUavBeacon();
+		scheduleAt(simTime() + beaconInterval, sendUavBeaconEvt);
+		break;
+	}
+	case UAVMessageKinds::EXAMINE_VEHICLES_EVT:
 	{
 		examineVehicles();
 		scheduleAt(simTime() + examineVehiclesInterval, examineVehiclesEvt);
 		break;
 	}
-	case RSUMessageKinds::FORGET_MEMORY_EVT:
+	case UAVMessageKinds::EXAMINE_NEIGHBORS_EVT:
 	{
-		forgetMemory();
-		scheduleAt(simTime() + forgetMemoryInterval, forgetMemoryEvt);
+		examineNeighbors();
+		scheduleAt(simTime() + examineNeighborsInterval, examineNeighborsEvt);
 		break;
 	}
 	default:
@@ -146,17 +148,24 @@ void BaseRSU::handleSelfMsg(cMessage *msg)
 	}
 }
 
-void BaseRSU::handleLowerMsg(cMessage *msg)
+void BaseUAV::handleLowerMsg(cMessage *msg)
 {
 	if (strcmp(msg->getName(), "beacon") == 0)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
-	else if (strcmp(msg->getName(), "warning") == 0)
-		EV << "RSU doesn't relay warning message received from vehicles.\n";
+	else if (strcmp(msg->getName(), "uavBeacon") == 0)
+		DYNAMIC_CAST_CMESSAGE(UavBeacon, uavBeacon)
 	else
-		EV << "unknown message (" << msg->getName() << ") received.\n";
+		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseUAV::handleMobilityUpdate(cObject *obj)
+{
+	mobility->getMove(curPosition, curSpeed);
+	MobilityObserver::Instance2()->update(myAddr, curPosition, curSpeed);
+	EV << "position: " << curPosition.info() << ", speed: " << curSpeed << std::endl;
+}
+
+void BaseUAV::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
@@ -167,21 +176,31 @@ void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channe
 	if (channel == type_CCH)
 		wsm->setChannelNumber(Channels::CCH);
 	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel.
 
 	wsm->setPriority(priority);
 	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
 	wsm->setSenderPos(curPosition);
+	wsm->setSenderSpeed(curSpeed);
 	wsm->setTimestamp(simTime());
 }
 
-void BaseRSU::sendWSM(WaveShortMessage *wsm)
+void BaseUAV::sendWSM(WaveShortMessage *wsm)
 {
 	sendDelayedDown(wsm, individualOffset);
 }
 
-void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
+void BaseUAV::sendUavBeacon()
+{
+	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at BaseUAV at " << simTime() << std::endl;
+	UavBeaconMessage *uavBeaconMsg = new UavBeaconMessage("uavBeacon");
+	prepareWSM(uavBeaconMsg, beaconLengthBits, t_channel::type_CCH, beaconPriority, -1);
+	decorateUavBeacon(uavBeaconMsg);
+	sendWSM(uavBeaconMsg);
+}
+
+void BaseUAV::onBeacon(BeaconMessage *beaconMsg)
 {
 	EV << logName() << ": onBeacon!\n";
 
@@ -211,7 +230,29 @@ void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
 #endif
 }
 
-void BaseRSU::examineVehicles()
+void BaseUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
+{
+	EV << logName() << ": onUavBeacon!\n";
+
+	LAddress::L3Type sender = uavBeaconMsg->getSenderAddress(); // alias
+	NeighborInfo *neighborInfo = nullptr;
+	if ((itN = neighbors.find(sender)) != neighbors.end()) // update old record
+	{
+		EV << "    sender [" << sender << "] is an old neighbor, update its info.\n";
+		neighborInfo = itN->second;
+		neighborInfo->pos = uavBeaconMsg->getSenderPos();
+		neighborInfo->speed = uavBeaconMsg->getSenderSpeed();
+		neighborInfo->receivedAt = simTime();
+	}
+	else // insert new record
+	{
+		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
+		neighborInfo = new NeighborInfo(uavBeaconMsg->getSenderPos(), uavBeaconMsg->getSenderSpeed(), simTime());
+		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
+	}
+}
+
+void BaseUAV::examineVehicles()
 {
 	double curTime = simTime().dbl(); // alias
 	for (itV = vehicles.begin(); itV != vehicles.end();)
@@ -228,18 +269,19 @@ void BaseRSU::examineVehicles()
 	}
 }
 
-void BaseRSU::forgetMemory()
+void BaseUAV::examineNeighbors()
 {
 	double curTime = simTime().dbl(); // alias
-	for (std::map<int, simtime_t>::iterator iter = messageMemory.begin(); iter != messageMemory.end();)
+	for (itN = neighbors.begin(); itN != neighbors.end();)
 	{
-		if (curTime - iter->second.dbl() > memoryElapsed)
+		if ( curTime - itN->second->receivedAt.dbl() > neighborElapsed )
 		{
-			EV << logName() << " forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
-			messageMemory.erase(iter++);
+			EV << logName() << " disconnected from neighbor[" << itN->first << "], delete its info.\n";
+			/* derived class's extension write here before it is deleted */
+			delete itN->second;
+			neighbors.erase(itN++);
 		}
 		else
-			++iter;
+			++itN;
 	}
 }
-

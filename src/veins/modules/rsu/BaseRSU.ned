@@ -29,18 +29,12 @@ simple BaseRSU extends BaseApplLayer
 	double positionY;
 	double positionZ;
 
+	bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
+
 	int westDistance; // distance between self and west neighbor RSU
 	int eastDistance; // distance between self and east neighbor RSU
 
-	bool sendWarnings = default(true);  // whether this RSU is at work
-	bool helpRoutings = default(false); // whether this RSU will help vehicle rebroadcast routing messages.
-	bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
-
 	int wiredHeaderLength = 224bit @unit(bit); // header length of the wired IP and UDP packet
-	int warningLengthBits = default(960bit) @unit(bit); // the length of a warning packet
-	int warningPriority = default(0); // the access category of the warning messages
-	int dataLengthBits = default(18272bit) @unit(bit); //the length of a data packet 8 * (2312-20-8)
-	int dataPriority = default(3); //the access category for data packets
 	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint
 	int whichSide = default(0); // which side direction relative to road this RSU locate
 

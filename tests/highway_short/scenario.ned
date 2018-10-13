@@ -25,11 +25,13 @@ import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.BaseServer;
 import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
+import org.car2x.veins.nodes.UAV;
 
 network scenario extends Scenario
 {
 	parameters:
 		int numRSU = 3; // number of RSUs
+		int numUAV = 2; // number of UAVs
 
 	submodules:
 		BS: BaseStation {
@@ -45,6 +47,9 @@ network scenario extends Scenario
 		}
 		dummyRSU: DummyRSU {
 			@display("p=$posX,$posY");
+		}
+		uav[numUAV]: UAV {
+			@display("p=$posX,$posY;b=10,10,oval");
 		}
 
 	connections:

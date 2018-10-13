@@ -31,15 +31,24 @@ public:
 	virtual void initialize(int) override;
 	virtual void finish() override;
 
+	void getMove(Coord& pos, Coord& speed);
+	void setMove(Coord dir, double speed, bool keepCurPos=true, Coord pos=Coord::ZERO);
+
 private:
 	void makeMove() override;
 	void fixIfHostGetsOutside() override;
 
+	/** @brief initialize trajectory through configured xmlfile. */
+	void initializeTrajectory(cXMLElement *xmlConfig);
+	/** @brief initialize circular trajectory. */
+	void initializeCircularTrajectory(double R, double v);
+
 private:
-	cOutVector currentPosXVec;  ///< vector plotting posx
-	cOutVector currentPosYVec;  ///< vector plotting posy
-	cOutVector currentPosZVec;  ///< vector plotting posz
-	cOutVector currentSpeedVec; ///< vector plotting speed
+	bool staticTrajectory;   ///< use static trajectory specified by std::list<> trajectory.
+	bool circularTrajectory; ///< use circular trajectory.
+	std::list<std::pair<Coord, double> > trajectory; ///< trajectory of the aircraft.
+	std::list<std::pair<Coord, double> >::iterator itTraj;  ///< iterator of std::list<> trajectory.
+	std::list<std::pair<Coord, double> >::iterator itTraj2; ///< itTraj2 == ++itTraj.
 };
 
 #endif /* __AIRCRAFTMOBILITY_H__ */

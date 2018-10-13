@@ -12,9 +12,9 @@
 	</Decider>
 	<RoutingPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<RoutingPlan type="4">
+		<RoutingPlan type="13">
 			<parameter name="simtime" type="double" value="90.1"/>
-			<parameter name="receiver" type="long" value="16"/>
+			<parameter name="receiver" type="long" value="10"/>
 		</RoutingPlan>
 	</RoutingPlans>
 	<WarningPlans>
