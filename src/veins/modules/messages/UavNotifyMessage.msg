@@ -26,5 +26,7 @@ class noncobject AccessHopList;
 
 packet UavNotifyMessage extends WaveShortMessage
 {
+    bool acknowledgment; // whether this message is an acknowledgment
+    long receiver = -1; // destination node
 	AccessHopList hopList; // access hop list from the originator UAV to the RSU
 }

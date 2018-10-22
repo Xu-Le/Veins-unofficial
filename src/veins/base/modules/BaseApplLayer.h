@@ -138,6 +138,7 @@ protected:
 	LAddress::L3Type myAddr; ///< network layer address.
     int headerLength; ///< the length of application packet header measured in bits.
     simtime_t individualOffset; ///< individual offset of time delay which measures a vehicle's or RSU's handling speed of messages.
+    cModule *rootModule; ///< store the pointer to system module for convenience.
 };
 
 #endif

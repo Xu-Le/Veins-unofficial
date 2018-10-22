@@ -39,6 +39,7 @@ void BaseApplLayer::initialize(int stage)
         headerLength = par("headerLength").longValue();
         double maxOffset = par("maxOffset").doubleValue();
         individualOffset = maxOffset;
+        rootModule = cSimulation::getActiveSimulation()->getSystemModule();
     }
 }
 

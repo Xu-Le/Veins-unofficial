@@ -30,4 +30,12 @@ tests/traci
 tests/netedit.exe.lnk
 tests/sumo-gui.exe.lnk
 
-/examples
+examples/veins
+examples/bologna/**/results
+examples/bologna/**/.cmdenv-log
+examples/bologna/**/.tkenvrc
+examples/bologna/**/out.tmp
+examples/bologna/**/err.tmp
+examples/bologna/**/*.txt
+examples/bologna/**/*.csv
+examples/bologna/**/General.anf

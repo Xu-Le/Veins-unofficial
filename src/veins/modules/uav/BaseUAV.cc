@@ -17,8 +17,10 @@
 //
 
 #include "veins/modules/uav/BaseUAV.h"
+#include "veins/modules/uav/DeployStatisticCollector.h"
 
 const simsignalwrap_t BaseUAV::mobilityStateChangedSignal = simsignalwrap_t(MIXIM_SIGNAL_MOBILITY_CHANGE_NAME);
+const simsignalwrap_t BaseUAV::optimalityCalculationSignal = simsignalwrap_t("optimalityCalculation");
 
 void BaseUAV::initialize(int stage)
 {
@@ -52,6 +54,7 @@ void BaseUAV::initialize(int stage)
 		neighborElapsed = par("neighborElapsed").doubleValue();
 
 		findHost()->subscribe(mobilityStateChangedSignal, this);
+		rootModule->subscribe(optimalityCalculationSignal, this);
 
 		sendUavBeaconEvt = new cMessage("send uav beacon evt", UAVMessageKinds::SEND_UAV_BEACON_EVT);
 		examineVehiclesEvt = new cMessage("examine vehicles evt", UAVMessageKinds::EXAMINE_VEHICLES_EVT);
@@ -82,6 +85,7 @@ void BaseUAV::finish()
 	cancelAndDelete(examineNeighborsEvt);
 
 	findHost()->unsubscribe(mobilityStateChangedSignal, this);
+	rootModule->unsubscribe(optimalityCalculationSignal, this);
 
 	BaseLayer::finish();
 }
@@ -92,6 +96,14 @@ void BaseUAV::receiveSignal(cComponent *source, simsignal_t signalID, cObject *o
 
 	if (signalID == mobilityStateChangedSignal)
 		handleMobilityUpdate(obj);
+	else if (signalID == optimalityCalculationSignal)
+	{
+		DeployStatisticCollector *collector = dynamic_cast<DeployStatisticCollector*>(obj);
+		std::list<LAddress::L3Type> vehicleList;
+		for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+			vehicleList.push_back(itV->first);
+		collector->importVehicles(vehicleList);
+	}
 }
 
 /////////////////////////    protected implementations    /////////////////////////

@@ -154,6 +154,7 @@ protected:
 	///@}
 
 	static const simsignalwrap_t mobilityStateChangedSignal;
+	static const simsignalwrap_t optimalityCalculationSignal;
 };
 
 #endif /* __BASEUAV_H__ */

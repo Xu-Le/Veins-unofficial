@@ -69,6 +69,20 @@ private:
 	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg);
+	/** @brief call-back method when neighbors updates. */
+	void onNeighborUpdate();
+
+	/** @brief examine whether neighbors still in connected. */
+	void examineNeighbors() override;
+	/** @brief actually updating position while flying towards a specified direction. */
+	void flying();
+	/** @brief decide how to move in the following several seconds. */
+	void decide();
+
+	/** @brief attain the average vehicle density of each sector. */
+	void attainSectorDensity();
+	/** @brief attain the number of forbidden sectors. */
+	int attainForbiddenSector();
 
 private:
 	/** @brief The derived class to store neighbor's information collected by beacon message. */
@@ -83,6 +97,8 @@ private:
 		double hopDist;  ///< distance to the next hop.
 	};
 
+	LAddress::L3Type rsuAddr; ///< address of the RSU.
+
 	int routingLengthBits; ///< the length of routing message measured in bits.
 	int routingPriority;   ///< the priority of routing message.
 	int dataLengthBits;    ///< the length of data message measured in bits.
@@ -91,9 +107,26 @@ private:
 	int remainingMs; ///< milliseconds left for the next deployment decision.
 
 	double hopDist;  ///< distance to the next hop.
+	double flyingSpeed; ///< constant flying speed.
+	double radTheta; ///< theta measured in rad.
+
+	Coord curDirection; ///< current direction flying towards.
+
+	SimTime flyingInterval; ///< the interval of actually updating position while flying.
+	SimTime decideInterval; ///< the interval of making a decision.
+	SimTime nextDecisionAt; ///< the time instant to make the next decision.
 
 	cMessage *flyingEvt; ///< self message event used to periodically flying a little distance.
 	cMessage *decideEvt; ///< self message event used to periodically make a deployment decision.
+
+	std::vector<double> sectorDensity; ///< average vehicle density of each sector.
+	std::vector<int> forbidden;        ///< indicate whether a sector is forbidden.
+	std::map<LAddress::L3Type, LAddress::L3Type> accessTable;    ///< store the next hop on accessing path to the RSU.
+	std::map<LAddress::L3Type, LAddress::L3Type>::iterator itAT; ///< an iterator used to traverse container accessTable.
+
+	static int sectorNum;    ///< the number of sectors.
+	static int stopFlyingMs; ///< when remainingMs reach this value, stop flying.
+	static double minGap;    ///< minimum distance between two UAVs.
 };
 
 #endif /* __ROUTINGUAV_H__ */

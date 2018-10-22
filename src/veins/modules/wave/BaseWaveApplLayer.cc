@@ -20,6 +20,8 @@
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
 
+#define MAINTAIN_LANE_ID    0
+
 const simsignalwrap_t BaseWaveApplLayer::mobilityStateChangedSignal = simsignalwrap_t(MIXIM_SIGNAL_MOBILITY_CHANGE_NAME);
 const simsignalwrap_t BaseWaveApplLayer::parkingStateChangedSignal = simsignalwrap_t(TRACI_SIGNAL_PARKING_CHANGE_NAME);
 
@@ -34,14 +36,16 @@ void BaseWaveApplLayer::initialize(int stage)
 		mobility = Veins::TraCIMobilityAccess().get(getParentModule());
 		traci = mobility->getCommandInterface();
 		traciVehicle = mobility->getVehicleCommandInterface();
+#if MAINTAIN_LANE_ID
 		laneId = mobility->getLaneId();
 		EV << "laneId start at: " << laneId << std::endl;
 		traciLane = mobility->getLaneCommandInterface(laneId);
+#endif
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
 		ASSERT(annotations);
-
+#if MAINTAIN_LANE_ID
 		std::list<Coord> roadheads = traciLane->getShape();
 		ASSERT( roadheads.size() == 2 ); // must be non-internal lane
 		fromRoadhead = roadheads.front();
@@ -49,6 +53,7 @@ void BaseWaveApplLayer::initialize(int stage)
 #if ROUTING_DEBUG_LOG
 		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
 		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
+#endif
 #endif
 		MobilityObserver::Instance()->insert(myAddr, Coord::ZERO, Coord::ZERO);
 
@@ -343,10 +348,10 @@ void BaseWaveApplLayer::forgetMemory()
 void BaseWaveApplLayer::handleMobilityUpdate(cObject *obj)
 {
 	// Veins::TraCIMobility* const mobility = check_and_cast<Veins::TraCIMobility*>(obj);
-	curAngle = mobility->getAngleRad();
 	curPosition = mobility->getCurrentPosition();
 	curSpeed = mobility->getCurrentSpeed();
-
+#if MAINTAIN_LANE_ID
+	curAngle = mobility->getAngleRad();
 	if (laneId != mobility->getLaneId())
 	{
 		laneId = mobility->getLaneId();
@@ -381,7 +386,7 @@ void BaseWaveApplLayer::handleMobilityUpdate(cObject *obj)
 	}
 	if (!mobility->getAtIntersection())
 		oldAngle = curAngle;
-
+#endif
 	MobilityObserver::Instance()->update(myAddr, curPosition, curSpeed);
 }
 

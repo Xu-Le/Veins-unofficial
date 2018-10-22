@@ -24,8 +24,15 @@ simple RoutingUAV extends BaseUAV
 {
 	@class(RoutingUAV);
 	@display("i=block/routing");
+
 	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
 	int routingPriority = default(2); // the access category of the routing messages
 	int dataLengthBits = default(18272bit) @unit(bit); // the length of a data packet 8 * (2312-20-8)
 	int dataPriority = default(3); // the access category for data packets
+	int flyingInterval = default(500ms) @unit(ms); // the interval of actually updating position while flying
+	int decideInterval = default(10000ms) @unit(ms); // the interval of making a decision
+	int stopFlyingMs = default(5000ms) @unit(ms); // when remainingMs reach this value, stop flying
+
+	double theta = default(45); // sector granularity measured in degree
+	double minGap = default(150); // minimum distance between two UAVs
 }

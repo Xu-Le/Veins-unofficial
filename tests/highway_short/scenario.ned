@@ -20,7 +20,7 @@ package org.car2x.veins.tests.highway_short;
 
 import org.car2x.veins.nodes.Scenario;
 
-import org.car2x.veins.modules.routing.WarningStatisticCollector;
+import org.car2x.veins.modules.uav.DeployStatisticCollector;
 import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.BaseServer;
 import org.car2x.veins.modules.rsu.DummyRSU;
@@ -30,10 +30,14 @@ import org.car2x.veins.nodes.UAV;
 network scenario extends Scenario
 {
 	parameters:
-		int numRSU = 3; // number of RSUs
+	    @signal[optimalityCalculation](type="DeployStatisticCollector");
+		int numRSU = 2; // number of RSUs
 		int numUAV = 2; // number of UAVs
 
 	submodules:
+	    deployCollector: DeployStatisticCollector {
+	        @display("p=700,24");
+	    }
 		BS: BaseStation {
 			@display("p=900,24");
 		}
@@ -48,9 +52,9 @@ network scenario extends Scenario
 		dummyRSU: DummyRSU {
 			@display("p=$posX,$posY");
 		}
-		uav[numUAV]: UAV {
-			@display("p=$posX,$posY;b=10,10,oval");
-		}
+		//uav[numUAV]: UAV {
+		//	@display("p=$posX,$posY;b=10,10,oval");
+		//}
 
 	connections:
 		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.cellularOut;
