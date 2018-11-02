@@ -42,6 +42,7 @@ public:
 		SEND_UAV_BEACON_EVT = LAST_BASE_RSU_MESSAGE_KIND,
 		EXAMINE_UAVS_EVT,
 		EMIT_UAV_EVT,
+		ATTAIN_DENSITY_EVT,
 		LAST_ROUTING_RSU_MESSAGE_KIND
 	};
 
@@ -78,6 +79,8 @@ private:
 	void examineUAVs();
 	/** @brief emit an UAV. */
 	void emitUAV();
+	/** @brief attain sector density. */
+	void attainDensity();
 
 private:
 	/** @brief The class to store UAV's information collected by UAV beacon message. */
@@ -100,20 +103,27 @@ private:
 
 	int curUavIndex; ///< the index of current UAV to be emitted.
 	int totalUavNum; ///< the total number of UAVs to be emitted.
+	int sectorNum;   ///< the number of sectors.
 
-	double beaconInterval;      ///< the interval of sending beacon message.
-	double examineUavsInterval; ///< the interval of examining the connectivity with UAVs.
-	double emitUavInterval;     ///< the interval of emitting UAVs.
-	double UavElapsed;          ///< the maximum time haven't receive message from UAVs leading to assume lose connectivity with it.
+	double radTheta; ///< theta measured in rad.
+	double averageDensity;  ///< average density of all sectors.
+	double densityDivision; ///< maximum sector density division by average sector density.
+
+	double beaconInterval;        ///< the interval of sending beacon message.
+	double examineUavsInterval;   ///< the interval of examining the connectivity with UAVs.
+	double emitUavInterval;       ///< the interval of emitting UAVs.
+	double attainDensityInterval; ///< the interval of attaining sector density.
+	double UavElapsed;            ///< the maximum time haven't receive message from UAVs leading to assume lose connectivity with it.
 
 	cMessage *sendUavBeaconEvt; ///< self message event used to periodically send UAV beacons.
 	cMessage *examineUavsEvt;   ///< self message event used to examine the connectivity with UAVs.
 	cMessage *emitUavEvt;       ///< self message event used to periodically emit UAVs.
+	cMessage *attainDensityEvt; ///< self message event used to periodically attain sector density.
 
 	std::map<LAddress::L3Type, UAVInfo*> UAVs; ///< a map from a UAV's identifier to all its mobility info.
 	std::map<LAddress::L3Type, UAVInfo*>::iterator itU; ///< an iterator used to traverse container UAVs.
-	std::map<LAddress::L3Type, LAddress::L3Type> accessTable;    ///< store the next hop on accessing path to the RSU.
-	std::map<LAddress::L3Type, LAddress::L3Type>::iterator itAT; ///< an iterator used to traverse container accessTable.
+	AccessTable accessTable;    ///< store the next hop on accessing path to the RSU.
+	AccessTable::iterator itAT; ///< an iterator used to traverse container accessTable.
 
 	static int uavIndexCounter; ///< self increasing counter.
 	static const simsignalwrap_t optimalityCalculationSignal;

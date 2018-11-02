@@ -24,7 +24,7 @@
 #define Epsilon    1e-8
 #define square(x)  (x) * (x)
 
-#define ROUTING_DEBUG_LOG         1
+#define ROUTING_DEBUG_LOG         0
 #define RSU_ADDRESS_OFFSET    10000
 #define UAV_ADDRESS_OFFSET    20000
 

@@ -34,6 +34,12 @@ void RoutingRSU::initialize(int stage)
 	{
 		MobilityObserver::Instance2()->insert(myAddr, curPosition, Coord::ZERO);
 
+		int theta = par("theta").longValue();
+		radTheta = M_PI * theta / 180.0;
+		sectorNum = 360 / theta;
+		averageDensity = 0.0;
+		densityDivision = 1.0;
+
 		beaconLengthBits = par("beaconLengthBits").longValue();
 		beaconPriority = par("beaconPriority").longValue();
 		routingLengthBits = par("routingLengthBits").longValue();
@@ -47,6 +53,7 @@ void RoutingRSU::initialize(int stage)
 		beaconInterval = par("beaconInterval").doubleValue();
 		examineUavsInterval = par("examineUavsInterval").doubleValue();
 		emitUavInterval = par("emitUavInterval").doubleValue();
+		attainDensityInterval = par("attainDensityInterval").doubleValue();
 		UavElapsed = par("UavElapsed").doubleValue();
 
 		rootModule->subscribe(optimalityCalculationSignal, this);
@@ -54,9 +61,11 @@ void RoutingRSU::initialize(int stage)
 		sendUavBeaconEvt = new cMessage("send uav beacon evt", RoutingRSUMessageKinds::SEND_UAV_BEACON_EVT);
 		examineUavsEvt = new cMessage("examine uavs evt", RoutingRSUMessageKinds::EXAMINE_UAVS_EVT);
 		emitUavEvt = new cMessage("emit uav evt", RoutingRSUMessageKinds::EMIT_UAV_EVT);
+		attainDensityEvt = new cMessage("attain density evt", RoutingRSUMessageKinds::ATTAIN_DENSITY_EVT);
 		scheduleAt(simTime() + dblrand()*beaconInterval, sendUavBeaconEvt);
 		scheduleAt(simTime() + dblrand()*examineUavsInterval, examineUavsEvt);
 		scheduleAt(SimTime(emitFirstUavAt, SIMTIME_S), emitUavEvt);
+		scheduleAt(simTime() + dblrand()*attainDensityInterval, attainDensityEvt);
 		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 	}
 }
@@ -75,6 +84,7 @@ void RoutingRSU::finish()
 	cancelAndDelete(sendUavBeaconEvt);
 	cancelAndDelete(examineUavsEvt);
 	cancelAndDelete(emitUavEvt);
+	cancelAndDelete(attainDensityEvt);
 
 	rootModule->unsubscribe(optimalityCalculationSignal, this);
 
@@ -118,6 +128,12 @@ void RoutingRSU::handleSelfMsg(cMessage *msg)
 			scheduleAt(simTime() + emitUavInterval, emitUavEvt);
 		break;
 	}
+	case RoutingRSUMessageKinds::ATTAIN_DENSITY_EVT:
+	{
+		attainDensity();
+		scheduleAt(simTime() + attainDensityInterval, attainDensityEvt);
+		break;
+	}
 	default:
 		BaseRSU::handleSelfMsg(msg);
 	}
@@ -142,6 +158,8 @@ void RoutingRSU::sendUavBeacon()
 	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at RoutingRSU at " << simTime() << std::endl;
 	UavBeaconMessage *uavBeaconMsg = new UavBeaconMessage("uavBeacon");
 	prepareWSM(uavBeaconMsg, beaconLengthBits, t_channel::type_CCH, beaconPriority, -1);
+	uavBeaconMsg->setAverageDensity(averageDensity);
+	uavBeaconMsg->setDensityDivision(densityDivision);
 	sendWSM(uavBeaconMsg);
 }
 
@@ -176,14 +194,21 @@ void RoutingRSU::onUavNotify(UavNotifyMessage *uavNotifyMsg)
 
 	AccessHopList &path = uavNotifyMsg->getHopList();
 	for (AccessHopList::iterator it = path.begin(); it != path.end(); ++it)
+	{
+		// any original direct previous hops that are not neighbors anymore need to be updated to this one
+		if (accessTable.find(*it) != accessTable.end())
+			for (itAT = accessTable.begin(); itAT != accessTable.end(); ++itAT)
+				if (itAT->second == accessTable[*it] && UAVs.find(itAT->second) == UAVs.end())
+					itAT->second = path.back();
 		accessTable[*it] = path.back(); // path.back() is previous hop
+	}
 	uavNotifyMsg->setReceiver(path.back());
 	uavNotifyMsg->setAcknowledgment(true);
 	// what to send is a duplication of uavNotifyMsg, because it will be deleted in BaseRSU::handleMessage()
 	UavNotifyMessage *dupUavNotifyMsg = new UavNotifyMessage(*uavNotifyMsg);
 	sendWSM(dupUavNotifyMsg);
 
-	EV << logName() << " receive notify at " << simTime() << ", routing table:\n";
+	EV << logName() << " receives notify at " << simTime() << ", routing table:\n";
 	for (itAT = accessTable.begin(); itAT != accessTable.end(); ++itAT)
 		EV << "  " << itAT->first << " -> " << itAT->second << std::endl;
 }
@@ -255,4 +280,38 @@ void RoutingRSU::emitUAV()
 	mod->callInitialize();
 
 	++uavIndexCounter;
+}
+
+void RoutingRSU::attainDensity()
+{
+	const double closeMulitplier = 1.0;
+	std::vector<double> sectorDensity(sectorNum, 0.0);
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+	{
+		VehicleInfo *veh = itV->second;
+		double angle = acos((veh->pos.x - curPosition.x) / curPosition.distance(veh->pos));
+		if (veh->pos.y < curPosition.y)
+			angle = 2*M_PI - angle;
+		int sector = angle / radTheta;
+		double coverCoefficient = 1.0, closeCoefficient = 0.0;
+		for (itU = UAVs.begin(); itU != UAVs.end(); ++itU)
+			if ((closeCoefficient = veh->pos.distance(itU->second->pos)/V2XRadius) < 1.0)
+				coverCoefficient += 1.0 + closeMulitplier*(1.0 - closeCoefficient);
+		sectorDensity[sector] += 1.0/coverCoefficient;
+	}
+	EV << "sector density:";
+	for (size_t k = 0; k < sectorDensity.size(); ++k)
+		EV << ' ' << sectorDensity[k];
+
+	double maxSectorDensity = sectorDensity[0];
+	averageDensity = sectorDensity[0];
+	for (int i = 1; i < sectorNum; ++i)
+	{
+		averageDensity += sectorDensity[i];
+		if (maxSectorDensity < sectorDensity[i])
+			maxSectorDensity = sectorDensity[i];
+	}
+	averageDensity /= sectorNum;
+	densityDivision = fabs(averageDensity) > Epsilon ? maxSectorDensity/averageDensity : 1000000.0;
+	EV << "\naverage density: " << averageDensity << ", density division: " << densityDivision << std::endl;
 }

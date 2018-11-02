@@ -34,9 +34,11 @@ simple RoutingRSU extends BaseRSU
 
 	int totalUavNum = default(1); // the total number of UAV to be emitted per RSU
 	int emitFirstUavAt = default(50); // when to emit the first UAV
+	int theta = default(45); // sector granularity measured in degree
 
 	double beaconInterval = default(1s) @unit(s); // the intervall between 2 beacon messages
 	double examineUavsInterval = default(2s) @unit(s); // the intervall between 2 examine UAV whether in communication range messages
-	double emitUavInterval = default(120s) @unit(s); // the interval between 2 emit UAV events
+	double emitUavInterval = default(60s) @unit(s); // the interval between 2 emit UAV events
+	double attainDensityInterval = default(5s) @unit(s); // the interval between 2 attain density events
 	double UavElapsed = default(3s) @unit(s); // if exceeds this time, assuming has lose connectivity with the UAV
 }

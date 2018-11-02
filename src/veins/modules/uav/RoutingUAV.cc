@@ -16,6 +16,7 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
+#include <algorithm>
 #include "veins/modules/uav/RoutingUAV.h"
 
 Define_Module(RoutingUAV);
@@ -24,6 +25,7 @@ extern std::map<LAddress::L3Type, LAddress::L3Type> rsuBelongingMap;
 
 int RoutingUAV::sectorNum = 0;
 int RoutingUAV::stopFlyingMs = 0;
+double RoutingUAV::radTheta = 0.0;
 double RoutingUAV::minGap = 0.0;
 
 void RoutingUAV::initialize(int stage)
@@ -36,9 +38,11 @@ void RoutingUAV::initialize(int stage)
 
 		hop = 1;
 		hopDist = 0.0;
-		double theta = par("theta").doubleValue();
-		radTheta = theta / 180.0 * M_PI;
+		int theta = par("theta").longValue();
+		radTheta = M_PI * theta / 180.0;
 		sectorNum = 360 / theta;
+		averageDensity = 0.0;
+		densityDivision = 1.0;
 		stopFlyingMs = par("stopFlyingMs").longValue();
 		minGap = par("minGap").doubleValue();
 
@@ -50,9 +54,10 @@ void RoutingUAV::initialize(int stage)
 		curDirection = Coord::ZERO;
 		sectorDensity.resize(sectorNum, 0.0);
 		forbidden.resize(sectorNum, 0);
+		// accessTable.insert(std::pair<LAddress::L3Type, LAddress::L3Type>(rsuAddr, rsuAddr));
 
 		flyingInterval = SimTime(par("flyingInterval").longValue(), SIMTIME_MS);
-		decideInterval = SimTime(par("decideInterval").longValue(), SIMTIME_MS);
+		nextDecisionAt = decideInterval = SimTime(par("decideInterval").longValue(), SIMTIME_MS);
 
 		flyingEvt = new cMessage("flying evt", RoutingUAVMessageKinds::FLYING_EVT);
 		decideEvt = new cMessage("decide evt", RoutingUAVMessageKinds::DECIDE_EVT);
@@ -113,10 +118,11 @@ void RoutingUAV::handleLowerMsg(cMessage *msg)
 
 void RoutingUAV::decorateUavBeacon(UavBeaconMessage *uavBeaconMsg)
 {
-	SimTime remainingTime(nextDecisionAt - simTime());
 	uavBeaconMsg->setHop(hop);
-	uavBeaconMsg->setRemainingMs(remainingTime.inUnit(SIMTIME_MS)); // do not use remainingMs here
+	uavBeaconMsg->setDecideAt(nextDecisionAt - decideInterval);
 	uavBeaconMsg->setHopDist(hopDist);
+	uavBeaconMsg->setAverageDensity(averageDensity);
+	uavBeaconMsg->setDensityDivision(densityDivision);
 }
 
 void RoutingUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
@@ -125,29 +131,41 @@ void RoutingUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
 
 	LAddress::L3Type sender = uavBeaconMsg->getSenderAddress(); // alias
 	RoutingNeighborInfo *neighborInfo = nullptr;
-	bool nbHopUpdates = true;
 	if ((itN = neighbors.find(sender)) != neighbors.end()) // update old record
 	{
 		EV << "    sender [" << sender << "] is an old neighbor, update its info.\n";
-		NeighborInfo *baseNbInfo = itN->second;
-		neighborInfo = dynamic_cast<RoutingNeighborInfo*>(baseNbInfo);
-		nbHopUpdates = neighborInfo->hop != uavBeaconMsg->getHop();
+		neighborInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
 		neighborInfo->pos = uavBeaconMsg->getSenderPos();
 		neighborInfo->speed = uavBeaconMsg->getSenderSpeed();
 		neighborInfo->receivedAt = simTime();
 		neighborInfo->hop = uavBeaconMsg->getHop();
-		neighborInfo->remainingMs = uavBeaconMsg->getRemainingMs();
+		neighborInfo->decideAt = uavBeaconMsg->getDecideAt();
 		neighborInfo->hopDist = uavBeaconMsg->getHopDist();
+		neighborInfo->averageDensity = uavBeaconMsg->getAverageDensity();
+		neighborInfo->densityDivision = uavBeaconMsg->getDensityDivision();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
-		neighborInfo = new RoutingNeighborInfo(uavBeaconMsg->getSenderPos(), uavBeaconMsg->getSenderSpeed(), simTime(),
-				uavBeaconMsg->getHop(), uavBeaconMsg->getRemainingMs(), uavBeaconMsg->getHopDist());
+		neighborInfo = new RoutingNeighborInfo(uavBeaconMsg->getSenderPos(), uavBeaconMsg->getSenderSpeed(), simTime(), uavBeaconMsg->getHop(),
+			uavBeaconMsg->getDecideAt(), uavBeaconMsg->getHopDist(), uavBeaconMsg->getAverageDensity(), uavBeaconMsg->getDensityDivision());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
-	if (nbHopUpdates)
-		onNeighborUpdate();
+	onNeighborUpdate();
+
+	EV << "display all neighbors' information:\n";
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+	{
+		NeighborInfo *baseNbInfo = itN->second;
+		neighborInfo = dynamic_cast<RoutingNeighborInfo*>(baseNbInfo);
+		if (itN->first >= UAV_ADDRESS_OFFSET)
+			EV << "uav[" << itN->first - UAV_ADDRESS_OFFSET << "]:  ";
+		else
+			EV << "rsu[" << itN->first - RSU_ADDRESS_OFFSET << "]:  ";
+		EV << "decideAt: " << neighborInfo->decideAt << ", hop: " << neighborInfo->hop << ", hopDist: " << neighborInfo->hopDist
+			<< ", density: (" << neighborInfo->averageDensity << ',' << neighborInfo->densityDivision << ")\n";
+	}
+	EV << std::endl;
 }
 
 void RoutingUAV::onUavNotify(UavNotifyMessage *uavNotifyMsg)
@@ -171,11 +189,39 @@ void RoutingUAV::onUavNotify(UavNotifyMessage *uavNotifyMsg)
 	}
 	else
 	{
+		LAddress::L3Type prevHop = path.back(); // path.back() is previous hop
+		AccessTable &prevAccessTable = uavNotifyMsg->getTable();
+		// delete indirect previous hops that cannot be routed from the direct previous hop anymore
+		for (itAT = accessTable.begin(); itAT != accessTable.end();)
+		{
+			if (itAT->second == prevHop && itAT->first != itAT->second && prevAccessTable.find(itAT->first) == prevAccessTable.end())
+				accessTable.erase(itAT++);
+			else
+				++itAT;
+		}
+		// insert indirect previous hops that can be routed from the direct previous hop
+		for (itAT = prevAccessTable.begin(); itAT != prevAccessTable.end(); ++itAT)
+		{
+			if (itAT->first != rsuAddr && itAT->first != myAddr && accessTable.find(itAT->first) == accessTable.end() && neighbors.find(itAT->first) == neighbors.end())
+			{
+				int nextHop = neighbors.find(itAT->second) != neighbors.end() ? itAT->second : prevHop;
+				accessTable.insert(std::pair<LAddress::L3Type, LAddress::L3Type>(itAT->first, nextHop));
+			}
+		}
 		for (AccessHopList::iterator it = path.begin(); it != path.end(); ++it)
-			accessTable[*it] = path.back(); // path.back() is previous hop
+		{
+			// any original direct previous hops that are not neighbors anymore need to be updated to this one
+			if (accessTable.find(*it) != accessTable.end())
+				for (itAT = accessTable.begin(); itAT != accessTable.end(); ++itAT)
+					if (itAT->second == accessTable[*it] && neighbors.find(itAT->second) == neighbors.end())
+						itAT->second = prevHop;
+			accessTable[*it] = prevHop;
+		}
 		path.push_back(myAddr);
 		uavNotifyMsg->setReceiver(accessTable[rsuAddr]);
-		EV << logName() << " notify at " << simTime() << ", routing table:\n";
+		if (uavNotifyMsg->getReceiver() == rsuAddr) // RSU do not need previous hop's access table
+			uavNotifyMsg->getTable().clear();
+		EV << logName() << " relays notify at " << simTime() << ", routing table:\n";
 		for (itAT = accessTable.begin(); itAT != accessTable.end(); ++itAT)
 			EV << "  " << itAT->first << " -> " << itAT->second << std::endl;
 	}
@@ -200,6 +246,7 @@ void RoutingUAV::onNeighborUpdate()
 {
 	int minNbHop = 1000, nextHop = -1;
 	double minNbDist = 100000.0;
+	LAddress::L3Type originalNext = accessTable[rsuAddr];
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 	{
 		RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
@@ -213,26 +260,47 @@ void RoutingUAV::onNeighborUpdate()
 		}
 	}
 	hopDist = minNbDist;
-	accessTable[rsuAddr] = nextHop;
-	if (hop != minNbHop + 1)
+	bool needNotify = hop != minNbHop + 1 || originalNext != nextHop;
+	if (needNotify)
 	{
 		UavNotifyMessage *uavNotifyMsg = new UavNotifyMessage("uavNotify");
 		prepareWSM(uavNotifyMsg, routingLengthBits, type_CCH, routingPriority, -1);
-		uavNotifyMsg->setReceiver(accessTable[rsuAddr]);
+		uavNotifyMsg->setReceiver(nextHop);
 		uavNotifyMsg->getHopList().push_back(myAddr);
 		sendWSM(uavNotifyMsg);
-
+	}
+	hop = minNbHop + 1;
+	accessTable[rsuAddr] = nextHop;
+	if (needNotify)
+	{
 		EV << logName() << " notify at " << simTime() << ", routing table:\n";
 		for (itAT = accessTable.begin(); itAT != accessTable.end(); ++itAT)
 			EV << "  " << itAT->first << " -> " << itAT->second << std::endl;
 	}
-	hop = minNbHop + 1;
 }
 
 void RoutingUAV::examineNeighbors()
 {
 	size_t oldNum = neighbors.size();
-	BaseUAV::examineNeighbors();
+	double curTime = simTime().dbl(); // alias
+	for (itN = neighbors.begin(); itN != neighbors.end();)
+	{
+		if ( curTime - itN->second->receivedAt.dbl() > neighborElapsed )
+		{
+			EV << logName() << " disconnected from neighbor[" << itN->first << "], delete its info.\n";
+			for (itAT = accessTable.begin(); itAT != accessTable.end();)
+			{
+				if (itAT->first != rsuAddr && itAT->second == itN->first)
+					accessTable.erase(itAT++);
+				else
+					++itAT;
+			}
+			delete itN->second;
+			neighbors.erase(itN++);
+		}
+		else
+			++itN;
+	}
 
 	if (neighbors.size() != oldNum)
 		onNeighborUpdate();
@@ -251,20 +319,6 @@ void RoutingUAV::decide()
 	remainingMs = decideInterval.inUnit(SIMTIME_MS);
 
 	attainSectorDensity();
-	double averageDensity = sectorDensity[0], maxSectorDensity = sectorDensity[0];
-	for (int i = 1; i < sectorNum; ++i)
-	{
-		averageDensity += sectorDensity[i];
-		if (maxSectorDensity < sectorDensity[i])
-			maxSectorDensity = sectorDensity[i];
-	}
-	averageDensity /= sectorNum;
-	EV << ", average density: " << averageDensity << "\n";
-	if (maxSectorDensity < 2.0*averageDensity && averageDensity > 1.0)
-	{
-		EV << "sector density division " << maxSectorDensity/averageDensity << " below threshold 2.0" << std::endl;
-		return;
-	}
 
 	int forbiddenNum = attainForbiddenSector();
 	if (forbiddenNum == sectorNum)
@@ -273,10 +327,38 @@ void RoutingUAV::decide()
 		return;
 	}
 
+	int i = 0;
+	double maxSectorDensity = sectorDensity[0];
+	averageDensity = sectorDensity[0];
+	for (i = 1; i < sectorNum; ++i)
+	{
+		averageDensity += sectorDensity[i];
+		if (maxSectorDensity < sectorDensity[i])
+			maxSectorDensity = sectorDensity[i];
+	}
+	averageDensity /= sectorNum;
+	densityDivision = fabs(averageDensity) > Epsilon ? maxSectorDensity/averageDensity : 1000000.0;
+	std::vector<double> nbAverage, nbDivision;
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+	{
+		RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
+		nbAverage.push_back(nbInfo->averageDensity);
+		nbDivision.push_back(nbInfo->densityDivision);
+	}
+	int halfNbNum = static_cast<int>(nbAverage.size()) / 2;
+	std::nth_element(nbAverage.begin(), nbAverage.begin()+halfNbNum, nbAverage.end());
+	std::nth_element(nbDivision.begin(), nbDivision.begin()+halfNbNum, nbDivision.end(), std::greater<double>());
+	EV << "average density: " << averageDensity << ", density division: " << densityDivision << std::endl;
+	if (averageDensity > nbAverage[halfNbNum] && densityDivision < nbDivision[halfNbNum])
+	{
+		EV << "nb-mid average density: " << nbAverage[halfNbNum] << ", nb-mid density division: " << nbDivision[halfNbNum] << std::endl;
+		return;
+	}
+
 	// select an optimal moving direction
 	maxSectorDensity = 0.0;
 	int maxI = 0;
-	for (int i = 0; i < sectorNum; ++i)
+	for (i = 0; i < sectorNum; ++i)
 	{
 		if (forbidden[i] == 0 && maxSectorDensity < sectorDensity[i])
 		{
@@ -313,6 +395,7 @@ void RoutingUAV::attainSectorDensity()
 	EV << "sector density:";
 	for (size_t k = 0; k < sectorDensity.size(); ++k)
 		EV << ' ' << sectorDensity[k];
+	EV << std::endl;
 }
 
 int RoutingUAV::attainForbiddenSector()
@@ -332,7 +415,7 @@ int RoutingUAV::attainForbiddenSector()
 			nbGreater.push_back(nbInfo);
 	}
 	const Coord rsuPos = MobilityObserver::Instance2()->globalPosition[rsuAddr];
-	const double remainingFlyingDist = (remainingMs - stopFlyingMs)*flyingSpeed/1000.0;
+	const double remainingFlyingDist = (remainingMs - stopFlyingMs)/1000.0*flyingSpeed;
 	for (i = 0; i < sectorNum; ++i)
 	{
 		forbidden[i] = 0;
@@ -340,42 +423,60 @@ int RoutingUAV::attainForbiddenSector()
 		Coord dst(curPosition);
 		dst.x += remainingFlyingDist * cos(phi);
 		dst.y += remainingFlyingDist * sin(phi);
+		bool flag = false;
 		double dist2 = curPosition.sqrdist(rsuPos);
 		if (dist2 < minGap2) // boot process
 		{
-			forbidden[i] = dist2 > dst.sqrdist(rsuPos) ? 1 : 0;
+			flag = dst.sqrdist(rsuPos) < dist2; // moving more close to the RSU
+			forbidden[i] = flag ? 1 : 0;
+			if (flag)
+				continue;
+			for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
+				flag |= dst.sqrdist((*it)->pos) < minGap2;
+			forbidden[i] = flag ? 1 : 0;
+			if (flag)
+				continue;
+			for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
+				flag |= dst.sqrdist((*it)->pos) < minGap2;
+			forbidden[i] = flag ? 1 : 0;
+			// note that in boot process, RSU is the only neighbor in nbLess, thus no need to check nbLess
 			continue;
 		}
 		// case 1: leave any neighbor with greater hop count
-		bool flag = false;
 		for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
-			flag |= dst.distance((*it)->pos) > U2URadius - ((*it)->remainingMs - stopFlyingMs)*flyingSpeed/1000.0;
+			flag |= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
 		forbidden[i] = flag ? 1 : 0;
 		if (flag)
 			continue;
 		// case 2: leave all neighbors with less hop count
 		flag = true;
 		for (it = nbLess.begin(); it != nbLess.end(); ++it)
-			flag &= dst.distance((*it)->pos) > U2URadius - ((*it)->remainingMs - stopFlyingMs)*flyingSpeed/1000.0;
+			flag &= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
 		if (flag)
 		{
 			bool closest = true;
 			for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
-				if (dst.distance((*it)->pos) > U2URadius - ((*it)->remainingMs - stopFlyingMs)*flyingSpeed/1000.0 && (*it)->hopDist <= hopDist)
+				if (dst.distance((*it)->pos) < U2URadius - maxRelativeMoving((*it)->decideAt) && (*it)->hopDist < hopDist)
 					closest = false;
 			forbidden[i] = closest ? 1 : 0;
 			if (closest)
 				continue;
 		}
-		// case 3: move too close to neighbors or rsu
-		for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-		{
-			if (dst.sqrdist(itN->second->pos) < minGap2)
-			{
-				forbidden[i] = 1;
-				break;
-			}
-		}
+		// case 3: move too close to neighbors or RSU
+		flag = false;
+		for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
+			flag |= dst.sqrdist((*it)->pos) < minGap2;
+		forbidden[i] = flag ? 1 : 0;
+		if (flag)
+			continue;
+		for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
+			flag |= dst.sqrdist((*it)->pos) < minGap2;
+		forbidden[i] = flag ? 1 : 0;
+		if (flag)
+			continue;
+		for (it = nbLess.begin(); it != nbLess.end(); ++it)
+			flag |= dst.sqrdist((*it)->pos) < minGap2;
+		forbidden[i] = flag ? 1 : 0;
 	}
 	EV << "forbidden:";
 	int forbiddenNum = 0;
@@ -386,4 +487,16 @@ int RoutingUAV::attainForbiddenSector()
 	}
 	EV << std::endl;
 	return forbiddenNum;
+}
+
+double RoutingUAV::maxRelativeMoving(SimTime decideAt)
+{
+	if (decideAt == SimTime::ZERO) // only RSU do not set variable decideAt in the packet
+		return 0.0;
+	SimTime sinceDecide = simTime() - decideAt;
+	if (sinceDecide > decideInterval) // beacon message may not fresh enough
+		sinceDecide -= decideInterval;
+	int sinceDecideMs = sinceDecide.inUnit(SIMTIME_MS), flyingMs = decideInterval.inUnit(SIMTIME_MS) - stopFlyingMs;
+	int movingMs = sinceDecideMs < flyingMs ? flyingMs - sinceDecideMs : sinceDecideMs - flyingMs;
+	return flyingSpeed * movingMs / 1000.0;
 }

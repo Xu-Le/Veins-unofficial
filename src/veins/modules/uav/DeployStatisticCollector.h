@@ -19,6 +19,7 @@
 #ifndef __DEPLOYSTATISTICCOLLECTOR_H__
 #define __DEPLOYSTATISTICCOLLECTOR_H__
 
+#include "veins/base/modules/BaseWorldUtility.h"
 #include "veins/modules/routing/MobilityObserver.h"
 
 /**
@@ -44,6 +45,7 @@ public:
 	void initialize(int stage) override;
 	void finish() override;
 
+	/** @brief Called by RSU and UAVs when they receive optimalityCalculationSignal. */
 	void importVehicles(std::list<LAddress::L3Type>& vehicleList);
 
 private:
@@ -59,6 +61,8 @@ private:
 	SimTime calculateInterval; ///< the interval between 2 optimality calculation event.
 
 	cMessage *calculateEvt; ///< self message event used to periodically execute optimality calculation.
+
+	BaseWorldUtility *world; ///< pointing to module BaseWorldUtility.
 
 	cOutVector practicalVec;   ///< same as practical.
 	cOutVector theoreticalVec; ///< same as theoretical.

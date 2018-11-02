@@ -83,18 +83,22 @@ private:
 	void attainSectorDensity();
 	/** @brief attain the number of forbidden sectors. */
 	int attainForbiddenSector();
+	/** @brief attain the maximum possible moving distance of a neighbor. */
+	double maxRelativeMoving(SimTime decideAt);
 
 private:
 	/** @brief The derived class to store neighbor's information collected by beacon message. */
 	class RoutingNeighborInfo : public BaseUAV::NeighborInfo
 	{
 	public:
-		RoutingNeighborInfo(Coord& p, Coord& s, simtime_t ra, int h, int rm, double hd)
-			: BaseUAV::NeighborInfo(p, s, ra), hop(h), remainingMs(rm), hopDist(hd) {}
+		RoutingNeighborInfo(Coord& p, Coord& s, simtime_t ra, int h, simtime_t da, double hd, double ad, double dd)
+			: NeighborInfo(p, s, ra), hop(h), decideAt(da), hopDist(hd), averageDensity(ad), densityDivision(dd) {}
 
-		int hop;         ///< minimum hop count to the RSU.
-		int remainingMs; ///< milliseconds left for the next deployment decision.
-		double hopDist;  ///< distance to the next hop.
+		int hop;            ///< minimum hop count to the RSU.
+		simtime_t decideAt; ///< time instant when making the last deployment decision.
+		double hopDist;     ///< distance to the next hop.
+		double averageDensity;  ///< average density of all sectors.
+		double densityDivision; ///< maximum sector density division by average sector density.
 	};
 
 	LAddress::L3Type rsuAddr; ///< address of the RSU.
@@ -107,8 +111,9 @@ private:
 	int remainingMs; ///< milliseconds left for the next deployment decision.
 
 	double hopDist;  ///< distance to the next hop.
+	double averageDensity;  ///< average density of all sectors.
+	double densityDivision; ///< maximum sector density division by average sector density.
 	double flyingSpeed; ///< constant flying speed.
-	double radTheta; ///< theta measured in rad.
 
 	Coord curDirection; ///< current direction flying towards.
 
@@ -121,11 +126,12 @@ private:
 
 	std::vector<double> sectorDensity; ///< average vehicle density of each sector.
 	std::vector<int> forbidden;        ///< indicate whether a sector is forbidden.
-	std::map<LAddress::L3Type, LAddress::L3Type> accessTable;    ///< store the next hop on accessing path to the RSU.
-	std::map<LAddress::L3Type, LAddress::L3Type>::iterator itAT; ///< an iterator used to traverse container accessTable.
+	AccessTable accessTable;    ///< store the next hop on accessing path to the RSU.
+	AccessTable::iterator itAT; ///< an iterator used to traverse container accessTable.
 
 	static int sectorNum;    ///< the number of sectors.
 	static int stopFlyingMs; ///< when remainingMs reach this value, stop flying.
+	static double radTheta;  ///< theta measured in rad.
 	static double minGap;    ///< minimum distance between two UAVs.
 };
 

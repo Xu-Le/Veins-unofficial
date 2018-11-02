@@ -32,7 +32,7 @@ simple RoutingUAV extends BaseUAV
 	int flyingInterval = default(500ms) @unit(ms); // the interval of actually updating position while flying
 	int decideInterval = default(10000ms) @unit(ms); // the interval of making a decision
 	int stopFlyingMs = default(5000ms) @unit(ms); // when remainingMs reach this value, stop flying
+	int theta = default(45); // sector granularity measured in degree
 
-	double theta = default(45); // sector granularity measured in degree
-	double minGap = default(150); // minimum distance between two UAVs
+	double minGap = default(200); // minimum distance between two UAVs
 }
