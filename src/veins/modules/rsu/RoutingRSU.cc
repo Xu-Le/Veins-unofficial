@@ -284,6 +284,21 @@ void RoutingRSU::emitUAV()
 
 void RoutingRSU::attainDensity()
 {
+#ifdef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+		delete itV->second;
+	vehicles.clear();
+	Coord O;
+	std::map<LAddress::L3Type, Coord> &allVeh = MobilityObserver::Instance()->globalPosition;
+	for (std::map<LAddress::L3Type, Coord>::iterator it = allVeh.begin(); it != allVeh.end(); ++it)
+	{
+		if (curPosition.distance(it->second) < V2XRadius)
+		{
+			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
+			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
+		}
+	}
+#endif
 	const double closeMulitplier = 1.0;
 	std::vector<double> sectorDensity(sectorNum, 0.0);
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)

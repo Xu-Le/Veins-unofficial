@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,20 +16,17 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-package org.car2x.veins.modules.mobility;
+#include "mainwindow.h"
+#include <QApplication>
 
-import org.car2x.veins.base.modules.BaseMobility;
-
-simple AircraftMobility extends BaseMobility
+int main(int argc, char *argv[])
 {
-	parameters:
-		@class(AircraftMobility);
-		@display("i=block/cogwheel");
-		bool staticTrajectory = default(true);
-		bool circularTrajectory = default(false);
-		double trajectoryRadius = default(50m) @unit(m); // radius of the circle if using circular trajectory
-		double flyingSpeed = default(10); // constant flying speed if using circular trajectory
-		double updateInterval = default(1s) @unit(s);
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+	QApplication::setGraphicsSystem("raster");
+#endif
+	QApplication a(argc, argv);
+	MainWindow w;
+	w.show();
 
-		xml trajectory;
+	return a.exec();
 }

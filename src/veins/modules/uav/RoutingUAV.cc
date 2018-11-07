@@ -338,21 +338,26 @@ void RoutingUAV::decide()
 	}
 	averageDensity /= sectorNum;
 	densityDivision = fabs(averageDensity) > Epsilon ? maxSectorDensity/averageDensity : 1000000.0;
-	std::vector<double> nbAverage, nbDivision;
-	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-	{
-		RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
-		nbAverage.push_back(nbInfo->averageDensity);
-		nbDivision.push_back(nbInfo->densityDivision);
-	}
-	int halfNbNum = static_cast<int>(nbAverage.size()) / 2;
-	std::nth_element(nbAverage.begin(), nbAverage.begin()+halfNbNum, nbAverage.end());
-	std::nth_element(nbDivision.begin(), nbDivision.begin()+halfNbNum, nbDivision.end(), std::greater<double>());
 	EV << "average density: " << averageDensity << ", density division: " << densityDivision << std::endl;
-	if (averageDensity > nbAverage[halfNbNum] && densityDivision < nbDivision[halfNbNum])
+
+	const Coord rsuPos = MobilityObserver::Instance2()->globalPosition[rsuAddr];
+	if (curPosition.distance(rsuPos) > minGap)
 	{
-		EV << "nb-mid average density: " << nbAverage[halfNbNum] << ", nb-mid density division: " << nbDivision[halfNbNum] << std::endl;
-		return;
+		std::vector<double> nbAverage, nbDivision;
+		for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+		{
+			RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
+			nbAverage.push_back(nbInfo->averageDensity);
+			nbDivision.push_back(nbInfo->densityDivision);
+		}
+		int halfNbNum = static_cast<int>(nbAverage.size()) / 2;
+		std::nth_element(nbAverage.begin(), nbAverage.begin()+halfNbNum, nbAverage.end());
+		std::nth_element(nbDivision.begin(), nbDivision.begin()+halfNbNum, nbDivision.end(), std::greater<double>());
+		if (averageDensity > nbAverage[halfNbNum] && densityDivision < nbDivision[halfNbNum])
+		{
+			EV << "nb-mid average density: " << nbAverage[halfNbNum] << ", nb-mid density division: " << nbDivision[halfNbNum] << std::endl;
+			return;
+		}
 	}
 
 	// select an optimal moving direction
@@ -377,6 +382,21 @@ void RoutingUAV::decide()
 
 void RoutingUAV::attainSectorDensity()
 {
+#ifdef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+		delete itV->second;
+	vehicles.clear();
+	Coord O;
+	std::map<LAddress::L3Type, Coord> &allVeh = MobilityObserver::Instance()->globalPosition;
+	for (std::map<LAddress::L3Type, Coord>::iterator it = allVeh.begin(); it != allVeh.end(); ++it)
+	{
+		if (curPosition.distance(it->second) < V2XRadius)
+		{
+			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
+			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
+		}
+	}
+#endif
 	const double closeMulitplier = 1.0;
 	std::fill(sectorDensity.begin(), sectorDensity.end(), 0.0);
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)

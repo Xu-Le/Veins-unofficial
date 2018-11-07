@@ -27,6 +27,7 @@
 #define ROUTING_DEBUG_LOG         0
 #define RSU_ADDRESS_OFFSET    10000
 #define UAV_ADDRESS_OFFSET    20000
+#define ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
 
 #define DELETE_SAFELY(obj) delete obj; obj = nullptr
 #define DYNAMIC_CAST_CMESSAGE(cls, obj) { cls##Message *obj##Msg = dynamic_cast<cls##Message*>(msg); ASSERT(obj##Msg != nullptr); on##cls(obj##Msg); }

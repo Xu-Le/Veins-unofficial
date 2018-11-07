@@ -29,14 +29,14 @@ network scenario extends Scenario
 	parameters:
 	    @signal[optimalityCalculation](type="DeployStatisticCollector");
 		int numRSU = 1; // number of RSUs
-		int numUAV = 3; // number of UAVs
+		int numUAV = 2; // number of UAVs
 
 	submodules:
 	    deployCollector: DeployStatisticCollector {
 	        @display("p=700,24");
 	    }
 		rsu[numRSU]: RSU {
-			@display("p=$posX,$posY;b=10,10,oval");
+			@display("p=$posX,$posY;b=10,10,oval;r=396,,green");
 		}
 		//uav[numUAV]: UAV {
 		//	@display("p=$posX,$posY;b=10,10,oval");

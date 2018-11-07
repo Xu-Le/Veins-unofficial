@@ -173,8 +173,8 @@ void TraCIMobility::updatePosition()
 	ASSERT(lastUpdate != simTime());
 
 	// keep statistics (for current step)
-	currentPosXVec.record(move.getStartPos().x);
-	currentPosYVec.record(move.getStartPos().y);
+	// currentPosXVec.record(move.getStartPos().x);
+	// currentPosYVec.record(move.getStartPos().y);
 
 	Coord nextPos = calculateAntennaPosition(roadPosition);
 	nextPos.z = move.getCurrentPosition().z;
@@ -189,12 +189,12 @@ void TraCIMobility::updatePosition()
 		if (speed != -1) {
 			statistics.minSpeed = std::min(statistics.minSpeed, speed);
 			statistics.maxSpeed = std::max(statistics.maxSpeed, speed);
-			currentSpeedVec.record(speed);
+			// currentSpeedVec.record(speed);
 			if (last_speed != -1) {
 				double acceleration = (speed - last_speed) / updateInterval;
 				double co2emission = calculateCO2emission(speed, acceleration);
-				currentAccelerationVec.record(acceleration);
-				currentCO2EmissionVec.record(co2emission);
+				// currentAccelerationVec.record(acceleration);
+				// currentCO2EmissionVec.record(co2emission);
 				statistics.totalCO2Emission+=co2emission * updateInterval.dbl();
 			}
 			last_speed = speed;

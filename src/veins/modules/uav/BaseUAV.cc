@@ -60,7 +60,9 @@ void BaseUAV::initialize(int stage)
 		examineVehiclesEvt = new cMessage("examine vehicles evt", UAVMessageKinds::EXAMINE_VEHICLES_EVT);
 		examineNeighborsEvt = new cMessage("examine neighbors evt", UAVMessageKinds::EXAMINE_NEIGHBORS_EVT);
 		scheduleAt(simTime() + dblrand()*beaconInterval, sendUavBeaconEvt);
+#ifndef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
 		scheduleAt(simTime() + dblrand()*examineVehiclesInterval, examineVehiclesEvt);
+#endif
 		scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
 	}
 }

@@ -220,6 +220,12 @@ void OptimalCalculator::buildMatrix(double X, double Y, double x0, double y0, co
 	{
 		for (double y = lowerY; y < upperY + g/2; y += g)
 		{
+			int j = 0;
+			for (; j < vn; ++j)
+				if (vehicles[j].sqrdist(Coord(x, y)) < r2)
+					j = vn;
+			if (j == vn)
+				continue;
 			cacheDist2 = (x - x0) * (x - x0) + (y - y0) * (y - y0);
 			if (cacheDist2 > d2 && cacheDist2 < farthest*farthest)
 			{
@@ -251,6 +257,10 @@ int OptimalCalculator::traverse(int k, int rsu)
 				graph[i].push_back(j);
 	std::vector<int> path(1, rsu);
 	dfs(rsu, k, path);
+	EV << "positions:";
+	for (size_t i = 1; i < answer.size(); ++i)
+		EV << ' ' << positions[answer[i]].info() << ',';
+	EV << std::endl;
 	return maxCovered;
 }
 

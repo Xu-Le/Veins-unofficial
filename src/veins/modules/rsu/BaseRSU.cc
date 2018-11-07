@@ -60,7 +60,9 @@ void BaseRSU::initialize(int stage)
 
 		examineVehiclesEvt = new cMessage("examine vehicles evt", RSUMessageKinds::EXAMINE_VEHICLES_EVT);
 		forgetMemoryEvt = new cMessage("forget memory evt", RSUMessageKinds::FORGET_MEMORY_EVT); // derived classes schedule it
+#ifndef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
 		scheduleAt(simTime() + dblrand()*examineVehiclesInterval, examineVehiclesEvt);
+#endif
 	}
 }
 
