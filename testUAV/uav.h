@@ -21,6 +21,11 @@
 
 #include "utils.h"
 
+// H. Zhao, H. Wang, W. Wu, and J. Wei, "Deployment algorithms for UAV airborne networks towards on-demand coverage,"
+// IEEE J. Sel. Areas Commun., vol. 36, no. 7, pp. 1–16, Jul. 2018.
+// SECTION V. DISTRIBUTED MOTION CONTROL ALGORITHM
+#define USE_VIRTUAL_FORCE_MODEL
+
 class UAV;
 class Solution;
 
@@ -47,7 +52,8 @@ public:
 		CHECKCONN,
 		EMITUAV,
 		ATTAINDENSITY,
-		NOTIFYSEND
+		NOTIFYSEND,
+		CHECKTABLE
 	};
 
 	explicit RSU(Solution *_env);
@@ -57,8 +63,10 @@ public:
 	double getY() { return pos.y; }
 	const Point& getPos() { return pos; }
 	int getSelfIndex() { return selfIndex; }
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	double getAverageDensity() { return averageDensity; }
 	double getDensityDivision() { return densityDivision; }
+#endif
 	void setX(double x) { pos.x = x; }
 	void setY(double y) { pos.y = y; }
 	void setSelfIndex(int n) { selfIndex = n; }
@@ -69,8 +77,11 @@ public:
 private:
 	void checkConn();
 	void emitUAV();
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	void attainDensity();
+#endif
 	void notifySend(int sourceIndex);
+	void checkTable();
 
 	UAV* getNeighbor(int index);
 
@@ -79,8 +90,11 @@ private:
 	Point pos; ///< 3D position.
 	int selfIndex;
 	int remainingNum;
+	int routingTableIncorrectTimes;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	double averageDensity;
 	double densityDivision;
+#endif
 	std::list<int> vehicles;
 	std::list<int>::iterator itV;
 	std::list<UAV*> neighbors;
@@ -112,7 +126,6 @@ public:
 	double getX() { return pos.x; }
 	double getY() { return pos.y; }
 	const Point& getPos() { return pos; }
-	int getSelfIndex() { return selfIndex; }
 
 	void handleEvent(int what, void *data);
 
@@ -122,10 +135,14 @@ private:
 	void decide();
 	void notifySend(int sourceIndex);
 	void notifyRecv(int sourceIndex);
-
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	void attainSectorDensity();
 	int attainForbiddenSector();
-	int getNextHop();
+#else
+	void attainResultantForce(); // calculate dir
+#endif
+	bool isForbidden(Point dst, std::list<UAV*>& nbLess, std::list<UAV*>& nbEqual, std::list<UAV*>& nbGreater);
+	int getNextHop(int index);
 	UAV* getNeighbor(int index);
 	double maxRelativeMoving();
 
@@ -139,25 +156,36 @@ private:
 	int decideAt;
 	int flyingTime;
 	double hopDist;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	double averageDensity;
 	double densityDivision;
+#endif
 	std::list<int> vehicles;
 	std::list<int>::iterator itV;
 	std::list<UAV*> neighbors;
 	std::list<UAV*>::iterator itN;
 	std::map<int, int> routingTable;
 	std::map<int, int>::iterator itRT;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	std::vector<double> sectorDensity;
 	std::vector<int> forbidden;
+#endif
 
 public:
 	static double r;
 	static double R;
 	static double v;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	static double minGap;
 	static double radTheta;
 	static int theta;
+	static int expand;
 	static int sectorNum;
+#else
+	static double k_a;
+	static double K_r;
+	static double R_opt;
+#endif
 };
 
 class ReadConfig

@@ -22,6 +22,8 @@
 #include "veins/base/modules/BaseWorldUtility.h"
 #include "veins/modules/routing/MobilityObserver.h"
 
+#define DO_THEORETICAL_CALCULATION    0
+
 /**
  * @brief Collect global deployment statistics of UAVs periodically for performance assessment.
  *
@@ -60,18 +62,18 @@ private:
 private:
 	SimTime calculateInterval; ///< the interval between 2 optimality calculation event.
 
-	cMessage *calculateEvt; ///< self message event used to periodically execute optimality calculation.
+	cMessage *calculateEvt;    ///< self message event used to periodically execute optimality calculation.
 
-	BaseWorldUtility *world; ///< pointing to module BaseWorldUtility.
+	BaseWorldUtility *world;   ///< pointing to module BaseWorldUtility.
 
 	cOutVector practicalVec;   ///< same as practical.
 	cOutVector theoreticalVec; ///< same as theoretical.
-
+#if DO_THEORETICAL_CALCULATION
 	std::list<int> calculateAt; ///< a series of time instants at which optimality calculation executes.
 	std::list<int> practical;   ///< attained solution by our strategy in practical.
 	std::list<int> theoretical; ///< global optimal solution theoretically.
 	std::list<LAddress::L3Type> vehicleSet; ///< vehicles that covered by RSU or UAVs in practical.
-
+#endif
 	static const simsignalwrap_t optimalityCalculationSignal;
 };
 

@@ -23,10 +23,17 @@ Define_Module(RoutingUAV);
 
 extern std::map<LAddress::L3Type, LAddress::L3Type> rsuBelongingMap;
 
-int RoutingUAV::sectorNum = 0;
 int RoutingUAV::stopFlyingMs = 0;
+#ifndef USE_VIRTUAL_FORCE_MODEL
+int RoutingUAV::expand = 0;
+int RoutingUAV::sectorNum = 0;
 double RoutingUAV::radTheta = 0.0;
 double RoutingUAV::minGap = 0.0;
+#else
+double RoutingUAV::k_a = 0.0;
+double RoutingUAV::K_r = 0.0;
+double RoutingUAV::R_opt = 0.0;
+#endif
 
 void RoutingUAV::initialize(int stage)
 {
@@ -38,13 +45,24 @@ void RoutingUAV::initialize(int stage)
 
 		hop = 1;
 		hopDist = 0.0;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 		int theta = par("theta").longValue();
+		if (360 % theta != 0)
+			throw cRuntimeError("theta %d cannot be divided with no remainder by 360 degree", theta);
+		expand = par("expand").longValue();
+		if (expand % 2 == 0 || expand * theta > 180)
+			throw cRuntimeError("expand must be odd and expand * theta must less than or equal to 180 degree");
 		radTheta = M_PI * theta / 180.0;
 		sectorNum = 360 / theta;
 		averageDensity = 0.0;
 		densityDivision = 1.0;
-		stopFlyingMs = par("stopFlyingMs").longValue();
 		minGap = par("minGap").doubleValue();
+#else
+		k_a = par("k_a").doubleValue();
+		K_r = par("K_r").doubleValue();
+		R_opt = par("R_opt").doubleValue();
+#endif
+		stopFlyingMs = par("stopFlyingMs").longValue();
 
 		routingLengthBits = par("routingLengthBits").longValue();
 		routingPriority = par("routingPriority").longValue();
@@ -52,9 +70,10 @@ void RoutingUAV::initialize(int stage)
 		dataPriority = par("dataPriority").longValue();
 
 		curDirection = Coord::ZERO;
+#ifndef USE_VIRTUAL_FORCE_MODEL
 		sectorDensity.resize(sectorNum, 0.0);
 		forbidden.resize(sectorNum, 0);
-		// accessTable.insert(std::pair<LAddress::L3Type, LAddress::L3Type>(rsuAddr, rsuAddr));
+#endif
 
 		flyingInterval = SimTime(par("flyingInterval").longValue(), SIMTIME_MS);
 		nextDecisionAt = decideInterval = SimTime(par("decideInterval").longValue(), SIMTIME_MS);
@@ -70,8 +89,10 @@ void RoutingUAV::initialize(int stage)
 void RoutingUAV::finish()
 {
 	// clear containers
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	sectorDensity.clear();
 	forbidden.clear();
+#endif
 	accessTable.clear();
 
 	// delete handle self message
@@ -121,8 +142,10 @@ void RoutingUAV::decorateUavBeacon(UavBeaconMessage *uavBeaconMsg)
 	uavBeaconMsg->setHop(hop);
 	uavBeaconMsg->setDecideAt(nextDecisionAt - decideInterval);
 	uavBeaconMsg->setHopDist(hopDist);
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	uavBeaconMsg->setAverageDensity(averageDensity);
 	uavBeaconMsg->setDensityDivision(densityDivision);
+#endif
 }
 
 void RoutingUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
@@ -314,16 +337,32 @@ void RoutingUAV::flying()
 
 void RoutingUAV::decide()
 {
-	EV << logName() << " decide at " << simTime() << std::endl;
+	EV << logName() << " decide at " << simTime() << "\n";
 
 	remainingMs = decideInterval.inUnit(SIMTIME_MS);
 
+#ifdef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+		delete itV->second;
+	vehicles.clear();
+	Coord O;
+	std::map<LAddress::L3Type, Coord> &allVeh = MobilityObserver::Instance()->globalPosition;
+	for (std::map<LAddress::L3Type, Coord>::iterator it = allVeh.begin(); it != allVeh.end(); ++it)
+	{
+		if (curPosition.distance(it->second) < V2XRadius)
+		{
+			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
+			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
+		}
+	}
+#endif
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	attainSectorDensity();
 
 	int forbiddenNum = attainForbiddenSector();
 	if (forbiddenNum == sectorNum)
 	{
-		EV << "all sector are forbidden." << std::endl;
+		EV << "all sectors are forbidden." << std::endl;
 		return;
 	}
 
@@ -374,31 +413,48 @@ void RoutingUAV::decide()
 	double phi = (maxI + 0.5) * radTheta;
 	curDirection.x = cos(phi);
 	curDirection.y = sin(phi);
+#else
+	attainResultantForce();
+
+	double L = curDirection.length();
+	curDirection /= L;
+	double phi = acos(curDirection.x);
+	if (curDirection.y < 0)
+		phi = 2*M_PI - phi;
+	std::list<RoutingNeighborInfo*> nbLess, nbEqual, nbGreater;
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+	{
+		RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
+		if (nbInfo->hop < hop)
+			nbLess.push_back(nbInfo);
+		else if (nbInfo->hop == hop)
+			nbEqual.push_back(nbInfo);
+		else // nbInfo->hop > hop
+			nbGreater.push_back(nbInfo);
+	}
+	const double remainingFlyingDist = (remainingMs - stopFlyingMs)/1000.0*flyingSpeed;
+	Coord dst(curPosition);
+	dst.x += remainingFlyingDist * curDirection.x;
+	dst.y += remainingFlyingDist * curDirection.y;
+	if (isForbidden(dst, nbLess, nbEqual, nbGreater))
+	{
+		EV << "dir is forbidden, pos: " << curPosition.info() << ", dst: " << dst.info() << ", phi: " << 180*phi/M_PI << std::endl;
+		return;
+	}
+#endif
+
 	EV << "pos: " << curPosition.info() << ", phi: " << 180*phi/M_PI << std::endl;
 
 	mobility->setMove(curDirection, flyingSpeed, false, curPosition);
 	scheduleAt(simTime() + flyingInterval, flyingEvt);
 }
 
+#ifndef USE_VIRTUAL_FORCE_MODEL
 void RoutingUAV::attainSectorDensity()
 {
-#ifdef ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
-	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
-		delete itV->second;
-	vehicles.clear();
-	Coord O;
-	std::map<LAddress::L3Type, Coord> &allVeh = MobilityObserver::Instance()->globalPosition;
-	for (std::map<LAddress::L3Type, Coord>::iterator it = allVeh.begin(); it != allVeh.end(); ++it)
-	{
-		if (curPosition.distance(it->second) < V2XRadius)
-		{
-			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
-			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
-		}
-	}
-#endif
 	const double closeMulitplier = 1.0;
 	std::fill(sectorDensity.begin(), sectorDensity.end(), 0.0);
+	std::vector<double> sectorDensity0(sectorNum, 0.0);
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
 	{
 		VehicleInfo *veh = itV->second;
@@ -410,7 +466,19 @@ void RoutingUAV::attainSectorDensity()
 		for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 			if ((closeCoefficient = veh->pos.distance(itN->second->pos)/V2XRadius) < 1.0)
 				coverCoefficient += 1.0 + closeMulitplier*(1.0 - closeCoefficient);
-		sectorDensity[sector] += 1.0/coverCoefficient;
+		sectorDensity0[sector] += 1.0/coverCoefficient;
+	}
+	// smooth the density of each sector
+	for (int i = 0; i < sectorNum; ++i)
+	{
+		int rangeFrom = i - expand/2, rangeTo = i + expand/2;
+		if (rangeFrom < 0)
+			rangeFrom += sectorNum;
+		if (rangeTo < rangeFrom)
+			rangeTo += sectorNum;
+		for (int j = rangeFrom; j <= rangeTo; ++j)
+			sectorDensity[i] += sectorDensity0[j < sectorNum ? j : j - sectorNum];
+		sectorDensity[i] /= expand;
 	}
 	EV << "sector density:";
 	for (size_t k = 0; k < sectorDensity.size(); ++k)
@@ -420,10 +488,8 @@ void RoutingUAV::attainSectorDensity()
 
 int RoutingUAV::attainForbiddenSector()
 {
-	int i = 0;
-	const double minGap2 = minGap * minGap;
+	int i = 0, forbiddenNum = 0;
 	std::list<RoutingNeighborInfo*> nbLess, nbEqual, nbGreater;
-	std::list<RoutingNeighborInfo*>::iterator it;
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 	{
 		RoutingNeighborInfo *nbInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
@@ -434,7 +500,6 @@ int RoutingUAV::attainForbiddenSector()
 		else // nbInfo->hop > hop
 			nbGreater.push_back(nbInfo);
 	}
-	const Coord rsuPos = MobilityObserver::Instance2()->globalPosition[rsuAddr];
 	const double remainingFlyingDist = (remainingMs - stopFlyingMs)/1000.0*flyingSpeed;
 	for (i = 0; i < sectorNum; ++i)
 	{
@@ -443,63 +508,9 @@ int RoutingUAV::attainForbiddenSector()
 		Coord dst(curPosition);
 		dst.x += remainingFlyingDist * cos(phi);
 		dst.y += remainingFlyingDist * sin(phi);
-		bool flag = false;
-		double dist2 = curPosition.sqrdist(rsuPos);
-		if (dist2 < minGap2) // boot process
-		{
-			flag = dst.sqrdist(rsuPos) < dist2; // moving more close to the RSU
-			forbidden[i] = flag ? 1 : 0;
-			if (flag)
-				continue;
-			for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
-				flag |= dst.sqrdist((*it)->pos) < minGap2;
-			forbidden[i] = flag ? 1 : 0;
-			if (flag)
-				continue;
-			for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
-				flag |= dst.sqrdist((*it)->pos) < minGap2;
-			forbidden[i] = flag ? 1 : 0;
-			// note that in boot process, RSU is the only neighbor in nbLess, thus no need to check nbLess
-			continue;
-		}
-		// case 1: leave any neighbor with greater hop count
-		for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
-			flag |= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
-		forbidden[i] = flag ? 1 : 0;
-		if (flag)
-			continue;
-		// case 2: leave all neighbors with less hop count
-		flag = true;
-		for (it = nbLess.begin(); it != nbLess.end(); ++it)
-			flag &= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
-		if (flag)
-		{
-			bool closest = true;
-			for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
-				if (dst.distance((*it)->pos) < U2URadius - maxRelativeMoving((*it)->decideAt) && (*it)->hopDist < hopDist)
-					closest = false;
-			forbidden[i] = closest ? 1 : 0;
-			if (closest)
-				continue;
-		}
-		// case 3: move too close to neighbors or RSU
-		flag = false;
-		for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
-			flag |= dst.sqrdist((*it)->pos) < minGap2;
-		forbidden[i] = flag ? 1 : 0;
-		if (flag)
-			continue;
-		for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
-			flag |= dst.sqrdist((*it)->pos) < minGap2;
-		forbidden[i] = flag ? 1 : 0;
-		if (flag)
-			continue;
-		for (it = nbLess.begin(); it != nbLess.end(); ++it)
-			flag |= dst.sqrdist((*it)->pos) < minGap2;
-		forbidden[i] = flag ? 1 : 0;
+		forbidden[i] = isForbidden(dst, nbLess, nbEqual, nbGreater) ? 1 : 0;
 	}
 	EV << "forbidden:";
-	int forbiddenNum = 0;
 	for (i = 0; i < sectorNum; ++i)
 	{
 		EV << ' ' << forbidden[i];
@@ -507,6 +518,90 @@ int RoutingUAV::attainForbiddenSector()
 	}
 	EV << std::endl;
 	return forbiddenNum;
+}
+#else
+void RoutingUAV::attainResultantForce()
+{
+	curDirection = Coord::ZERO;
+	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
+	{
+		Coord &vpos = itV->second->pos;
+		Coord force(vpos.x - curPosition.x, vpos.y - curPosition.y);
+		double dist = curPosition.distance(vpos);
+		if (dist < 1.0)
+			dist = 1.0;
+		force *= k_a / (dist*dist*dist);
+		curDirection += force;
+	}
+	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
+	{
+		Coord &npos = itN->second->pos;
+		double dist = curPosition.distance(npos);
+		if (dist < R_opt && dist > R_opt/10.0)
+		{
+			Coord force(curPosition.x - npos.x, curPosition.y - npos.y);
+			force *= K_r * (R_opt - dist) / dist;
+			curDirection += force;
+		}
+	}
+}
+#endif
+
+bool RoutingUAV::isForbidden(Coord dst, std::list<RoutingNeighborInfo*>& nbLess, std::list<RoutingNeighborInfo*>& nbEqual, std::list<RoutingNeighborInfo*>& nbGreater)
+{
+	bool flag = false;
+	std::list<RoutingNeighborInfo*>::iterator it;
+#ifndef USE_VIRTUAL_FORCE_MODEL
+	const Coord rsuPos = MobilityObserver::Instance2()->globalPosition[rsuAddr];
+	const double minGap2 = minGap * minGap, dist2 = curPosition.sqrdist(rsuPos);
+	if (dist2 < minGap2) // boot process
+	{
+		flag = dst.sqrdist(rsuPos) < dist2; // moving more close to the RSU
+		if (flag)
+			return true;
+		for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
+			flag |= dst.sqrdist((*it)->pos) < minGap2;
+		if (flag)
+			return true;
+		for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
+			flag |= dst.sqrdist((*it)->pos) < minGap2;
+		// note that in boot process, RSU is the only neighbor in nbLess, thus no need to check nbLess
+		return flag;
+	}
+#endif
+	// case 1: leave any neighbor with greater hop count
+	for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
+		flag |= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
+	if (flag)
+		return true;
+	// case 2: leave all neighbors with less hop count
+	flag = true;
+	for (it = nbLess.begin(); it != nbLess.end(); ++it)
+		flag &= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
+	if (flag)
+	{
+		bool closest = true;
+		for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
+			if (dst.distance((*it)->pos) < U2URadius - maxRelativeMoving((*it)->decideAt) && (*it)->hopDist < hopDist)
+				closest = false;
+		if (closest)
+			return true;
+	}
+	flag = false;
+#ifndef USE_VIRTUAL_FORCE_MODEL
+	// case 3: move too close to neighbors or RSU
+	for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
+		flag |= dst.sqrdist((*it)->pos) < minGap2;
+	if (flag)
+		return true;
+	for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
+		flag |= dst.sqrdist((*it)->pos) < minGap2;
+	if (flag)
+		return true;
+	for (it = nbLess.begin(); it != nbLess.end(); ++it)
+		flag |= dst.sqrdist((*it)->pos) < minGap2;
+#endif
+	return flag;
 }
 
 double RoutingUAV::maxRelativeMoving(SimTime decideAt)

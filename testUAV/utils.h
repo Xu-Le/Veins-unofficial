@@ -42,6 +42,13 @@ public:
 	Point() : x(0.0), y(0.0), z(0.0) {}
 	Point(double X, double Y) : x(X), y(Y), z(0.0) {}
 
+	Point& operator+=(const Point& p) { x += p.x; y += p.y; z += p.z; return *this; }
+	Point& operator-=(const Point& p) { x -= p.x; y -= p.y; z -= p.z; return *this; }
+	Point& operator*=(double f) { x *= f; y *= f; z *= f; return *this; }
+	Point& operator/=(double f) { x /= f; y /= f; z /= f; return *this; }
+
+	void normalize() { double L = sqrt(x*x + y*y + z*z); x /= L; y /= L; z /= L; }
+
 	double x;
 	double y;
 	double z;

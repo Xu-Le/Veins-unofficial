@@ -24,7 +24,6 @@ extern int numVehicle;
 extern Point *vehicleTable;
 extern double *velocityTable;
 extern double *directionTable;
-extern int *coveredTable;
 
 Solution::Solution() : eventSequence(0), rsu(this)
 {
@@ -42,8 +41,11 @@ int Solution::initialize(int _num)
 	rsu.setSelfIndex(uavNum);
 	rsu.setRemainingNum(uavNum);
 	schedule(10, uavNum, RSU::EventType::CHECKCONN);
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	schedule(10, uavNum, RSU::EventType::ATTAINDENSITY);
+#endif
 	schedule(15, uavNum, RSU::EventType::EMITUAV);
+	schedule(1100, uavNum, RSU::EventType::CHECKTABLE);
 	return 10; // first event happens at
 }
 

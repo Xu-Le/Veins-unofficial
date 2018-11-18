@@ -26,6 +26,7 @@ Define_Module(DeployStatisticCollector);
 
 const simsignalwrap_t DeployStatisticCollector::optimalityCalculationSignal = simsignalwrap_t("optimalityCalculation");
 
+#if DO_THEORETICAL_CALCULATION
 /**
  * @brief Actual class responsible for global optimal solution calculation.
  *
@@ -72,6 +73,7 @@ private:
 	std::vector<std::vector<int> > matrix;  ///< adjacent matrix of the artificial graph.
 	std::vector<std::vector<int> > bitmaps; ///< each binary element indicate whether an UAV covers a vehicle.
 };
+#endif
 
 void DeployStatisticCollector::initialize(int stage)
 {
@@ -85,12 +87,14 @@ void DeployStatisticCollector::initialize(int stage)
 		world = FindModule<BaseWorldUtility*>::findGlobalModule();
 		if (world == nullptr)
 			error("Could not find BaseWorldUtility module");
-
+#if DO_THEORETICAL_CALCULATION
 		calculateInterval = SimTime(par("calculateInterval").longValue(), SIMTIME_S);
-
 		calculateEvt = new cMessage("calculate evt", DSCMessageKinds::CALCULATE_EVT);
 		calculateEvt->setSchedulingPriority(1); // calculate after UAV's decide event
 		scheduleAt(SimTime(par("emitFirstUavAt").longValue()+2, SIMTIME_S), calculateEvt);
+#else
+		calculateEvt = nullptr;
+#endif
 		EV << "DeployStatisticCollector::initialize() called.\n";
 	}
 	else
@@ -103,6 +107,7 @@ void DeployStatisticCollector::finish()
 {
 	EV << "DeployStatisticCollector::finish() called.\n";
 
+#if DO_THEORETICAL_CALCULATION
 	// write statistic to file for figuring in MATLAB
 	std::ofstream fout("deployStatistics.csv", std::ios_base::out | std::ios_base::trunc);
 	if (!fout.is_open())
@@ -111,6 +116,9 @@ void DeployStatisticCollector::finish()
 	for (; it1 != calculateAt.end(); ++it1, ++it2, ++it3)
 		fout << *it1 << ',' << *it2 << ',' << *it3 << "\n";
 	fout.close();
+#endif
+
+	cancelAndDelete(calculateEvt);
 
 	cComponent::finish();
 }
@@ -118,7 +126,9 @@ void DeployStatisticCollector::finish()
 void DeployStatisticCollector::importVehicles(std::list<LAddress::L3Type>& vehicleList)
 {
 	EV << "DeployStatisticCollector::importVehicles() called.\n";
+#if DO_THEORETICAL_CALCULATION
 	vehicleSet.splice(vehicleSet.end(), vehicleList);
+#endif
 }
 
 void DeployStatisticCollector::handleMessage(cMessage *msg)
@@ -130,10 +140,12 @@ void DeployStatisticCollector::handleMessage(cMessage *msg)
 	{
 	case DSCMessageKinds::CALCULATE_EVT:
 	{
+#if DO_THEORETICAL_CALCULATION
 		vehicleSet.clear();
 		cSimulation::getActiveSimulation()->getSystemModule()->emit(optimalityCalculationSignal, this);
 		calculate();
 		scheduleAt(simTime() + calculateInterval, calculateEvt);
+#endif
 		break;
 	}
 	default:
@@ -143,6 +155,7 @@ void DeployStatisticCollector::handleMessage(cMessage *msg)
 
 void DeployStatisticCollector::calculate()
 {
+#if DO_THEORETICAL_CALCULATION
 	EV << "DeployStatisticCollector calculate at " << simTime() << "\n";
 
 	vehicleSet.sort();
@@ -161,10 +174,12 @@ void DeployStatisticCollector::calculate()
 	theoreticalVec.record(theoreticalNum);
 
 	EV << "practical: " << practicalNum << ", theoretical: " << theoreticalNum << std::endl;
+#endif
 }
 
 int DeployStatisticCollector::doCalculate()
 {
+#if DO_THEORETICAL_CALCULATION
 	std::map<LAddress::L3Type, Coord> &vehPos = MobilityObserver::Instance()->globalPosition;
 	std::map<LAddress::L3Type, Coord> &uavPos = MobilityObserver::Instance2()->globalPosition; // including RSUs
 	std::map<LAddress::L3Type, Coord>::iterator it = uavPos.lower_bound(UAV_ADDRESS_OFFSET);
@@ -177,6 +192,9 @@ int DeployStatisticCollector::doCalculate()
 	calculator.attainVehicles(vehPos);
 	calculator.buildMatrix(world->getPgs()->x, world->getPgs()->y, rsuPos.x, rsuPos.y, K);
 	return calculator.traverse(K);
+#else
+	return 0;
+#endif
 }
 
 DeployStatisticCollector::~DeployStatisticCollector()
@@ -184,6 +202,7 @@ DeployStatisticCollector::~DeployStatisticCollector()
 	EV << "DeployStatisticCollector::~DeployStatisticCollector() called.\n";
 }
 
+#if DO_THEORETICAL_CALCULATION
 void OptimalCalculator::attainVehicles(std::map<LAddress::L3Type, Coord>& _vehicles)
 {
 	vehicles.reserve(_vehicles.size());
@@ -346,3 +365,4 @@ OptimalCalculator::~OptimalCalculator()
 	matrix.clear();
 	bitmaps.clear();
 }
+#endif

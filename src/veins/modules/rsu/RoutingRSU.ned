@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2016-2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -33,12 +33,13 @@ simple RoutingRSU extends BaseRSU
 	int dataPriority = default(3); // the access category for data packets
 
 	int totalUavNum = default(1); // the total number of UAV to be emitted per RSU
-	int emitFirstUavAt = default(50); // when to emit the first UAV
-	int theta = default(45); // sector granularity measured in degree
+	int emitFirstUavAt = default(60); // when to emit the first UAV
+	int theta = default(20); // sector granularity measured in degree
+	int expand = default(3); // expand to how many adjacent sectors to smooth the density in average
 
 	double beaconInterval = default(1s) @unit(s); // the intervall between 2 beacon messages
 	double examineUavsInterval = default(2s) @unit(s); // the intervall between 2 examine UAV whether in communication range messages
-	double emitUavInterval = default(60s) @unit(s); // the interval between 2 emit UAV events
-	double attainDensityInterval = default(5s) @unit(s); // the interval between 2 attain density events
+	double emitUavInterval = default(120s) @unit(s); // the interval between 2 emit UAV events
+	double attainDensityInterval = default(10s) @unit(s); // the interval between 2 attain density events
 	double UavElapsed = default(3s) @unit(s); // if exceeds this time, assuming has lose connectivity with the UAV
 }

@@ -49,29 +49,31 @@ void BaseMacLayer::initialize(int stage)
 {
     BaseLayer::initialize(stage);
 
-    if(stage==0)
+    if (stage==0)
     {
     	// get handle to phy layer
         if ((phy = FindModule<MacToPhyInterface*>::findSubModule(getParentModule())) == NULL) {
         	error("Could not find a PHY module.");
         }
-        headerLength    = par("headerLength");
+        headerLength    = par("headerLength").longValue();
         phyHeaderLength = phy->getPhyHeaderLength();
 
-        hasPar("coreDebug") ? coreDebug = par("coreDebug").boolValue() : coreDebug = false;
+        coreDebug = false;
     }
-    if (myMacAddr == LAddress::L2NULL()) {
+    if (myMacAddr == LAddress::L2NULL())
+    {
     	// see if there is an addressing module available
         // otherwise use NIC modules id as MAC address
         AddressingInterface* addrScheme = FindModule<AddressingInterface*>::findSubModule(findHost());
-        if(addrScheme) {
+        if (addrScheme != nullptr)
             myMacAddr = addrScheme->myMacAddr(this);
-        } else {
+        else
+        {
             const std::string addressString = par("address").stringValue();
             if (addressString.empty() || addressString == "auto")
                 myMacAddr = LAddress::L2Type(getParentModule()->getId());
             else
-                myMacAddr = LAddress::L2Type(addressString.c_str());
+                myMacAddr = LAddress::L2Type(atol(addressString.c_str()));
             // use streaming operator for string conversion, this makes it more
             // independent from the myMacAddr type
             std::ostringstream oSS; oSS << myMacAddr;

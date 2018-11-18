@@ -24,7 +24,6 @@ extern int numVehicle;
 extern Point *vehicleTable;
 extern double *velocityTable;
 extern double *directionTable;
-extern int *coveredTable;
 
 Point Point::zero;
 
@@ -100,13 +99,11 @@ int parseInput(const char *filename)
 	vehicleTable = new Point[numVehicle];
 	velocityTable = new double[numVehicle];
 	directionTable = new double[numVehicle];
-	coveredTable = new int[numVehicle];
 	int theta = 0;
 	for (int i = 0; i < numVehicle; ++i)
 	{
 		fscanf(fd, "%lf,%lf,%lf,%d\n", &vehicleTable[i].x, &vehicleTable[i].y, &velocityTable[i], &theta);
 		directionTable[i] = M_PI * theta / 180.0;
-		coveredTable[i] = 0;
 	}
 
 	fclose(fd);

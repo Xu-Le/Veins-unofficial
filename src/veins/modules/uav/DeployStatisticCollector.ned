@@ -23,6 +23,6 @@ simple DeployStatisticCollector
 	@class(DeployStatisticCollector);
 	@display("i=abstract/db");
 
-	int calculateInterval = default(5s) @unit(s); // the interval between 2 optimality calculation event
-	int emitFirstUavAt = default(50); // when to emit the first UAV
+	int calculateInterval = default(10s) @unit(s); // the interval between 2 optimality calculation event
+	int emitFirstUavAt = default(60); // when to emit the first UAV
 }

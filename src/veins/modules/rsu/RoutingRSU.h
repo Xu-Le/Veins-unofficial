@@ -79,8 +79,10 @@ private:
 	void examineUAVs();
 	/** @brief emit an UAV. */
 	void emitUAV();
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	/** @brief attain sector density. */
 	void attainDensity();
+#endif
 
 private:
 	/** @brief The class to store UAV's information collected by UAV beacon message. */
@@ -103,28 +105,32 @@ private:
 
 	int curUavIndex; ///< the index of current UAV to be emitted.
 	int totalUavNum; ///< the total number of UAVs to be emitted.
-	int sectorNum;   ///< the number of sectors.
-
-	double radTheta; ///< theta measured in rad.
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	double averageDensity;  ///< average density of all sectors.
 	double densityDivision; ///< maximum sector density division by average sector density.
-
+	double attainDensityInterval; ///< the interval of attaining sector density.
+#endif
 	double beaconInterval;        ///< the interval of sending beacon message.
 	double examineUavsInterval;   ///< the interval of examining the connectivity with UAVs.
 	double emitUavInterval;       ///< the interval of emitting UAVs.
-	double attainDensityInterval; ///< the interval of attaining sector density.
 	double UavElapsed;            ///< the maximum time haven't receive message from UAVs leading to assume lose connectivity with it.
 
 	cMessage *sendUavBeaconEvt; ///< self message event used to periodically send UAV beacons.
 	cMessage *examineUavsEvt;   ///< self message event used to examine the connectivity with UAVs.
 	cMessage *emitUavEvt;       ///< self message event used to periodically emit UAVs.
+#ifndef USE_VIRTUAL_FORCE_MODEL
 	cMessage *attainDensityEvt; ///< self message event used to periodically attain sector density.
+#endif
 
 	std::map<LAddress::L3Type, UAVInfo*> UAVs; ///< a map from a UAV's identifier to all its mobility info.
 	std::map<LAddress::L3Type, UAVInfo*>::iterator itU; ///< an iterator used to traverse container UAVs.
 	AccessTable accessTable;    ///< store the next hop on accessing path to the RSU.
 	AccessTable::iterator itAT; ///< an iterator used to traverse container accessTable.
-
+#ifndef USE_VIRTUAL_FORCE_MODEL
+	static int expand;          ///< expand to how many adjacent sectors to smooth the density in average.
+	static int sectorNum;       ///< the number of sectors.
+	static double radTheta;     ///< theta measured in rad.
+#endif
 	static int uavIndexCounter; ///< self increasing counter.
 	static const simsignalwrap_t optimalityCalculationSignal;
 };
