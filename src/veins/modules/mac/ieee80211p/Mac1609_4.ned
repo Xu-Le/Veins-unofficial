@@ -43,9 +43,6 @@ simple Mac1609_4 extends BaseMacLayer
         // the service channel this maclayer listens on
         int serviceChannel = default(1);
 
-        // debug switch
-        bool debug = default(false);
-
         // length of MAC header, header is already added at 1609_4
         headerLength @unit(bit) = default(0 bit);
 
@@ -55,14 +52,21 @@ simple Mac1609_4 extends BaseMacLayer
         // little asynchronization between cars
         double syncOffset @unit(s) = default(0.0003s);
 
-        //tx power [mW]
+        // tx power [mW]
         double txPower @unit(mW);
 
         int queueSize = default(0);
+
+		// unicast parameters
+		int dot11RTSThreshold @unit(bit) = default(12000bit);
+		int dot11ShortRetryLimit = default(7);
+		int dot11LongRetryLimit = default(4);
+		int ackLength @unit(bit) = default(112bit);
+		bool useAcks = default(false);
+		double ackErrorRate = default(0.20);
 
         // signal informing interested application about channel busy state
         @signal[sigChannelBusy](type=bool);
         // signal informing interested application about a collision
         @signal[sigCollision](type=bool);
-
 }

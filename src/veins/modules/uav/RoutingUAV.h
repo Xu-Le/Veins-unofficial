@@ -72,6 +72,8 @@ private:
 	void handleSelfMsg(cMessage *msg) override;
 	/** @brief handle messages from lower layer. */
 	void handleLowerMsg(cMessage *msg) override;
+	/** @brief handle control messages from lower layer. */
+	void handleLowerControl(cMessage *msg) override;
 
 	/** @brief UAV beacon message decorate method. */
 	void decorateUavBeacon(UavBeaconMessage *uavBeaconMsg) override;
@@ -84,6 +86,8 @@ private:
 	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg);
+	/** @brief call-back method of receiving data control message. */
+	void onDataLost(DataMessage *lostDataMsg);
 	/** @brief call-back method when neighbors updates. */
 	void onNeighborUpdate();
 

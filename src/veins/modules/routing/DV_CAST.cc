@@ -461,14 +461,6 @@ void DV_CAST::onWarning(WarningMessage *_warningMsg)
 #endif
 		return;
 	}
-	if (laneId != warningMsg->getLaneId())
-	{
-		EV << "message(GUID=" << guid << ") has disseminated outside its ROI(disseminated to another road).\n";
-		messageMemory.insert(std::pair<int, WaveShortMessage*>(guid, warningMsg));
-
-		++WarningStatisticCollector::globalInterferences;
-		return;
-	}
 
 	// catch a new warning message
 	EV << "catch a new warning message(GUID=" << guid << ").\n";
@@ -583,26 +575,7 @@ void DV_CAST::callWarning(double distance)
 	scheduleAt(simTime() + guidUsedTime, recycleGUIDEvt);
 	// set necessary warning info
 	warningMsg->setGUID(guid);
-	if (distance > 0)
-	{
-		warningMsg->setDirection(false);
-		warningMsg->setLaneId(laneId.c_str());
-	}
-	else
-	{
-		warningMsg->setDirection(true);
-		std::string tmpLaneId("-");
-		if (laneId[0] == '-') // remove front '-'
-		{
-			tmpLaneId = laneId.substr(1, laneId.size() - 1);
-			warningMsg->setLaneId(tmpLaneId.c_str());
-		}
-		else // add '-' to front
-		{
-			tmpLaneId.append(laneId);
-			warningMsg->setLaneId(tmpLaneId.c_str());
-		}
-	}
+	warningMsg->setDirection(distance <= 0);
 	double farthestDistance = fabs(distance); // the farthest target vehicle for warning message in ROI
 	warningMsg->setFarthestDistance(farthestDistance);
 	warningMsg->setHopCount(0);
@@ -622,85 +595,19 @@ void DV_CAST::callWarning(double distance)
 	LAddress::L3Type farthestOne = -1;
 	if (distance > 0)
 	{
-		double distFromRoadhead = sqrt(square(curPosition.x - fromRoadhead.x) + square(curPosition.y - fromRoadhead.y) + square(curPosition.z - fromRoadhead.z));
-		if (distFromRoadhead <= farthestDistance)
-		{
-			EV << "distFromRoadhead = " << distFromRoadhead << " <= " << farthestDistance << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = fromRoadhead;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = fromRoadhead;
-			}
-		}
-		else
-		{
-			EV << "distFromRoadhead = " << distFromRoadhead << " > " << farthestDistance << std::endl;
-			Coord farthestPos;
-			farthestPos.x = curPosition.x + farthestDistance/distFromRoadhead * (fromRoadhead.x - curPosition.x);
-			farthestPos.y = curPosition.y + farthestDistance/distFromRoadhead * (fromRoadhead.y - curPosition.y);
-			farthestPos.z = curPosition.z + farthestDistance/distFromRoadhead * (fromRoadhead.z - curPosition.z);
-			EV << "farthestPos.x: " << farthestPos.x << ", farthestPos.y: " << farthestPos.y << ", farthestPos.z: " << farthestPos.z << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = farthestPos;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = farthestPos;
-			}
-		}
+		Coord farthestPos(curPosition.x + farthestDistance, curPosition.y + farthestDistance);
+		EV << "farthestPos: " << farthestPos.info() << std::endl;
+		xMin = curPosition;
+		xMin.x += 1.0; // avoid count self vehicle
+		xMax = farthestPos;
 	}
 	else
 	{
-		double distToRoadhead = sqrt(square(curPosition.x - toRoadhead.x) + square(curPosition.y - toRoadhead.y) + square(curPosition.z - toRoadhead.z));
-		if (distToRoadhead <= farthestDistance)
-		{
-			EV << "distToRoadhead = " << distToRoadhead << " <= " << farthestDistance << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = toRoadhead;
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = toRoadhead;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-		}
-		else
-		{
-			EV << "distToRoadhead = " << distToRoadhead << " > " << farthestDistance << std::endl;
-			Coord farthestPos;
-			farthestPos.x = curPosition.x + farthestDistance/distToRoadhead * (toRoadhead.x - curPosition.x);
-			farthestPos.y = curPosition.y + farthestDistance/distToRoadhead * (toRoadhead.y - curPosition.y);
-			farthestPos.z = curPosition.z + farthestDistance/distToRoadhead * (toRoadhead.z - curPosition.z);
-			EV << "farthestPos.x: " << farthestPos.x << ", farthestPos.y: " << farthestPos.y << ", farthestPos.z: " << farthestPos.z << std::endl;
-			if (fromRoadhead.x <= toRoadhead.x) // curSpeed.x >= 0
-			{
-				xMin = curPosition;
-				xMin.x += 1.0; // avoid count self vehicle
-				xMax = farthestPos;
-			}
-			else // curSpeed.x < 0
-			{
-				xMin = farthestPos;
-				xMax = curPosition;
-				xMax.x -= 1.0; // avoid count self vehicle
-			}
-		}
+		Coord farthestPos(curPosition.x - farthestDistance, curPosition.y - farthestDistance);
+		EV << "farthestPos: " << farthestPos.info() << std::endl;
+		xMin = farthestPos;
+		xMax = curPosition;
+		xMax.x -= 1.0; // avoid count self vehicle
 	}
 
 	WarningStatisticCollector::globalTargets += targetVehicles(plusX, xMin, xMax, farthestOne);

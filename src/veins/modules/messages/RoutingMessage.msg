@@ -27,6 +27,7 @@ packet RoutingMessage extends WaveShortMessage
 {
 	bool routingSuccess = false; // Is routing path successfully found?
 	bool backward = false; // Is routing result known, notify it backward to sender?
+	int GUID = 0; // Unique identifier of this RoutingMessage
 	int hopCount = 0;   // Total hop count from sender
 	long receiver = -1; // Destination vehicle
 	long nextHop = -1;  // Next selected hop vehicle in routing process

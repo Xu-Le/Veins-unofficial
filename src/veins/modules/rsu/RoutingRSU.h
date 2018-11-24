@@ -62,6 +62,8 @@ private:
 	void handleSelfMsg(cMessage *msg) override;
 	/** @brief handle messages from lower layer. */
 	void handleLowerMsg(cMessage *msg) override;
+	/** @brief handle control messages from lower layer. */
+	void handleLowerControl(cMessage *msg) override;
 
 	/** @brief UAV beacon message send method. */
 	void sendUavBeacon();
@@ -74,6 +76,8 @@ private:
 	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg);
+	/** @brief call-back method of receiving data control message. */
+	void onDataLost(DataMessage *lostDataMsg);
 
 	/** @brief examine whether UAVs still in connected. */
 	void examineUAVs();

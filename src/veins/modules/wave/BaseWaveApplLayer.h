@@ -24,8 +24,8 @@
 #include "veins/base/modules/BaseApplLayer.h"
 #include "veins/base/connectionManager/ChannelAccess.h"
 #include "veins/modules/utility/Consts80211p.h"
-#include "veins/modules/cellular/BaseStation.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
+#include "veins/modules/messages/CellularMessage_m.h"
 #include "veins/modules/messages/PacketExpiredMessage_m.h"
 #include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/routing/MobilityObserver.h"
@@ -99,7 +99,7 @@ protected:
 	/** @brief send beacon message. */
 	void sendBeacon();
 	/** @brief beacon message decorate method. */
-	virtual void decorateBeacon(BeaconMessage *beaconMsg);
+	virtual void decorateBeacon(BeaconMessage *beaconMsg) {}
 	/** @brief call-back method of receiving beacon message. */
 	virtual void onBeacon(BeaconMessage *beaconMsg);
 
@@ -110,14 +110,6 @@ protected:
 
 	/** @name mobility relevant methods. */
 	///@{
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just cross a intersection without changing driving direction. */
-	virtual void onStraight() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned left. */
-	virtual void onTurnLeft() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned right. */
-	virtual void onTurnRight() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned around. */
-	virtual void onTurnAround() {}
 	/** @brief update vehicle's mobility information that is read from SUMO(template method). */
 	void handleMobilityUpdate(cObject* obj);
 	/** @brief update(register or unregister) vehicle's NIC when it parks or resumes driving. */
@@ -129,14 +121,11 @@ protected:
 	class NeighborInfo
 	{
 	public:
-		NeighborInfo(double a, Coord& p, Coord& s, Coord& f, Coord& t, simtime_t ra) : type(0), angle(a), pos(p), speed(s), from(f), to(t), receivedAt(ra) {}
+		NeighborInfo(Coord& p, Coord& s, simtime_t ra) : type(0), pos(p), speed(s), receivedAt(ra) {}
 
 		short type;   ///< reserved, defined by derived class since concrete protocol may define different types of neighbors, derived class should define an unknown type whose value equals 0.
-		double angle; ///< current driving angle of the neighbor.
 		Coord pos;    ///< current position of the neighbor.
 		Coord speed;  ///< current speed of the neighbor.
-		Coord from;   ///< the tail of road where the neighbor driving from.
-		Coord to;     ///< the head of road where the neighbor driving to.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the neighbor.
 	};
 
@@ -167,13 +156,8 @@ protected:
 	simtime_t maxStoreTime; ///< the maximum time a relay vehicle will store a routing message before discarding it.
 	simtime_t guidUsedTime; ///< the maximum time from a GUID's allocated time to its recycled time.
 
-	std::string laneId;     ///< the lane of this vehicle driving on.
-	Coord fromRoadhead;     ///< the tail of road where this vehicle driving from.
-	Coord toRoadhead;       ///< the head of road where this vehicle driving to.
 	Coord curPosition;      ///< current position of this vehicle.
 	Coord curSpeed;         ///< current speed of this vehicle.
-	double curAngle;        ///< current driving angle measured in rad of this vehicle.
-	double oldAngle;        ///< before turn direction, driving angle measured in rad of this vehicle.
 
 	/** @name containers. */
 	///@{
@@ -197,7 +181,6 @@ protected:
 	Veins::TraCIMobility *mobility;
 	Veins::TraCICommandInterface *traci;
 	Veins::TraCICommandInterface::Vehicle *traciVehicle;
-	Veins::TraCICommandInterface::Lane *traciLane;
 	Veins::AnnotationManager *annotations;
 	WaveAppToMac1609_4Interface *myMac;
 	///@}

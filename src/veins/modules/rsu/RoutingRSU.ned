@@ -26,11 +26,11 @@ simple RoutingRSU extends BaseRSU
 	@display("i=block/routing");
 
 	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
-	int beaconPriority = default(1); // the access category of the beacon messages
+	int beaconPriority = default(0); // the access category of the beacon messages
 	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
-	int routingPriority = default(2); // the access category of the routing messages
+	int routingPriority = default(1); // the access category of the routing messages
 	int dataLengthBits = default(18272bit) @unit(bit); // the length of a data packet 8 * (2312-20-8)
-	int dataPriority = default(3); // the access category for data packets
+	int dataPriority = default(2); // the access category for data packets
 
 	int totalUavNum = default(1); // the total number of UAV to be emitted per RSU
 	int emitFirstUavAt = default(60); // when to emit the first UAV

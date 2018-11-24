@@ -20,8 +20,6 @@
 
 #include "veins/modules/wave/BaseWaveApplLayer.h"
 
-#define MAINTAIN_LANE_ID    0
-
 const simsignalwrap_t BaseWaveApplLayer::mobilityStateChangedSignal = simsignalwrap_t(MIXIM_SIGNAL_MOBILITY_CHANGE_NAME);
 const simsignalwrap_t BaseWaveApplLayer::parkingStateChangedSignal = simsignalwrap_t(TRACI_SIGNAL_PARKING_CHANGE_NAME);
 
@@ -36,25 +34,11 @@ void BaseWaveApplLayer::initialize(int stage)
 		mobility = Veins::TraCIMobilityAccess().get(getParentModule());
 		traci = mobility->getCommandInterface();
 		traciVehicle = mobility->getVehicleCommandInterface();
-#if MAINTAIN_LANE_ID
-		laneId = mobility->getLaneId();
-		EV << "laneId start at: " << laneId << std::endl;
-		traciLane = mobility->getLaneCommandInterface(laneId);
-#endif
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
 		ASSERT(annotations);
-#if MAINTAIN_LANE_ID
-		std::list<Coord> roadheads = traciLane->getShape();
-		ASSERT( roadheads.size() == 2 ); // must be non-internal lane
-		fromRoadhead = roadheads.front();
-		toRoadhead = roadheads.back();
-#if ROUTING_DEBUG_LOG
-		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
-		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
-#endif
-#endif
+
 		MobilityObserver::Instance()->insert(myAddr, Coord::ZERO, Coord::ZERO);
 
 		transmissionRadius = BaseConnectionManager::maxInterferenceDistance;
@@ -155,11 +139,13 @@ void BaseWaveApplLayer::handleMessage(cMessage *msg)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_DATA, msg);
 		handleLowerMsg(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == lowerControlIn)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_CONTROL, msg);
 		handleLowerControl(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == cellularIn)
 	{
@@ -226,8 +212,6 @@ void BaseWaveApplLayer::handleLowerMsg(cMessage *msg)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
 	else
 		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
-
-	DELETE_SAFELY(msg);
 }
 
 void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
@@ -238,18 +222,17 @@ void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_chan
 	wsm->addBitLength(headerLength);
 	wsm->addBitLength(dataLength);
 
-	if (channel == type_CCH)
-		wsm->setChannelNumber(Channels::CCH);
-	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
+	WAVEInformationElement dataRate(16, 1, 12);
+	WAVEInformationElement transmitPowerUsed(4, 1, 30);
+	WAVEInformationElement channelLoad(23, 1, 0);
+	wsm->setChannelNumber(channelNumber); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	wsm->setDataRate(dataRate);
+	wsm->setTransmitPowerUsed(transmitPowerUsed);
+	wsm->setChannelLoad(channelLoad);
 
-	wsm->setTimestamp();
 	wsm->setPriority(priority);
-	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
-	wsm->setSenderAngle(curAngle);
-	wsm->setSenderPos(curPosition);
-	wsm->setSenderSpeed(curSpeed);
 }
 
 void BaseWaveApplLayer::sendWSM(WaveShortMessage *wsm)
@@ -268,14 +251,10 @@ void BaseWaveApplLayer::sendBeacon()
 	EV << "Creating Beacon with Priority " << beaconPriority << " at BaseWaveApplLayer at " << simTime() << std::endl;
 	BeaconMessage *beaconMsg = new BeaconMessage("beacon");
 	prepareWSM(beaconMsg, beaconLengthBits, type_CCH, beaconPriority, -1);
+	beaconMsg->setSenderPos(curPosition);
+	beaconMsg->setSenderSpeed(curSpeed);
 	decorateBeacon(beaconMsg);
 	sendWSM(beaconMsg);
-}
-
-void BaseWaveApplLayer::decorateBeacon(BeaconMessage *beaconMsg)
-{
-	beaconMsg->setSenderFrom(fromRoadhead);
-	beaconMsg->setSenderTo(toRoadhead);
 }
 
 void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
@@ -288,17 +267,14 @@ void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
 	{
 		EV << "    sender [" << sender << "] is an old neighbor, update its info.\n";
 		neighborInfo = neighbors[sender]; // alias for efficiency
-		neighborInfo->angle = beaconMsg->getSenderAngle();
 		neighborInfo->pos = beaconMsg->getSenderPos();
 		neighborInfo->speed = beaconMsg->getSenderSpeed();
-		neighborInfo->from = beaconMsg->getSenderFrom();
-		neighborInfo->to = beaconMsg->getSenderTo();
 		neighborInfo->receivedAt = simTime();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
-		neighborInfo = new NeighborInfo(beaconMsg->getSenderAngle(), beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), beaconMsg->getSenderFrom(), beaconMsg->getSenderTo(), simTime());
+		neighborInfo = new NeighborInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), simTime());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
 	beaconMsg->removeControlInfo();
@@ -347,46 +323,9 @@ void BaseWaveApplLayer::forgetMemory()
 
 void BaseWaveApplLayer::handleMobilityUpdate(cObject *obj)
 {
-	// Veins::TraCIMobility* const mobility = check_and_cast<Veins::TraCIMobility*>(obj);
 	curPosition = mobility->getCurrentPosition();
 	curSpeed = mobility->getCurrentSpeed();
-#if MAINTAIN_LANE_ID
-	curAngle = mobility->getAngleRad();
-	if (laneId != mobility->getLaneId())
-	{
-		laneId = mobility->getLaneId();
-		EV << "laneId changed to: " << laneId << std::endl;
-		traciLane->setLaneId(laneId);
-		std::list<Coord> roadheads = traciLane->getShape();
-		ASSERT( roadheads.size() == 2 ); // must be non-internal lane
-		fromRoadhead = roadheads.front();
-		toRoadhead = roadheads.back();
-		if ((curSpeed.x >= 0 && fromRoadhead.x > toRoadhead.x) || (curSpeed.x < 0 && fromRoadhead.x < toRoadhead.x))
-			std::swap(fromRoadhead, toRoadhead);
-#if ROUTING_DEBUG_LOG
-		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
-		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
-#endif
-		// check if the vehicle has turned driving direction
-		switch (RoutingUtils::relativeDirection(oldAngle, curAngle))
-		{
-		case RoutingUtils::SAME:
-			onStraight();
-			break;
-		case RoutingUtils::LEFT:
-			onTurnLeft();
-			break;
-		case RoutingUtils::RIGHT:
-			onTurnRight();
-			break;
-		case RoutingUtils::OPPOSITE:
-			onTurnAround();
-			break;
-		}
-	}
-	if (!mobility->getAtIntersection())
-		oldAngle = curAngle;
-#endif
+
 	MobilityObserver::Instance()->update(myAddr, curPosition, curSpeed);
 }
 

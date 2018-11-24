@@ -25,7 +25,6 @@ import org.car2x.veins.modules.world.annotations.AnnotationManager;
 import org.car2x.veins.base.connectionManager.ConnectionManager;
 import org.car2x.veins.base.modules.BaseWorldUtility;
 import org.car2x.veins.modules.mobility.traci.TraCIScenarioManagerLaunchd;
-import org.car2x.veins.modules.routing.RoutingStatisticCollector;
 
 network Scenario
 {

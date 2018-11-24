@@ -1,5 +1,7 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018 Gurjashan Pannu <pannu@ccs-labs.org>
+//
+// Documentation for these modules is at http://veins.car2x.org/
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,21 +18,13 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-package org.car2x.veins.modules.rsu;
+cplusplus {{
+#include "veins/modules/messages/Mac80211Pkt_m.h"
+}}
 
-simple DummyRSU
+class Mac80211Pkt;
+
+packet Mac80211Ack extends Mac80211Pkt
 {
-	parameters:
-		@class(DummyRSU);
-		@display("b=10,10,oval");
-
-		double posX;
-		double posY;
-		double posZ;
-
-	gates:
-		input westIn;    // westIn gate connected to west neighbor RSU
-		output westOut;  // westOut gate connected to west neighbor RSU
-		input eastIn;    // eastIn gate connected to east neighbor RSU
-		output eastOut;  // eastOut gate connected to east neighbor RSU
+	unsigned long messageId; // The ID of the aknowledged packet
 }

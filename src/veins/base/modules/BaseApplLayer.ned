@@ -21,7 +21,7 @@ simple BaseApplLayer
 {
     parameters:
         int headerLength = default(320bit) @unit("bit"); // length of the application message header (in bits), default is the length of TCP/IP header
-        double maxOffset = default(0.005s) @unit(s);  // the maximum delay of messages sent down to avoid synchronous channel access
+        double maxOffset = default(0.001s) @unit(s); // the maximum delay of messages sent down to avoid synchronous channel access
 
     gates:
         input lowerLayerIn; // from network layer

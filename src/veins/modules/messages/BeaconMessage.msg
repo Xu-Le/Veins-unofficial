@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,14 +17,13 @@
 //
 
 cplusplus {{
-#include "veins/modules/messages/WaveShortMessage_m.h"
+#include "veins/modules/messages/WaveServiceAdvertisement_m.h"
 }}
 
-class WaveShortMessage;
-class noncobject Coord;
+class WaveServiceAdvertisment;
 
-packet BeaconMessage extends WaveShortMessage
+packet BeaconMessage extends WaveServiceAdvertisment
 {
-	Coord senderFrom;  // The tail of road where sender is driving from
-	Coord senderTo;    // The head of road where sender is driving to
+    unsigned char elementID = 6; // see "8.2.2.6.3 3DLocation" of IEEE Std 1609.3-2016
+    unsigned char elementLength = 48;
 }

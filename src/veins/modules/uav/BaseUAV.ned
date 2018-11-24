@@ -28,7 +28,7 @@ simple BaseUAV extends BaseApplLayer
 	bool dataOnSch = default(true); // tells the applayer whether to use a service channel for datapackets or the control channel
 
 	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
-	int beaconPriority = default(1); // the access category of the beacon messages
+	int beaconPriority = default(0); // the access category of the beacon messages
 
 	double beaconInterval = default(1s) @unit(s); // the interval between 2 beacon messages
 	double examineVehiclesInterval = default(2s) @unit(s);  // the interval between 2 examine vehicle whether in communication range messages

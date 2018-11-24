@@ -137,6 +137,13 @@ void RoutingUAV::handleLowerMsg(cMessage *msg)
 	BaseUAV::handleLowerMsg(msg);
 }
 
+void RoutingUAV::handleLowerControl(cMessage *msg)
+{
+	DataMessage *dataMsg = dynamic_cast<DataMessage*>(msg);
+	ASSERT(dataMsg != nullptr);
+	onDataLost(dataMsg);
+}
+
 void RoutingUAV::decorateUavBeacon(UavBeaconMessage *uavBeaconMsg)
 {
 	uavBeaconMsg->setHop(hop);
@@ -263,6 +270,11 @@ void RoutingUAV::onRouting(RoutingMessage *routingMsg)
 void RoutingUAV::onData(DataMessage* dataMsg)
 {
 	EV << logName() << ": onData!\n";
+}
+
+void RoutingUAV::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << logName() << ": onDataLost!\n";
 }
 
 void RoutingUAV::onNeighborUpdate()

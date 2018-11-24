@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ class WaveShortMessage;
 
 packet DataMessage extends WaveShortMessage
 {
-	bool isLast;     // whether it is the last data packet
-	long receiver;   // identifier of receiver's application
-	int curOffset;   // current content offset of the data this packet contains
-	int bytesNum;    // this variable exists due to performance consideration, for sending many packets once in transmission
+    bool isAck;    // if isAck is true, then sequence field indicates which sequence receives acknowledgment
+	long receiver; // identifier of receiver's application
+	int sequence;  // current content offset of the data this packet contains
+	int bytesNum;  // this variable exists due to performance consideration, for sending many packets once in transmission
 }

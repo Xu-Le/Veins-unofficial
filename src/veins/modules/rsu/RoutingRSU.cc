@@ -171,6 +171,13 @@ void RoutingRSU::handleLowerMsg(cMessage *msg)
 	BaseRSU::handleLowerMsg(msg);
 }
 
+void RoutingRSU::handleLowerControl(cMessage *msg)
+{
+	DataMessage *dataMsg = dynamic_cast<DataMessage*>(msg);
+	ASSERT(dataMsg != nullptr);
+	onDataLost(dataMsg);
+}
+
 void RoutingRSU::sendUavBeacon()
 {
 	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at RoutingRSU at " << simTime() << std::endl;
@@ -264,6 +271,11 @@ void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 void RoutingRSU::onData(DataMessage *dataMsg)
 {
 	EV << logName() << ": onData!\n";
+}
+
+void RoutingRSU::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << logName() << ": onDataLost!\n";
 }
 
 void RoutingRSU::examineUAVs()

@@ -20,12 +20,12 @@ package org.car2x.veins.tests.multilane_notls;
 import org.car2x.veins.nodes.Scenario;
 
 import org.car2x.veins.nodes.RSU;
-import org.car2x.veins.modules.routing.WarningStatisticCollector;
+import org.car2x.veins.modules.routing.RoutingStatisticCollector;
 
 network scenario extends Scenario
 {
 	submodules:
-		warningCollector: WarningStatisticCollector {
+		routingCollector: RoutingStatisticCollector {
 			@display("p=500,24");
 		}
 }

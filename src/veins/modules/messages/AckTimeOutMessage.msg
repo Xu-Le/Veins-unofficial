@@ -1,5 +1,7 @@
 //
-// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018 Gurjashan Pannu <pannu@ccs-labs.org>
+//
+// Documentation for these modules is at http://veins.car2x.org/
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,19 +18,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-package org.car2x.veins.modules.application;
-
-simple BaseServer
+message AckTimeOutMessage
 {
-	parameters:
-		@class(BaseServer);
-		@display("i=device/server2");
-		int rsuNum; // number of RSUs in current scenario
-		int headerLength = 224bit @unit(bit); // header length of the wired UDP/IP packet
-
-	gates:
-		input cellularIn;   // cellularIn gate connected to cellular base station
-		output cellularOut; // cellularOut gate connected to cellular base station
-		input rsuIn[rsuNum]; // rsuIn gates connected to road side units
-		output rsuOut[rsuNum]; // rsuOut gates connected to road side units
+	unsigned long wsmId = -1; // The corresponding WSM's tree id
+	int ac = -1; // Access category on which the AckTimer is set
 }

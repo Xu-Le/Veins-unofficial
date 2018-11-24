@@ -61,6 +61,15 @@ public:
      * @brief Return the cca threshold in dBm
      */
     double getCCAThreshold();
+    /**
+     * @brief Enable notifications about PHY-RXSTART.indication in MAC
+     * @param enable true if Mac needs to be notified about it
+     */
+    void notifyMacAboutRxStart(bool enable);
+    /**
+     * @brief Explicit request to PHY for the channel status
+     */
+    void requestChannelStatusIfIdle();
 
 protected:
     /** @brief CCA threshold. See Decider80211p for details */

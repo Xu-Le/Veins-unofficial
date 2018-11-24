@@ -1,5 +1,7 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2011 David Eckhoff <eckhoff@cs.fau.de>, 2018 Xu Le <xmutongxinXuLe@163.com>
+//
+// Documentation for these modules is at http://veins.car2x.org/
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,31 +18,14 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include "veins/modules/rsu/DummyRSU.h"
+cplusplus {{
+#include "veins/modules/messages/WaveShortMessage_m.h"
+}}
 
-Define_Module(DummyRSU);
+class WaveShortMessage;
 
-void DummyRSU::initialize(int stage)
+packet WaveServiceAdvertisment extends WaveShortMessage
 {
-	cComponent::initialize(stage);
-
-	if (stage == 0)
-	{
-		EV << "DummyRSU::initialize() called.\n";
-
-		westIn = findGate("westIn");
-		westOut = findGate("westOut");
-		eastIn = findGate("eastIn");
-		eastOut = findGate("eastOut");
-
-		positionX = par("posX").doubleValue();
-		positionY = par("posY").doubleValue();
-		positionZ = par("posZ").doubleValue();
-	}
+    unsigned char wsaOptionIndicator = 56; // WSA Version, WSA Header Option Indicator, see 8.2.2.2 of IEEE Std 1609.3-2016
+    unsigned char wsaIdentifier; // WSA Identifier, Content Count, see 8.2.2.4 of IEEE Std 1609.3-2016
 }
-
-void DummyRSU::finish()
-{
-	EV << "DummyRSU::finish() called.\n";
-}
-

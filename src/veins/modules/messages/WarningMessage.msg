@@ -21,12 +21,14 @@ cplusplus {{
 }}
 
 class WaveShortMessage;
+
 class noncobject HopItems;
 
 packet WarningMessage extends WaveShortMessage
 {
 	bool warningSuccess = false; // Is warning message successfully arrive at farthest vehicle?
 	bool direction = false; // Is target to opposite vehicle?
+	int GUID = 0; // Unique identifier of this WarningMessage
 	int hopCount = 0;   // Total hop count from sender
 	double farthestDistance = 1000; // The farthest target vehicle for warning message in ROI
 	string laneId; // Indicates which lane is the warning message's target

@@ -84,6 +84,13 @@ void GPCR::handleLowerMsg(cMessage *msg)
 	BaseWaveApplLayer::handleLowerMsg(msg);
 }
 
+void GPCR::handleLowerControl(cMessage *msg)
+{
+	DataMessage *dataMsg = dynamic_cast<DataMessage*>(msg);
+	ASSERT(dataMsg != nullptr);
+	onDataLost(dataMsg);
+}
+
 void GPCR::decorateRouting(RoutingMessage *routingMsg)
 {
 	int hopCount = routingMsg->getHopCount();
@@ -205,6 +212,11 @@ void GPCR::onRouting(RoutingMessage *_routingMsg)
 void GPCR::onData(DataMessage *dataMsg)
 {
 	EV << "node[" << myAddr << "]: onData!\n";
+}
+
+void GPCR::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << "node[" << myAddr << "]: onDataLost!\n";
 }
 
 void GPCR::callRouting(LAddress::L3Type receiver)

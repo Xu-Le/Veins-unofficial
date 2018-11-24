@@ -119,6 +119,9 @@ protected:
     /** @brief count the number of collisions */
     unsigned int collisions;
 
+    /** @brief notify PHY-RXSTART.indication  */
+    bool notifyRxStart;
+
 protected:
     /**
      * @brief Checks a mapping against a specific threshold (element-wise).
@@ -200,7 +203,8 @@ public:
         myBusyTime(0),
         myStartTime(simTime().dbl()),
         collectCollisionStats(collectCollisionStatistics),
-        collisions(0)
+        collisions(0),
+		notifyRxStart(false)
     {
         phy11p = dynamic_cast<Decider80211pToPhy80211pInterface*>(phy);
         assert(phy11p);
@@ -243,6 +247,11 @@ public:
      * because of the transmission.
      */
     virtual void switchToTx();
+
+    /**
+     * @brief notify PHY-RXSTART.indication
+     */
+    void setNotifyRxStart(bool enable);
 };
 
 #endif /* DECIDER80211p_H_ */

@@ -102,6 +102,7 @@ void BaseRSU::handleMessage(cMessage *msg)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_CONTROL, msg);
 		handleLowerControl(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == wiredIn)
 	{
@@ -166,16 +167,17 @@ void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channe
 	wsm->addBitLength(headerLength);
 	wsm->addBitLength(dataLength);
 
-	if (channel == type_CCH)
-		wsm->setChannelNumber(Channels::CCH);
-	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
+	WAVEInformationElement dataRate(16, 1, 12);
+	WAVEInformationElement transmitPowerUsed(4, 1, 30);
+	WAVEInformationElement channelLoad(23, 1, 0);
+	wsm->setChannelNumber(channelNumber); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	wsm->setDataRate(dataRate);
+	wsm->setTransmitPowerUsed(transmitPowerUsed);
+	wsm->setChannelLoad(channelLoad);
 
 	wsm->setPriority(priority);
-	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
-	wsm->setSenderPos(curPosition);
-	wsm->setTimestamp(simTime());
 }
 
 void BaseRSU::sendWSM(WaveShortMessage *wsm)
