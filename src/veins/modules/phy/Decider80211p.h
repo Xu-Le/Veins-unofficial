@@ -52,9 +52,10 @@ class Decider80211p: public BaseDecider
 public:
     enum Decider80211ControlKinds {
         NOTHING = 22100,
-        BITERROR,       //the phy has recognized a bit error in the packet
-        LAST_DECIDER_80211_CONTROL_KIND,
-        RECWHILESEND
+        BITERROR, // the phy has recognized a bit error in the packet
+		RECVWHILESEND,
+		NOT_SYNCHRONIZED, // the phy has already synchronized to another AirFrame
+        LAST_DECIDER_80211_CONTROL_KIND
     };
 
     /**
@@ -145,7 +146,7 @@ protected:
     virtual simtime_t processSignalEnd(AirFrame* frame);
 
     /** @brief computes if packet is ok or has errors*/
-    enum PACKET_OK_RESULT packetOk(double snirMin, double snrMin, int lengthMPDU, double bitrate);
+    enum PACKET_OK_RESULT packetOk(double sinrMin, double snrMin, int lengthMPDU, double bitrate);
 
     /**
      * @brief Calculates the RSSI value for the passed ChannelSenseRequest.

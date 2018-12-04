@@ -159,13 +159,12 @@ void BaseRSU::handleLowerMsg(cMessage *msg)
 		EV << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
 	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
 	WAVEInformationElement dataRate(16, 1, 12);
@@ -178,6 +177,7 @@ void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channe
 
 	wsm->setPriority(priority);
 	wsm->setSenderAddress(myAddr);
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseRSU::sendWSM(WaveShortMessage *wsm)
@@ -197,21 +197,23 @@ void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
 		vehicleInfo = vehicles[sender];
 		vehicleInfo->pos = beaconMsg->getSenderPos();
 		vehicleInfo->speed = beaconMsg->getSenderSpeed();
+		vehicleInfo->macAddr = beaconMsg->getRecipientAddress();
 		vehicleInfo->receivedAt = simTime();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new vehicle, insert its info.\n";
-		vehicleInfo = new VehicleInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), simTime());
+		vehicleInfo = new VehicleInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), beaconMsg->getRecipientAddress(), simTime());
 		vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(sender, vehicleInfo));
 	}
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
 	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all vehicles' information of " << logName() << std::endl;
+	EV << "display all vehicles' information:\n";
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
-		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << std::endl;
+		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 

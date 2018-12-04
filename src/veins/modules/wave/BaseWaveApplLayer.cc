@@ -31,9 +31,13 @@ void BaseWaveApplLayer::initialize(int stage)
 	{
 		cellularIn = findGate("cellularIn");
 
+#ifndef TEST_ROUTE_REPAIR_PROTOCOL
 		mobility = Veins::TraCIMobilityAccess().get(getParentModule());
 		traci = mobility->getCommandInterface();
 		traciVehicle = mobility->getVehicleCommandInterface();
+#else
+		mobility = FindModule<BaseMobility*>::findSubModule(getParentModule());
+#endif
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
@@ -50,7 +54,6 @@ void BaseWaveApplLayer::initialize(int stage)
 
 		beaconLengthBits = par("beaconLengthBits").longValue();
 		beaconPriority = par("beaconPriority").longValue();
-		maxHopConstraint = par("maxHopConstraint").longValue();
 
 		neighborElapsed = par("neighborElapsed").doubleValue();
 		memoryElapsed = par("memoryElapsed").doubleValue();
@@ -63,17 +66,13 @@ void BaseWaveApplLayer::initialize(int stage)
 		findHost()->subscribe(mobilityStateChangedSignal, this);
 		findHost()->subscribe(parkingStateChangedSignal, this);
 
-		// simulate asynchronous channel access
-		double offSet = static_cast<double>(myAddr%100)/100.0 * (beaconInterval/2);
-		offSet = offSet + floor(offSet/0.050)*0.050;
-
 		if (sendBeacons)
 		{
 			sendBeaconEvt = new cMessage("beacon evt", WaveApplMsgKinds::SEND_BEACON_EVT);
 			examineNeighborsEvt = new cMessage("examine neighbors evt", WaveApplMsgKinds::EXAMINE_NEIGHBORS_EVT);
 			forgetMemoryEvt = new cMessage("forget memory evt", WaveApplMsgKinds::FORGET_MEMORY_EVT); // derived classes schedule it
 			recycleGUIDEvt = new cMessage("recycle guid evt", WaveApplMsgKinds::RECYCLE_GUID_EVT);
-			scheduleAt(simTime() + offSet, sendBeaconEvt);
+			scheduleAt(simTime() + dblrand()*beaconInterval, sendBeaconEvt);
 			scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
 		}
 		else
@@ -210,17 +209,16 @@ void BaseWaveApplLayer::handleLowerMsg(cMessage *msg)
 {
 	if (strcmp(msg->getName(), "beacon") == 0)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
-	else
-		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
+	// else
+	//	EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
 	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
 	WAVEInformationElement dataRate(16, 1, 12);
@@ -233,6 +231,7 @@ void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_chan
 
 	wsm->setPriority(priority);
 	wsm->setSenderAddress(myAddr);
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseWaveApplLayer::sendWSM(WaveShortMessage *wsm)
@@ -269,33 +268,34 @@ void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
 		neighborInfo = neighbors[sender]; // alias for efficiency
 		neighborInfo->pos = beaconMsg->getSenderPos();
 		neighborInfo->speed = beaconMsg->getSenderSpeed();
+		neighborInfo->macAddr = beaconMsg->getRecipientAddress();
 		neighborInfo->receivedAt = simTime();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
-		neighborInfo = new NeighborInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), simTime());
+		neighborInfo = new NeighborInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), beaconMsg->getRecipientAddress(), simTime());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
-	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
 	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all neighbors' information of " << logName() << std::endl;
+	EV << "display all neighbors' information:\n";
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << std::endl;
+		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << ", MAC: " << itN->second->macAddr << "\n";
+	EV << std::endl;
 #endif
 }
 
 void BaseWaveApplLayer::examineNeighbors()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (itN = neighbors.begin(); itN != neighbors.end();)
 	{
-		if ( curTime - itN->second->receivedAt.dbl() > neighborElapsed )
+		if ( curTime - itN->second->receivedAt > neighborElapsed )
 		{
-			EV << logName() << " disconnected from neighbor[" << itN->first << "], delete its info.\n";
-			/* derived class's extension write here before it is deleted */
+			EV << "disconnected from neighbor[" << itN->first << "], delete its info.\n";
+			onNeighborLost(itN->first);
 			delete itN->second;
 			neighbors.erase(itN++);
 		}
@@ -306,12 +306,12 @@ void BaseWaveApplLayer::examineNeighbors()
 
 void BaseWaveApplLayer::forgetMemory()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (std::map<int, WaveShortMessage*>::iterator iter = messageMemory.begin(); iter != messageMemory.end();)
 	{
-		if ( curTime - iter->second->getTimestamp().dbl() > memoryElapsed )
+		if ( curTime - iter->second->getTimestamp() > memoryElapsed )
 		{
-			EV << logName() << " forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
+			EV << "forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
 			/* derived class's extension write here before it is deleted */
 			delete iter->second;
 			messageMemory.erase(iter++);
@@ -331,7 +331,9 @@ void BaseWaveApplLayer::handleMobilityUpdate(cObject *obj)
 
 void BaseWaveApplLayer::handleParkingUpdate(cObject *obj)
 {
+#ifndef TEST_ROUTE_REPAIR_PROTOCOL
 	isParking = mobility->getParkingState();
+#endif
 
 	if (!sendWhileParking)
 	{

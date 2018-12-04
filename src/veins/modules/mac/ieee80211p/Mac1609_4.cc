@@ -19,10 +19,6 @@
 //
 
 #include "veins/modules/mac/ieee80211p/Mac1609_4.h"
-#include <iterator>
-
-#include "veins/modules/phy/DeciderResult80211.h"
-#include "veins/base/phyLayer/PhyToMacControlInfo.h"
 #include "veins/modules/messages/PhyControlMessage_m.h"
 
 #define DBG_MAC if (false) EV_INFO
@@ -83,10 +79,10 @@ void Mac1609_4::initialize(int stage)
 		myEDCA[type_CCH]->myId = myId;
 		myEDCA[type_CCH]->myId.append(" CCH");
 
-		myEDCA[type_CCH]->createQueue(2,(((CWMIN_11P+1)/4)-1),(((CWMIN_11P +1)/2)-1),AC_VO);
+		myEDCA[type_CCH]->createQueue(2,(((CWMIN_11P+1)/4)-1),(((CWMIN_11P+1)/2)-1),AC_VO);
 		myEDCA[type_CCH]->createQueue(3,(((CWMIN_11P+1)/2)-1),CWMIN_11P,AC_VI);
 		myEDCA[type_CCH]->createQueue(6,CWMIN_11P,CWMAX_11P,AC_BE);
-		myEDCA[type_CCH]->createQueue(9,CWMIN_11P,CWMAX_11P,AC_BK);
+		myEDCA[type_CCH]->createQueue(9,CWMIN_11P,(CWMAX_11P+1)/16-1,AC_BK);
 
 		myEDCA[type_SCH] = new EDCA(this, type_SCH,par("queueSize").longValue());
 		myEDCA[type_SCH]->myId = myId;
@@ -94,7 +90,7 @@ void Mac1609_4::initialize(int stage)
 		myEDCA[type_SCH]->createQueue(2,(((CWMIN_11P+1)/4)-1),(((CWMIN_11P +1)/2)-1),AC_VO);
 		myEDCA[type_SCH]->createQueue(3,(((CWMIN_11P+1)/2)-1),CWMIN_11P,AC_VI);
 		myEDCA[type_SCH]->createQueue(6,CWMIN_11P,CWMAX_11P,AC_BE);
-		myEDCA[type_SCH]->createQueue(9,CWMIN_11P,CWMAX_11P,AC_BK);
+		myEDCA[type_SCH]->createQueue(9,CWMIN_11P,(CWMAX_11P+1)/16-1,AC_BK);
 
 		useSCH = par("useServiceChannel").boolValue();
 		if (useSCH)
@@ -155,7 +151,9 @@ void Mac1609_4::initialize(int stage)
 		statsSentPackets = 0;
 		statsSentAcks = 0;
 		statsTXRXLostPackets = 0;
-		statsSNIRLostPackets = 0;
+		statsSINRLostPackets = 0;
+		statsSyncLostPackets = 0;
+		statsCollisionLostPackets = 0;
 		statsDroppedPackets = 0;
 		statsNumTooLittleTime = 0;
 		statsNumInternalContention = 0;
@@ -187,21 +185,22 @@ void Mac1609_4::finish()
 	cancelAndDelete(nextChannelSwitch);
 	cancelAndDelete(stopIgnoreChannelStateMsg);
 
-	/*
-	recordScalar("ReceivedUnicastPackets",statsReceivedPackets);
-	recordScalar("ReceivedBroadcasts",statsReceivedBroadcasts);
-	recordScalar("SentPackets",statsSentPackets);
+	//long totalLostPackets = statsTXRXLostPackets + statsSINRLostPackets + statsSyncLostPackets + statsCollisionLostPackets;
+	recordScalar("RecvUnicastPackets", statsReceivedPackets);
+	recordScalar("RecvBroadcasts", statsReceivedBroadcasts);
+	recordScalar("SentPackets", statsSentPackets);
 	recordScalar("SentAcknowledgements", statsSentAcks);
-	recordScalar("SNIRLostPackets",statsSNIRLostPackets);
-	recordScalar("RXTXLostPackets",statsTXRXLostPackets);
-	recordScalar("TotalLostPackets",statsSNIRLostPackets+statsTXRXLostPackets);
-	recordScalar("DroppedPacketsInMac",statsDroppedPackets);
-	recordScalar("TooLittleTime",statsNumTooLittleTime);
-	recordScalar("TimesIntoBackoff",statsNumBackoff);
-	recordScalar("SlotsBackoff",statsSlotsBackoff);
-	recordScalar("NumInternalContention",statsNumInternalContention);
-	recordScalar("totalBusyTime",statsTotalBusyTime.dbl());
-	*/
+	recordScalar("RXTXLostPackets", statsTXRXLostPackets);
+	recordScalar("SINRLostPackets", statsSINRLostPackets);
+	recordScalar("SyncLostPackets", statsSyncLostPackets);
+	//recordScalar("CollisionLostPackets", statsCollisionLostPackets);
+	//recordScalar("TotalLostPackets", totalLostPackets);
+	//recordScalar("DroppedPacketsInMac", statsDroppedPackets);
+	//recordScalar("TooLittleTime", statsNumTooLittleTime);
+	//recordScalar("TimesIntoBackoff", statsNumBackoff);
+	//recordScalar("SlotsBackoff", statsSlotsBackoff);
+	//recordScalar("NumInternalContention", statsNumInternalContention);
+	//recordScalar("totalBusyTime", statsTotalBusyTime.dbl());
 }
 
 /* Will change the Service Channel on which the mac layer is listening and sending */
@@ -350,19 +349,15 @@ void Mac1609_4::handleSelfMsg(cMessage *msg)
 void Mac1609_4::handleLowerMsg(cMessage *msg)
 {
 	Mac80211Pkt *macPkt = dynamic_cast<Mac80211Pkt*>(msg);
+	LAddress::L2Type srcAddr = macPkt->getSrcAddr(), dstAddr = macPkt->getDestAddr();
 	WaveShortMessage *wsm = nullptr;
 	if (!macPkt->getIsAck())
 		wsm = dynamic_cast<WaveShortMessage*>(macPkt->decapsulate());
 	if (wsm != nullptr && strcmp(wsm->getName(), "beacon") == 0) // pass information about received frame to the upper layers
 	{
-		DeciderResult80211 *macRes = dynamic_cast<DeciderResult80211*>(PhyToMacControlInfo::getDeciderResult(msg));
-		ASSERT(macRes);
-		DeciderResult80211 *res = new DeciderResult80211(*macRes);
-		wsm->setControlInfo(new PhyToMacControlInfo(res));
+		wsm->setRecipientAddress(srcAddr); // trick, there is no field indicates the source's MAC address
+		wsm->setControlInfo(msg->removeControlInfo());
 	}
-	msg->removeControlInfo();
-
-	LAddress::L2Type srcAddr = macPkt->getSrcAddr(), dstAddr = macPkt->getDestAddr();
 
 	DBG_MAC << "Received frame name = " << macPkt->getName()
 	        << ", src = " << srcAddr
@@ -519,6 +514,7 @@ void Mac1609_4::handleLowerControl(cMessage *msg)
 		// RX failed at phy. Time to retransmit
 		phy11p->notifyMacAboutRxStart(false);
 		rxStartIndication = false;
+		handleRetransmit(lastAC);
 		break;
 	}
 	case Mac80211pToPhy11pInterface::CHANNEL_BUSY:
@@ -540,18 +536,26 @@ void Mac1609_4::handleLowerControl(cMessage *msg)
 	case Decider80211p::COLLISION:
 	{
 		emit(sigCollision, true);
-		// fallthrough
+		++statsCollisionLostPackets;
+		DBG_MAC << "A packet was not received due to collision." << std::endl;
+		break;
 	}
 	case Decider80211p::BITERROR:
 	{
-		statsSNIRLostPackets++;
+		++statsSINRLostPackets;
 		DBG_MAC << "A packet was not received due to biterrors." << std::endl;
 		break;
 	}
-	case Decider80211p::RECWHILESEND:
+	case Decider80211p::RECVWHILESEND:
 	{
-		statsTXRXLostPackets++;
+		++statsTXRXLostPackets;
 		DBG_MAC << "A packet was not received because we were sending while receiving." << std::endl;
+		break;
+	}
+	case Decider80211p::NOT_SYNCHRONIZED:
+	{
+		++statsSyncLostPackets;
+		DBG_MAC << "A packet was not received due to synchronized failure." << std::endl;
 		break;
 	}
 	case MacToPhyInterface::RADIO_SWITCHING_OVER:
@@ -576,6 +580,16 @@ void Mac1609_4::handleLowerControl(cMessage *msg)
 void Mac1609_4::handleUpperControl(cMessage* msg)
 {
 	throw cRuntimeError("Mac layer does not accept upper layer control message.");
+}
+
+uint32_t Mac1609_4::getEDCAQueueRoom(t_channel chan, int priority, bool total)
+{
+	t_access_category ac = mapUserPriority(priority);
+	EDCA *edca = myEDCA[chan];
+	if (total)
+		return edca->maxQueueSize > 0 ? edca->maxQueueSize : 64;
+	uint32_t curSize = edca->myQueues[ac].queue.size();
+	return edca->maxQueueSize > 0 ? edca->maxQueueSize - curSize : 64;
 }
 
 void Mac1609_4::setActiveChannel(t_channel state)
@@ -1007,7 +1021,7 @@ WaveShortMessage* Mac1609_4::EDCA::initiateTransmit(simtime_t lastIdle)
 
 simtime_t Mac1609_4::EDCA::startContent(simtime_t idleSince, bool guardActive)
 {
-	DBG_MAC << "Restarting contention." << std::endl;
+	DBG_MAC << "Restarting contention.\n";
 
 	simtime_t nextEvent = -1;
 
@@ -1015,7 +1029,7 @@ simtime_t Mac1609_4::EDCA::startContent(simtime_t idleSince, bool guardActive)
 
 	lastStart = idleSince;
 
-	DBG_MAC << "Channel is already idle for: " << idleTime << " since " << idleSince << std::endl;
+	DBG_MAC << "Channel is already idle for: " << idleTime << " since " << idleSince << "\n";
 
 	// this returns the nearest possible event in this EDCA subsystem after a busy channel
 	FOREACH_EDCAQUEUE
@@ -1037,7 +1051,7 @@ simtime_t Mac1609_4::EDCA::startContent(simtime_t idleSince, bool guardActive)
 			simtime_t possibleNextEvent = DIFS + EDCAQ.currentBackoff * SLOTLENGTH_11P;
 
 			DBG_MAC << "Waiting Time for Queue " << iter->first <<  ": " << possibleNextEvent << " = " << EDCAQ.aifsn << "*"  << SLOTLENGTH_11P << " + "
-			        << SIFS_11P << " + " << EDCAQ.currentBackoff << "*" << SLOTLENGTH_11P << "; Idle time: " << idleTime << std::endl;
+			        << SIFS_11P << " + " << EDCAQ.currentBackoff << "*" << SLOTLENGTH_11P << std::endl;
 
 			if (idleTime > possibleNextEvent)
 			{

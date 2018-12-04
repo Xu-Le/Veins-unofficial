@@ -25,6 +25,7 @@ class WaveShortMessage;
 packet DataMessage extends WaveShortMessage
 {
     bool isAck;    // if isAck is true, then sequence field indicates which sequence receives acknowledgment
+    long sender;   // identifier of sender's application
 	long receiver; // identifier of receiver's application
 	int sequence;  // current content offset of the data this packet contains
 	int bytesNum;  // this variable exists due to performance consideration, for sending many packets once in transmission

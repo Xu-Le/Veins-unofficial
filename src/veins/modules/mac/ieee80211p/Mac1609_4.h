@@ -157,6 +157,8 @@ public:
 	~Mac1609_4() {}
 	///@}
 
+	uint32_t getEDCAQueueRoom(t_channel chan, int priority, bool total);
+
 	void changeServiceChannel(int channelNumber);
 
 	/**
@@ -268,7 +270,9 @@ private:
 	long statsSentPackets;
 	long statsSentAcks;
 	long statsTXRXLostPackets;
-	long statsSNIRLostPackets;
+	long statsSINRLostPackets;
+	long statsSyncLostPackets;
+	long statsCollisionLostPackets;
 	long statsDroppedPackets;
 	long statsNumTooLittleTime;
 	long statsNumInternalContention;

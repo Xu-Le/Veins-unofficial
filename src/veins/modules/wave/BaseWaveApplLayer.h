@@ -57,7 +57,6 @@ public:
 		SEND_BEACON_EVT,
 		EXAMINE_NEIGHBORS_EVT,
 		CALL_ROUTING_EVT,
-		CALL_WARNING_EVT,
 		FORGET_MEMORY_EVT,
 		RECYCLE_GUID_EVT,
 		PACKET_EXPIRES_EVT,
@@ -93,7 +92,7 @@ protected:
 	virtual void handleCellularMsg(CellularMessage *cellularMsg) {}
 
 	/** @brief wave short message factory method. */
-	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient=-1);
 	/** @brief wave short message send method. */
 	void sendWSM(WaveShortMessage *wsm);
 	/** @brief send beacon message. */
@@ -107,6 +106,8 @@ protected:
 	virtual void examineNeighbors();
 	/** @brief forget packets received long time ago. */
 	virtual void forgetMemory();
+	/** @brief continuously failed to receive beacon message from the neighbor. */
+	virtual void onNeighborLost(LAddress::L3Type neighbor) {}
 
 	/** @name mobility relevant methods. */
 	///@{
@@ -121,11 +122,11 @@ protected:
 	class NeighborInfo
 	{
 	public:
-		NeighborInfo(Coord& p, Coord& s, simtime_t ra) : type(0), pos(p), speed(s), receivedAt(ra) {}
+		NeighborInfo(Coord& p, Coord& s, LAddress::L2Type ma, simtime_t ra) : pos(p), speed(s), macAddr(ma), receivedAt(ra) {}
 
-		short type;   ///< reserved, defined by derived class since concrete protocol may define different types of neighbors, derived class should define an unknown type whose value equals 0.
 		Coord pos;    ///< current position of the neighbor.
 		Coord speed;  ///< current speed of the neighbor.
+		LAddress::L2Type macAddr; ///< MAC address of the neighbor.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the neighbor.
 	};
 
@@ -140,17 +141,15 @@ protected:
 	bool sendWhileParking; ///< whether send messages when vehicle is parked.
 	bool sendBeacons;      ///< whether send beacons periodically.
 	bool callRoutings;     ///< whether send routing requests.
-	bool callWarnings;     ///< whether send warning notifies when emergent incident happens.
 	bool dataOnSch;        ///< whether send data on service channel.
 	int beaconLengthBits;  ///< the length of beacon message measured in bits.
 	int beaconPriority;    ///< the priority of beacon message.
-	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 	double transmissionRadius;   ///< the biggest transmission distance of transmitter.
-	double beaconInterval; ///< the interval of sending beacon message.
-	double examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
-	double forgetMemoryInterval; ///< the interval of forgetting message received too long time ago.
-	double neighborElapsed; ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
-	double memoryElapsed;   ///< the maximum time can a message store in memory.
+	simtime_t beaconInterval; ///< the interval of sending beacon message.
+	simtime_t examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
+	simtime_t forgetMemoryInterval; ///< the interval of forgetting message received too long time ago.
+	simtime_t neighborElapsed; ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
+	simtime_t memoryElapsed;   ///< the maximum time can a message store in memory.
 	///@}
 
 	simtime_t maxStoreTime; ///< the maximum time a relay vehicle will store a routing message before discarding it.
@@ -178,9 +177,13 @@ protected:
 
 	/** @name TraCI mobility interfaces. */
 	///@{
+#ifndef TEST_ROUTE_REPAIR_PROTOCOL
 	Veins::TraCIMobility *mobility;
 	Veins::TraCICommandInterface *traci;
 	Veins::TraCICommandInterface::Vehicle *traciVehicle;
+#else
+	BaseMobility *mobility;
+#endif
 	Veins::AnnotationManager *annotations;
 	WaveAppToMac1609_4Interface *myMac;
 	///@}

@@ -363,7 +363,7 @@ void RoutingUAV::decide()
 	{
 		if (curPosition.distance(it->second) < V2XRadius)
 		{
-			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
+			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, -1, SimTime::ZERO);
 			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
 		}
 	}

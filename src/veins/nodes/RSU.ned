@@ -23,7 +23,6 @@ package org.car2x.veins.nodes;
 import org.car2x.veins.base.modules.BaseMobility;
 import org.car2x.veins.modules.nic.Nic80211p;
 import org.car2x.veins.modules.rsu.RoutingRSU;
-import org.car2x.veins.modules.rsu.WarningRSU;
 
 module RSU
 {

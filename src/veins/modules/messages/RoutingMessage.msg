@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2017-2018 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,15 +21,10 @@ cplusplus {{
 }}
 
 class WaveShortMessage;
-class noncobject HopItems;
 
 packet RoutingMessage extends WaveShortMessage
 {
-	bool routingSuccess = false; // Is routing path successfully found?
-	bool backward = false; // Is routing result known, notify it backward to sender?
-	int GUID = 0; // Unique identifier of this RoutingMessage
-	int hopCount = 0;   // Total hop count from sender
-	long receiver = -1; // Destination vehicle
-	long nextHop = -1;  // Next selected hop vehicle in routing process
-	HopItems hopInfo;   // Info about every hop vehicle
+    long ipDest = -1; // L3 address
+    unsigned char TTL = 1; // the same as that in IP
+	unsigned char packetType; // packet type
 }

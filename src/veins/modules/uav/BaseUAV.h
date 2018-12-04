@@ -74,7 +74,7 @@ protected:
 	void handleMobilityUpdate(cObject *obj);
 
 	/** @brief wave short message factory method. */
-	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient=-1);
 	/** @brief wave short message send method. */
 	void sendWSM(WaveShortMessage *wsm);
 	/** @brief UAV beacon message send method. */
@@ -96,10 +96,11 @@ protected:
 	class VehicleInfo
 	{
 	public:
-		VehicleInfo(Coord& p, Coord& s, simtime_t ra) : pos(p), speed(s), receivedAt(ra) {}
+		VehicleInfo(Coord& p, Coord& s, LAddress::L2Type ma, simtime_t ra) : pos(p), speed(s), macAddr(ma), receivedAt(ra) {}
 
 		Coord pos;   ///< current position of the vehicle.
 		Coord speed; ///< current speed of the vehicle.
+		LAddress::L2Type macAddr; ///< MAC address of the vehicle.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the vehicle.
 	};
 

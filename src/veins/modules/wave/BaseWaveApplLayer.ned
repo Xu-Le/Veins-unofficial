@@ -41,12 +41,10 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 	bool sendWhileParking  = default(false); // send messages when the car is parked
 	bool sendBeacons = default(true); // tell the applayer to periodically send beacons
 	bool callRoutings = default(false); // whether send routing requests
-	bool callWarnings = default(false); // whether send warning notifies when emergent incident happens
 	bool dataOnSch = default(true); // tells the applayer whether to use a service channel for datapackets or the control channel
 
 	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
 	int beaconPriority = default(0); // the access category of the beacon messages
-	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint.
 
 	double maxStoreTime = default(5s) @unit(s); // the maximum time to store routing message from others
 	double guidUsedTime = default(10s) @unit(s); // the maximum time from a GUID's allocated time to its recycled time

@@ -17,16 +17,44 @@
 //
 package org.car2x.veins.tests.grid;
 
-import org.car2x.veins.nodes.Scenario;
-
-import org.car2x.veins.nodes.RSU;
+import org.car2x.veins.modules.obstacle.ObstacleControl;
+import org.car2x.veins.modules.world.annotations.AnnotationManager;
+import org.car2x.veins.base.connectionManager.ConnectionManager;
+import org.car2x.veins.base.modules.BaseWorldUtility;
+import org.car2x.veins.tests.grid.Phone;
 import org.car2x.veins.modules.routing.RoutingStatisticCollector;
 
-network scenario extends Scenario
+network scenario
 {
+    parameters:
+		double playgroundSizeX @unit(m); // x size of the area the nodes are in (in meters)
+		double playgroundSizeY @unit(m); // y size of the area the nodes are in (in meters)
+		double playgroundSizeZ @unit(m); // z size of the area the nodes are in (in meters)
+		int numPhone = 11; // number of Phones
+		@display("bgb=$playgroundSizeX,$playgroundSizeY");
+
     submodules:
+        obstacles: ObstacleControl {
+			@display("p=190,24");
+		}
+		annotations: AnnotationManager {
+			@display("p=260,24");
+		}
+		connectionManager: ConnectionManager {
+			@display("p=100,24;i=abstract/multicast");
+		}
+		world: BaseWorldUtility {
+			parameters:
+				playgroundSizeX = playgroundSizeX;
+				playgroundSizeY = playgroundSizeY;
+				playgroundSizeZ = playgroundSizeZ;
+				@display("p=20,24;i=misc/globe");
+		}
         routingCollector: RoutingStatisticCollector {
             parameters:
                 @display("p=500,24");
         }
+        node[numPhone]: Phone {
+			@display("p=$posX,$posY;i=device/cellphone_s");
+		}
 }

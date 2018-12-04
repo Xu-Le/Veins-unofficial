@@ -12,45 +12,88 @@
 	</Decider>
 	<RoutingPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter -->
-		<RoutingPlan type="4">
-			<parameter name="simtime" type="double" value="90.0"/>
-			<parameter name="receiver" type="long" value="16"/>
-		</RoutingPlan>
-		<RoutingPlan type="14">
-			<parameter name="simtime" type="double" value="145.0"/>
-			<parameter name="receiver" type="long" value="11"/>
-		</RoutingPlan>
-		<RoutingPlan type="18">
-			<parameter name="simtime" type="double" value="185.0"/>
-			<parameter name="receiver" type="long" value="19"/>
+		<RoutingPlan type="0">
+			<parameter name="simtime" type="double" value="10.5"/>
+			<parameter name="receiver" type="long" value="10"/>
+			<parameter name="contentsize" type="int" value="1048576"/>
 		</RoutingPlan>
 	</RoutingPlans>
-	<WarningPlans>
-		<!-- Notes: Ensure simtime is written increasely, or simulation will crash, however the order of WarningPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime, the warning message's distance of vehicles can be both positive and negative, the latter indicates the warning message aims to vehicles which are driving opposite since vehicle possibly turn around, whereas the warning message's distance of RSUs can only be positive -->
-		<WarningPlan type="3">
-			<!--
-			<parameter name="simtime" type="double" value="100.1"/>
-			<parameter name="distance" type="double" value="600"/>
-			<parameter name="simtime" type="double" value="190.1"/>
-			<parameter name="distance" type="double" value="600"/>
-			-->
-		</WarningPlan>
-		<!-- RSUs' type start from 10000, make sure keep consistent with macro RSU_ADDRESS_OFFSET in BaseRSU.h -->
-		<!--
-		<WarningPlan type="10000">
-			<parameter name="simtime" type="double" value="120.1"/>
-			<parameter name="distance" type="double" value="600"/>
-		</WarningPlan>
-		<WarningPlan type="10001">
-			<parameter name="simtime" type="double" value="150.1"/>
-			<parameter name="distance" type="double" value="1000"/>
-			<parameter name="simtime" type="double" value="180.1"/>
-			<parameter name="distance" type="double" value="1000"/>
-		</WarningPlan>
-		<WarningPlan type="10002">
-			<parameter name="simtime" type="double" value="105.1"/>
-			<parameter name="distance" type="double" value="750"/>
-		</WarningPlan>
-		-->
-	</WarningPlans>
+	<TriggerPlans>
+		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter -->
+		<TriggerPlan type="8">
+			<parameter name="simtime" type="double" value="19.5"/>
+			<parameter name="eventtype" type="int" value="0"/>
+			<parameter name="simtime" type="double" value="21.5"/>
+			<parameter name="eventtype" type="int" value="1"/>
+		</TriggerPlan>
+	</TriggerPlans>
+	<TrajectoryPlans>
+		<!-- Notes: do not specify address as the type of TrajectoryPlan, use the full name of UAV module instead -->
+		<TrajectoryPlan type="node[0]">
+			<parameter name="pos" type="coord" value="300.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="250.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[1]">
+			<parameter name="pos" type="coord" value="700.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+			<parameter name="pos" type="coord" value="600.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[2]">
+			<parameter name="pos" type="coord" value="1100.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="1150.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[3]">
+			<parameter name="pos" type="coord" value="1500.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+			<parameter name="pos" type="coord" value="1600.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[4]">
+			<parameter name="pos" type="coord" value="1900.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="1950.0,200.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[5]">
+			<parameter name="pos" type="coord" value="300.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="350.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[6]">
+			<parameter name="pos" type="coord" value="1100.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="1150.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[7]">
+			<parameter name="pos" type="coord" value="1900.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+			<parameter name="pos" type="coord" value="2000.0,500.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[8]">
+			<parameter name="pos" type="coord" value="300.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="5.0"/>
+			<parameter name="pos" type="coord" value="325.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="5.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[9]">
+			<parameter name="pos" type="coord" value="700.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="650.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="10.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[10]">
+			<parameter name="pos" type="coord" value="1100.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="15.0"/>
+			<parameter name="pos" type="coord" value="1025.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="15.0"/>
+		</TrajectoryPlan>
+	</TrajectoryPlans>
 </root>

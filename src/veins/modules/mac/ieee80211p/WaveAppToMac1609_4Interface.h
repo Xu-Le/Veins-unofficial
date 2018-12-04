@@ -34,7 +34,7 @@
  */
 class WaveAppToMac1609_4Interface {
 	public:
-
+		virtual uint32_t getEDCAQueueRoom(t_channel chan, int priority, bool total=false) = 0;
 		virtual void changeServiceChannel(int channelNumber) = 0;
 
 		virtual ~WaveAppToMac1609_4Interface() {} ;

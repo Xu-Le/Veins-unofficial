@@ -15,6 +15,7 @@
 		<RoutingPlan type="8">
 			<parameter name="simtime" type="double" value="60.1"/>
 			<parameter name="receiver" type="long" value="2"/>
+			<parameter name="contentsize" type="int" value="1048576"/>
 		</RoutingPlan>
 	</RoutingPlans>
 	<WarningPlans>

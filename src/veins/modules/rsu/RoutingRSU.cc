@@ -244,28 +244,7 @@ void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 {
 	EV << logName() << ": onRouting!\n";
 
-	int guid = routingMsg->getGUID(); // alias
 
-	if ( messageMemory.find(guid) != messageMemory.end() )
-	{
-		EV << "routing message(GUID=" << guid << ") has been rebroadcast recently, discard it.\n";
-		return;
-	}
-
-	// check if the hop count of the message exceeds
-	if ( routingMsg->getHopCount() > maxHopConstraint )
-	{
-		EV << "routing message(GUID=" << guid << ") exceeds its maximum hop count, discard it.\n";
-		return;
-	}
-
-	// catch a new routing message
-	EV << "catch a routing message(GUID=" << guid << "), help to rebroadcast it.\n";
-
-	messageMemory.insert(std::pair<int, simtime_t>(guid, simTime()));
-
-	RoutingMessage *dupWSM = new RoutingMessage(*routingMsg);
-	sendWSM(dupWSM);
 }
 
 void RoutingRSU::onData(DataMessage *dataMsg)
@@ -327,7 +306,7 @@ void RoutingRSU::attainDensity()
 	{
 		if (curPosition.distance(it->second) < V2XRadius)
 		{
-			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, SimTime::ZERO);
+			VehicleInfo *vehicleInfo = new VehicleInfo(it->second, O, -1, SimTime::ZERO);
 			vehicles.insert(std::pair<LAddress::L3Type, VehicleInfo*>(it->first, vehicleInfo));
 		}
 	}
