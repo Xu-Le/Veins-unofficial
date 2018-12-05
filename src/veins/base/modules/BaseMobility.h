@@ -23,13 +23,10 @@
 #ifndef BASE_MOBILITY_H
 #define BASE_MOBILITY_H
 
-#include "veins/base/utils/MiXiMDefs.h"
-#include "veins/base/modules/BatteryAccess.h"
 #include "veins/base/utils/Coord.h"
 #include "veins/base/utils/Move.h"
+#include "veins/base/modules/BaseModule.h"
 #include "veins/base/modules/BaseWorldUtility.h"
-
-using Veins::BatteryAccess;
 
 /**
  * @brief Base module for all mobility modules.
@@ -60,7 +57,7 @@ using Veins::BatteryAccess;
  * @ingroup baseModules
  * @author Daniel Willkomm, Andras Varga
  */
-class MIXIM_API BaseMobility : public BatteryAccess
+class MIXIM_API BaseMobility : public BaseModule
 {
   public:
     /**

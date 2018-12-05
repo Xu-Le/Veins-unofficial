@@ -1,5 +1,7 @@
 //
-// Copyright (C) 2016 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018 Gurjashan Pannu <pannu@ccs-labs.org>
+//
+// Documentation for these modules is at http://veins.car2x.org/
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,17 +18,13 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-//
-// Defines a self control message that handle with broadcast suppression wait time elapsed event
-//
-message WaitTimeElapsedMessage
+cplusplus {{
+#include "veins/modules/messages/Mac80211Pkt_m.h"
+}}
+
+class Mac80211Pkt;
+
+packet Mac80211Ack extends Mac80211Pkt
 {
-	// indicates which packet's wait time elapsed
-	int GUID = 0;
-	// whether receive duplicate packets from multiple sources within the waiting period
-	bool recvDup1 = false;
-	// whether receive duplicate packets from multiple sources within the additional waiting period
-	bool recvDup2 = false;
-	// probability of rebroadcast determined by relative distance between receiver and transmitter
-	double probability = 1.0;
+	unsigned long messageId; // The ID of the aknowledged packet
 }

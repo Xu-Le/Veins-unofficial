@@ -74,7 +74,7 @@ protected:
 	void handleMobilityUpdate(cObject *obj);
 
 	/** @brief wave short message factory method. */
-	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient);
 	/** @brief wave short message send method. */
 	void sendWSM(WaveShortMessage *wsm);
 	/** @brief UAV beacon message send method. */
@@ -122,11 +122,12 @@ protected:
 
 	double V2XRadius; ///< the biggest transmission distance of transmitter.
 	double U2URadius; ///< the biggest transmission distance of transmitter.
-	double beaconInterval;           ///< the interval of sending beacon message.
-	double examineVehiclesInterval;  ///< the interval of examining the connectivity with vehicles.
-	double examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
-	double vehicleElapsed;           ///< the maximum time haven't receive message from vehicles leading to assume lose connectivity with it.
-	double neighborElapsed;          ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
+
+	simtime_t beaconInterval;           ///< the interval of sending beacon message.
+	simtime_t examineVehiclesInterval;  ///< the interval of examining the connectivity with vehicles.
+	simtime_t examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
+	simtime_t vehicleElapsed;           ///< the maximum time haven't receive message from vehicles leading to assume lose connectivity with it.
+	simtime_t neighborElapsed;          ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
 
 	Coord curPosition;     ///< current position of this UAV.
 	Coord curSpeed;        ///< current speed of this UAV.

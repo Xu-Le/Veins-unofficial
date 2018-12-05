@@ -30,6 +30,7 @@ void RoutingRSU::initialize(int stage)
 		routingPriority = par("routingPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
 		dataPriority = par("dataPriority").longValue();
+		maxHopConstraint = par("maxHopConstraint").longValue();
 
 		scheduleAt(simTime() + dblrand()*forgetMemoryInterval, forgetMemoryEvt);
 	}
@@ -53,6 +54,12 @@ void RoutingRSU::handleLowerMsg(cMessage *msg)
 		DYNAMIC_CAST_CMESSAGE(Data, data)
 
 	BaseRSU::handleLowerMsg(msg);
+}
+
+void RoutingRSU::handleLowerControl(cMessage *msg)
+{
+	if (strcmp(msg->getName(), "data") == 0)
+		onDataLost(dynamic_cast<DataMessage*>(msg));
 }
 
 void RoutingRSU::onRouting(RoutingMessage *routingMsg)
@@ -86,4 +93,9 @@ void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 void RoutingRSU::onData(DataMessage *dataMsg)
 {
 	EV << logName() << ": onData!\n";
+}
+
+void RoutingRSU::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << logName() << ": onDataLost!\n";
 }

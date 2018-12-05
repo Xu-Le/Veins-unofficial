@@ -55,7 +55,7 @@ BaseConnectionManager* ChannelAccess::getConnectionManager(cModule* nic)
 
 void ChannelAccess::initialize( int stage )
 {
-	BatteryAccess::initialize(stage);
+	BaseModule::initialize(stage);
 
     if( stage == 0 ){
         hasPar("coreDebug") ? coreDebug = par("coreDebug").boolValue() : coreDebug = false;

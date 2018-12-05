@@ -29,6 +29,7 @@ void GPCR::initialize(int stage)
 		routingPriority = par("routingPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
 		dataPriority = par("dataPriority").longValue();
+		maxHopConstraint = par("maxHopConstraint").longValue();
 
 		callRoutings = par("callRoutings").boolValue();
 		if (callRoutings)
@@ -82,6 +83,12 @@ void GPCR::handleLowerMsg(cMessage *msg)
 		DYNAMIC_CAST_CMESSAGE(Data, data)
 
 	BaseWaveApplLayer::handleLowerMsg(msg);
+}
+
+void GPCR::handleLowerControl(cMessage *msg)
+{
+	if (strcmp(msg->getName(), "data") == 0)
+		onDataLost(dynamic_cast<DataMessage*>(msg));
 }
 
 void GPCR::decorateRouting(RoutingMessage *routingMsg)
@@ -205,6 +212,11 @@ void GPCR::onRouting(RoutingMessage *_routingMsg)
 void GPCR::onData(DataMessage *dataMsg)
 {
 	EV << "node[" << myAddr << "]: onData!\n";
+}
+
+void GPCR::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << "node[" << myAddr << "]: onDataLost!\n";
 }
 
 void GPCR::callRouting(LAddress::L3Type receiver)

@@ -24,7 +24,5 @@ class WaveShortMessage;
 
 packet UavBeaconMessage extends WaveShortMessage
 {
-	int hop; // minimum hop count to the RSU
-	int remainingMs; // milliseconds left for the next deployment decision
-	double hopDist; // distance to the next hop
+	int reserved; // reserved field
 }

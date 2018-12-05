@@ -44,17 +44,16 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 	bool callWarnings = default(false); // whether send warning notifies when emergent incident happens
 	bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
 
-	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
-	int beaconPriority = default(1); // the access category of the beacon messages
-	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint.
+	int beaconLengthBits = default(416bit) @unit(bit); // the length of a beacon packet
+	int beaconPriority = default(0); // the access category of the beacon messages
 
 	double maxStoreTime = default(5s) @unit(s); // the maximum time to store routing message from others
 	double guidUsedTime = default(10s) @unit(s); // the maximum time from a GUID's allocated time to its recycled time
 
 	double beaconInterval = default(1s) @unit(s); // the intervall between 2 beacon messages
-	double examineNeighborsInterval = default(2s) @unit(s); // the intervall between 2 examine neighbors messages
+	double examineNeighborsInterval = default(1.5s) @unit(s); // the intervall between 2 examine neighbors messages
 	double forgetMemoryInterval = default(15s) @unit(s); // the intervall between 2 forget the memory of received packets messages
-	double neighborElapsed = default(3s) @unit(s); // if exceeds this time haven't receive beacon message from neighbors, regard it turning into disconnected
+	double neighborElapsed = default(2s) @unit(s); // if exceeds this time haven't receive beacon message from neighbors, regard it turning into disconnected
 	double memoryElapsed = default(15s) @unit(s); // if exceeds this time, the memory of received packet will be forgotten
 
 	gates:

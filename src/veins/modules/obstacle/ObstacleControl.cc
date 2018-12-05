@@ -31,8 +31,6 @@ void ObstacleControl::initialize(int stage)
 {
 	if (stage == 1)
 	{
-		debug = par("debug");
-
 		obstacles.clear();
 		cacheEntries.clear();
 

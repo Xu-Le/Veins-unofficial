@@ -34,22 +34,11 @@ void BaseWaveApplLayer::initialize(int stage)
 		mobility = Veins::TraCIMobilityAccess().get(getParentModule());
 		traci = mobility->getCommandInterface();
 		traciVehicle = mobility->getVehicleCommandInterface();
-		laneId = mobility->getLaneId();
-		EV << "laneId start at: " << laneId << std::endl;
-		traciLane = mobility->getLaneCommandInterface(laneId);
 		myMac = FindModule<WaveAppToMac1609_4Interface*>::findSubModule(getParentModule());
 		ASSERT(myMac);
 		annotations = Veins::AnnotationManagerAccess().getIfExists();
 		ASSERT(annotations);
 
-		std::list<Coord> roadheads = traciLane->getShape();
-		ASSERT( roadheads.size() == 2 ); // must be non-internal lane
-		fromRoadhead = roadheads.front();
-		toRoadhead = roadheads.back();
-#if ROUTING_DEBUG_LOG
-		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
-		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
-#endif
 		MobilityObserver::Instance()->insert(myAddr, Coord::ZERO, Coord::ZERO);
 
 		transmissionRadius = BaseConnectionManager::maxInterferenceDistance;
@@ -61,7 +50,6 @@ void BaseWaveApplLayer::initialize(int stage)
 
 		beaconLengthBits = par("beaconLengthBits").longValue();
 		beaconPriority = par("beaconPriority").longValue();
-		maxHopConstraint = par("maxHopConstraint").longValue();
 
 		neighborElapsed = par("neighborElapsed").doubleValue();
 		memoryElapsed = par("memoryElapsed").doubleValue();
@@ -74,17 +62,13 @@ void BaseWaveApplLayer::initialize(int stage)
 		findHost()->subscribe(mobilityStateChangedSignal, this);
 		findHost()->subscribe(parkingStateChangedSignal, this);
 
-		// simulate asynchronous channel access
-		double offSet = static_cast<double>(myAddr%100)/100.0 * (beaconInterval/2);
-		offSet = offSet + floor(offSet/0.050)*0.050;
-
 		if (sendBeacons)
 		{
 			sendBeaconEvt = new cMessage("beacon evt", WaveApplMsgKinds::SEND_BEACON_EVT);
 			examineNeighborsEvt = new cMessage("examine neighbors evt", WaveApplMsgKinds::EXAMINE_NEIGHBORS_EVT);
 			forgetMemoryEvt = new cMessage("forget memory evt", WaveApplMsgKinds::FORGET_MEMORY_EVT); // derived classes schedule it
 			recycleGUIDEvt = new cMessage("recycle guid evt", WaveApplMsgKinds::RECYCLE_GUID_EVT);
-			scheduleAt(simTime() + offSet, sendBeaconEvt);
+			scheduleAt(simTime() + dblrand()*beaconInterval, sendBeaconEvt);
 			scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
 		}
 		else
@@ -150,11 +134,13 @@ void BaseWaveApplLayer::handleMessage(cMessage *msg)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_DATA, msg);
 		handleLowerMsg(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == lowerControlIn)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_CONTROL, msg);
 		handleLowerControl(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == cellularIn)
 	{
@@ -219,32 +205,29 @@ void BaseWaveApplLayer::handleLowerMsg(cMessage *msg)
 {
 	if (strcmp(msg->getName(), "beacon") == 0)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
-	else
-		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
-
-	DELETE_SAFELY(msg);
+	//else
+	//	EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
-	if (channel == type_CCH)
-		wsm->setChannelNumber(Channels::CCH);
-	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
+	WAVEInformationElement dataRate(16, 1, 12);
+	WAVEInformationElement transmitPowerUsed(4, 1, 30);
+	WAVEInformationElement channelLoad(23, 1, 0);
+	wsm->setChannelNumber(channelNumber); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	wsm->setDataRate(dataRate);
+	wsm->setTransmitPowerUsed(transmitPowerUsed);
+	wsm->setChannelLoad(channelLoad);
 
-	wsm->setTimestamp();
 	wsm->setPriority(priority);
-	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
-	wsm->setSenderAngle(curAngle);
-	wsm->setSenderPos(curPosition);
-	wsm->setSenderSpeed(curSpeed);
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseWaveApplLayer::sendWSM(WaveShortMessage *wsm)
@@ -263,14 +246,10 @@ void BaseWaveApplLayer::sendBeacon()
 	EV << "Creating Beacon with Priority " << beaconPriority << " at BaseWaveApplLayer at " << simTime() << std::endl;
 	BeaconMessage *beaconMsg = new BeaconMessage("beacon");
 	prepareWSM(beaconMsg, beaconLengthBits, type_CCH, beaconPriority, -1);
+	beaconMsg->setSenderPos(curPosition);
+	beaconMsg->setSenderSpeed(curSpeed);
 	decorateBeacon(beaconMsg);
 	sendWSM(beaconMsg);
-}
-
-void BaseWaveApplLayer::decorateBeacon(BeaconMessage *beaconMsg)
-{
-	beaconMsg->setSenderFrom(fromRoadhead);
-	beaconMsg->setSenderTo(toRoadhead);
 }
 
 void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
@@ -283,37 +262,35 @@ void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
 	{
 		EV << "    sender [" << sender << "] is an old neighbor, update its info.\n";
 		neighborInfo = neighbors[sender]; // alias for efficiency
-		neighborInfo->angle = beaconMsg->getSenderAngle();
 		neighborInfo->pos = beaconMsg->getSenderPos();
 		neighborInfo->speed = beaconMsg->getSenderSpeed();
-		neighborInfo->from = beaconMsg->getSenderFrom();
-		neighborInfo->to = beaconMsg->getSenderTo();
 		neighborInfo->receivedAt = simTime();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
-		neighborInfo = new NeighborInfo(beaconMsg->getSenderAngle(), beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), beaconMsg->getSenderFrom(), beaconMsg->getSenderTo(), simTime());
+		neighborInfo = new NeighborInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), simTime());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all neighbors' information of " << logName() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
+	EV << "display all neighbors' information as follows:\n";
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << std::endl;
+		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 
 void BaseWaveApplLayer::examineNeighbors()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (itN = neighbors.begin(); itN != neighbors.end();)
 	{
-		if ( curTime - itN->second->receivedAt.dbl() > neighborElapsed )
+		if ( curTime - itN->second->receivedAt > neighborElapsed )
 		{
-			EV << logName() << " disconnected from neighbor[" << itN->first << "], delete its info.\n";
+			EV << "disconnected from neighbor[" << itN->first << "], delete its info.\n";
 			/* derived class's extension write here before it is deleted */
 			delete itN->second;
 			neighbors.erase(itN++);
@@ -325,12 +302,12 @@ void BaseWaveApplLayer::examineNeighbors()
 
 void BaseWaveApplLayer::forgetMemory()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (std::map<int, WaveShortMessage*>::iterator iter = messageMemory.begin(); iter != messageMemory.end();)
 	{
-		if ( curTime - iter->second->getTimestamp().dbl() > memoryElapsed )
+		if ( curTime - iter->second->getTimestamp() > memoryElapsed )
 		{
-			EV << logName() << " forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
+			EV << "forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
 			/* derived class's extension write here before it is deleted */
 			delete iter->second;
 			messageMemory.erase(iter++);
@@ -342,45 +319,8 @@ void BaseWaveApplLayer::forgetMemory()
 
 void BaseWaveApplLayer::handleMobilityUpdate(cObject *obj)
 {
-	// Veins::TraCIMobility* const mobility = check_and_cast<Veins::TraCIMobility*>(obj);
-	curAngle = mobility->getAngleRad();
 	curPosition = mobility->getCurrentPosition();
 	curSpeed = mobility->getCurrentSpeed();
-
-	if (laneId != mobility->getLaneId())
-	{
-		laneId = mobility->getLaneId();
-		EV << "laneId changed to: " << laneId << std::endl;
-		traciLane->setLaneId(laneId);
-		std::list<Coord> roadheads = traciLane->getShape();
-		ASSERT( roadheads.size() == 2 ); // must be non-internal lane
-		fromRoadhead = roadheads.front();
-		toRoadhead = roadheads.back();
-		if ((curSpeed.x >= 0 && fromRoadhead.x > toRoadhead.x) || (curSpeed.x < 0 && fromRoadhead.x < toRoadhead.x))
-			std::swap(fromRoadhead, toRoadhead);
-#if ROUTING_DEBUG_LOG
-		EV << "fromRoadhead.x: " << fromRoadhead.x << ", fromRoadhead.y: " << fromRoadhead.y << ", fromRoadhead.z: " << fromRoadhead.z << ".\n";
-		EV << "toRoadhead.x: " << toRoadhead.x << ", toRoadhead.y: " << toRoadhead.y << ", toRoadhead.z: " << toRoadhead.z << ".\n";
-#endif
-		// check if the vehicle has turned driving direction
-		switch (RoutingUtils::relativeDirection(oldAngle, curAngle))
-		{
-		case RoutingUtils::SAME:
-			onStraight();
-			break;
-		case RoutingUtils::LEFT:
-			onTurnLeft();
-			break;
-		case RoutingUtils::RIGHT:
-			onTurnRight();
-			break;
-		case RoutingUtils::OPPOSITE:
-			onTurnAround();
-			break;
-		}
-	}
-	if (!mobility->getAtIntersection())
-		oldAngle = curAngle;
 
 	MobilityObserver::Instance()->update(myAddr, curPosition, curSpeed);
 }

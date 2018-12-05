@@ -26,10 +26,6 @@ void RoutingUAV::initialize(int stage)
 
 	if (stage == 0)
 	{
-		hop = 1;
-		remainingMs = 1000;
-		hopDist = 0.0;
-
 		routingLengthBits = par("routingLengthBits").longValue();
 		routingPriority = par("routingPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
@@ -70,9 +66,7 @@ void RoutingUAV::handleSelfMsg(cMessage *msg)
 
 void RoutingUAV::handleLowerMsg(cMessage *msg)
 {
-	if (strcmp(msg->getName(), "uavNotify") == 0)
-		DYNAMIC_CAST_CMESSAGE(UavNotify, uavNotify)
-	else if (strcmp(msg->getName(), "routing") == 0)
+	if (strcmp(msg->getName(), "routing") == 0)
 		DYNAMIC_CAST_CMESSAGE(Routing, routing)
 	else if (strcmp(msg->getName(), "data") == 0)
 		DYNAMIC_CAST_CMESSAGE(Data, data)
@@ -80,11 +74,15 @@ void RoutingUAV::handleLowerMsg(cMessage *msg)
 	BaseUAV::handleLowerMsg(msg);
 }
 
+void RoutingUAV::handleLowerControl(cMessage *msg)
+{
+	if (strcmp(msg->getName(), "data") == 0)
+		onDataLost(dynamic_cast<DataMessage*>(msg));
+}
+
 void RoutingUAV::decorateUavBeacon(UavBeaconMessage *uavBeaconMsg)
 {
-	uavBeaconMsg->setHop(hop);
-	uavBeaconMsg->setRemainingMs(remainingMs);
-	uavBeaconMsg->setHopDist(hopDist);
+
 }
 
 void RoutingUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
@@ -96,27 +94,18 @@ void RoutingUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
 	if ((itN = neighbors.find(sender)) != neighbors.end()) // update old record
 	{
 		EV << "    sender [" << sender << "] is an old neighbor, update its info.\n";
-		NeighborInfo *baseNbInfo = itN->second;
-		neighborInfo = dynamic_cast<RoutingNeighborInfo*>(baseNbInfo);
+		neighborInfo = dynamic_cast<RoutingNeighborInfo*>(itN->second);
 		neighborInfo->pos = uavBeaconMsg->getSenderPos();
 		neighborInfo->speed = uavBeaconMsg->getSenderSpeed();
 		neighborInfo->receivedAt = simTime();
-		neighborInfo->hop = uavBeaconMsg->getHop();
-		neighborInfo->remainingMs = uavBeaconMsg->getRemainingMs();
-		neighborInfo->hopDist = uavBeaconMsg->getHopDist();
+		neighborInfo->reserved = uavBeaconMsg->getReserved();
 	}
 	else // insert new record
 	{
 		EV << "    sender [" << sender << "] is a new neighbor, insert its info.\n";
-		neighborInfo = new RoutingNeighborInfo(uavBeaconMsg->getSenderPos(), uavBeaconMsg->getSenderSpeed(), simTime(),
-				uavBeaconMsg->getHop(), uavBeaconMsg->getRemainingMs(), uavBeaconMsg->getHopDist());
+		neighborInfo = new RoutingNeighborInfo(uavBeaconMsg->getSenderPos(), uavBeaconMsg->getSenderSpeed(), simTime(), uavBeaconMsg->getReserved());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
-}
-
-void RoutingUAV::onUavNotify(UavNotifyMessage *uavNotifyMsg)
-{
-	EV << logName() << ": onUavNotify!\n";
 }
 
 void RoutingUAV::onRouting(RoutingMessage *routingMsg)
@@ -129,4 +118,9 @@ void RoutingUAV::onRouting(RoutingMessage *routingMsg)
 void RoutingUAV::onData(DataMessage* dataMsg)
 {
 	EV << logName() << ": onData!\n";
+}
+
+void RoutingUAV::onDataLost(DataMessage *lostDataMsg)
+{
+	EV << logName() << ": onDataLost!\n";
 }

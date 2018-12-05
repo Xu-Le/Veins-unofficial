@@ -530,12 +530,6 @@ public:
 	virtual void rescheduleMessage(cMessage* msg, simtime_t_cref t);
 
 	/**
-	 * @brief Does nothing. For an actual power supporting
-	 * phy see "PhyLayerBattery".
-	 */
-	virtual void drawCurrent(double amount, int activity);
-
-	/**
 	 * @brief Returns a pointer to the simulations world-utility-module.
 	 */
 	virtual BaseWorldUtility* getWorldUtility();

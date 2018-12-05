@@ -24,10 +24,8 @@
 
 #include <sstream>
 
-#include "veins/base/utils/Coord.h"
-#include "veins/base/messages/BorderMsg_m.h"
 #include "veins/base/utils/FindModule.h"
-#include "veins/base/modules/BaseWorldUtility.h"
+#include "veins/base/messages/BorderMsg_m.h"
 
 Define_Module(BaseMobility);
 
@@ -44,7 +42,7 @@ namespace {
 
 
 BaseMobility::BaseMobility():
-		BatteryAccess(),
+		BaseModule(),
 		move(),
 		playgroundScaleX(1),
 		playgroundScaleY(1),
@@ -54,7 +52,7 @@ BaseMobility::BaseMobility():
 {}
 
 BaseMobility::BaseMobility(unsigned stacksize):
-		BatteryAccess(stacksize),
+		BaseModule(stacksize),
 		move(),
 		playgroundScaleX(1),
 		playgroundScaleY(1),
@@ -66,7 +64,9 @@ BaseMobility::BaseMobility(unsigned stacksize):
 void BaseMobility::initialize(int stage)
 {
     BaseModule::initialize(stage);
-    if (stage == 0){
+
+    if (stage == 0)
+    {
         hasPar("coreDebug") ? coreDebug = par("coreDebug").boolValue() : coreDebug = false;
 
         coreEV << "initializing BaseMobility stage " << stage << endl;
@@ -117,7 +117,8 @@ void BaseMobility::initialize(int stage)
         move.setSpeed(0);
         move.setDirectionByVector(Coord::ZERO);
     }
-    else if (stage == 1){
+    else if (stage == 1)
+    {
         coreEV << "initializing BaseMobility stage " << stage << endl;
 
         //get playground scaling

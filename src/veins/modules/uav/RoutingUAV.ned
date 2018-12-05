@@ -25,7 +25,7 @@ simple RoutingUAV extends BaseUAV
 	@class(RoutingUAV);
 	@display("i=block/routing");
 	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
-	int routingPriority = default(2); // the access category of the routing messages
-	int dataLengthBits = default(18272bit) @unit(bit); // the length of a data packet 8 * (2312-20-8)
-	int dataPriority = default(3); // the access category for data packets
+	int routingPriority = default(0); // the access category of the routing messages
+	int dataLengthBits = default(18432bit) @unit(bit); // the length of a data packet 8 * 2304
+	int dataPriority = default(1); // the access category for data packets
 }

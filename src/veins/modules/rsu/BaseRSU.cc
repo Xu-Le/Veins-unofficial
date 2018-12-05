@@ -50,7 +50,6 @@ void BaseRSU::initialize(int stage)
 
 		dataOnSch = par("dataOnSch").boolValue();
 
-		maxHopConstraint = par("maxHopConstraint").longValue();
 		whichSide = par("whichSide").longValue();
 
 		examineVehiclesInterval = par("examineVehiclesInterval").doubleValue();
@@ -152,28 +151,29 @@ void BaseRSU::handleLowerMsg(cMessage *msg)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
 	else if (strcmp(msg->getName(), "warning") == 0)
 		EV << "RSU doesn't relay warning message received from vehicles.\n";
-	else
-		EV << "unknown message (" << msg->getName() << ") received.\n";
+	//else
+	//	EV << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
-	if (channel == type_CCH)
-		wsm->setChannelNumber(Channels::CCH);
-	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
+	WAVEInformationElement dataRate(16, 1, 12);
+	WAVEInformationElement transmitPowerUsed(4, 1, 30);
+	WAVEInformationElement channelLoad(23, 1, 0);
+	wsm->setChannelNumber(channelNumber); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	wsm->setDataRate(dataRate);
+	wsm->setTransmitPowerUsed(transmitPowerUsed);
+	wsm->setChannelLoad(channelLoad);
 
 	wsm->setPriority(priority);
-	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
-	wsm->setSenderPos(curPosition);
-	wsm->setTimestamp(simTime());
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseRSU::sendWSM(WaveShortMessage *wsm)
@@ -204,19 +204,20 @@ void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all vehicles' information of " << logName() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
+	EV << "display all vehicles' information as follows:\n";
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
-		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << std::endl;
+		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 
 void BaseRSU::examineVehicles()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (itV = vehicles.begin(); itV != vehicles.end();)
 	{
-		if ( curTime - itV->second->receivedAt.dbl() > vehicleElapsed )
+		if ( curTime - itV->second->receivedAt > vehicleElapsed )
 		{
 			EV << logName() << " disconnected from vehicle[" << itV->first << "], delete its info.\n";
 			/* derived class's extension write here before it is deleted */
@@ -230,10 +231,10 @@ void BaseRSU::examineVehicles()
 
 void BaseRSU::forgetMemory()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (std::map<int, simtime_t>::iterator iter = messageMemory.begin(); iter != messageMemory.end();)
 	{
-		if (curTime - iter->second.dbl() > memoryElapsed)
+		if (curTime - iter->second > memoryElapsed)
 		{
 			EV << logName() << " forgets message(GUID=" << iter->first << "), delete it from message memory.\n";
 			messageMemory.erase(iter++);

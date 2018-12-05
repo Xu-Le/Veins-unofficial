@@ -471,9 +471,10 @@ AirFrame *PhyLayer80211p::encapsMsg(cPacket *macPkt)
 
 	return frame;
 }
+
 int PhyLayer80211p::getRadioState() {
 	return BasePhyLayer::getRadioState();
-};
+}
 
 simtime_t PhyLayer80211p::setRadioState(int rs) {
 	if (rs == Radio::TX)
@@ -483,8 +484,24 @@ simtime_t PhyLayer80211p::setRadioState(int rs) {
 
 void PhyLayer80211p::setCCAThreshold(double ccaThreshold_dBm) {
 	ccaThreshold = pow(10, ccaThreshold_dBm / 10);
-	((Decider80211p *)decider)->setCCAThreshold(ccaThreshold_dBm);
+	((Decider80211p*) decider)->setCCAThreshold(ccaThreshold_dBm);
 }
+
 double PhyLayer80211p::getCCAThreshold() {
 	return 10 * log10(ccaThreshold);
+}
+
+void PhyLayer80211p::notifyMacAboutRxStart(bool enable) {
+    ((Decider80211p*) decider)->setNotifyRxStart(enable);
+}
+
+void PhyLayer80211p::requestChannelStatusIfIdle() {
+    Enter_Method_Silent();
+    Decider80211p *dec = (Decider80211p*) decider;
+    if (dec->cca(simTime(), nullptr))
+    {
+        // chan is idle
+    	coreEV << "Request channel status: channel idle!\n";
+        dec->setChannelIdleStatus(true);
+    }
 }

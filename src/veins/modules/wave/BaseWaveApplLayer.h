@@ -93,13 +93,13 @@ protected:
 	virtual void handleCellularMsg(CellularMessage *cellularMsg) {}
 
 	/** @brief wave short message factory method. */
-	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient=-1);
 	/** @brief wave short message send method. */
 	void sendWSM(WaveShortMessage *wsm);
 	/** @brief send beacon message. */
 	void sendBeacon();
 	/** @brief beacon message decorate method. */
-	virtual void decorateBeacon(BeaconMessage *beaconMsg);
+	virtual void decorateBeacon(BeaconMessage *beaconMsg) {}
 	/** @brief call-back method of receiving beacon message. */
 	virtual void onBeacon(BeaconMessage *beaconMsg);
 
@@ -110,14 +110,6 @@ protected:
 
 	/** @name mobility relevant methods. */
 	///@{
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just cross a intersection without changing driving direction. */
-	virtual void onStraight() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned left. */
-	virtual void onTurnLeft() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned right. */
-	virtual void onTurnRight() {}
-	/** @brief called by template method handleMobilityUpdate() when this vehicle has just turned around. */
-	virtual void onTurnAround() {}
 	/** @brief update vehicle's mobility information that is read from SUMO(template method). */
 	void handleMobilityUpdate(cObject* obj);
 	/** @brief update(register or unregister) vehicle's NIC when it parks or resumes driving. */
@@ -129,14 +121,11 @@ protected:
 	class NeighborInfo
 	{
 	public:
-		NeighborInfo(double a, Coord& p, Coord& s, Coord& f, Coord& t, simtime_t ra) : type(0), angle(a), pos(p), speed(s), from(f), to(t), receivedAt(ra) {}
+		NeighborInfo(Coord& p, Coord& s, simtime_t ra) : type(0), pos(p), speed(s), receivedAt(ra) {}
 
 		short type;   ///< reserved, defined by derived class since concrete protocol may define different types of neighbors, derived class should define an unknown type whose value equals 0.
-		double angle; ///< current driving angle of the neighbor.
 		Coord pos;    ///< current position of the neighbor.
 		Coord speed;  ///< current speed of the neighbor.
-		Coord from;   ///< the tail of road where the neighbor driving from.
-		Coord to;     ///< the head of road where the neighbor driving to.
 		simtime_t receivedAt; ///< the time received the most recently beacon message from the neighbor.
 	};
 
@@ -155,25 +144,19 @@ protected:
 	bool dataOnSch;        ///< whether send data on service channel.
 	int beaconLengthBits;  ///< the length of beacon message measured in bits.
 	int beaconPriority;    ///< the priority of beacon message.
-	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 	double transmissionRadius;   ///< the biggest transmission distance of transmitter.
-	double beaconInterval; ///< the interval of sending beacon message.
-	double examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
-	double forgetMemoryInterval; ///< the interval of forgetting message received too long time ago.
-	double neighborElapsed; ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
-	double memoryElapsed;   ///< the maximum time can a message store in memory.
 	///@}
 
+	simtime_t beaconInterval; ///< the interval of sending beacon message.
+	simtime_t examineNeighborsInterval; ///< the interval of examining the connectivity with neighbors.
+	simtime_t forgetMemoryInterval; ///< the interval of forgetting message received too long time ago.
+	simtime_t neighborElapsed; ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
+	simtime_t memoryElapsed;   ///< the maximum time can a message store in memory.
 	simtime_t maxStoreTime; ///< the maximum time a relay vehicle will store a routing message before discarding it.
 	simtime_t guidUsedTime; ///< the maximum time from a GUID's allocated time to its recycled time.
 
-	std::string laneId;     ///< the lane of this vehicle driving on.
-	Coord fromRoadhead;     ///< the tail of road where this vehicle driving from.
-	Coord toRoadhead;       ///< the head of road where this vehicle driving to.
 	Coord curPosition;      ///< current position of this vehicle.
 	Coord curSpeed;         ///< current speed of this vehicle.
-	double curAngle;        ///< current driving angle measured in rad of this vehicle.
-	double oldAngle;        ///< before turn direction, driving angle measured in rad of this vehicle.
 
 	/** @name containers. */
 	///@{
@@ -197,7 +180,6 @@ protected:
 	Veins::TraCIMobility *mobility;
 	Veins::TraCICommandInterface *traci;
 	Veins::TraCICommandInterface::Vehicle *traciVehicle;
-	Veins::TraCICommandInterface::Lane *traciLane;
 	Veins::AnnotationManager *annotations;
 	WaveAppToMac1609_4Interface *myMac;
 	///@}

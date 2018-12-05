@@ -40,14 +40,15 @@ const simsignalwrap_t BaseLayer::catDroppedPacketSignal = simsignalwrap_t(MIXIM_
  **/
 void BaseLayer::initialize(int stage)
 {
-    BatteryAccess::initialize(stage);
-    if (stage==0)
+	BaseModule::initialize(stage);
+
+    if (stage == 0)
     {
-        passedMsg = NULL;
+        passedMsg = nullptr;
         if (hasPar("stats") && par("stats").boolValue())
         {
             passedMsg = new PassedMessage();
-            if (passedMsg != NULL)
+            if (passedMsg != nullptr)
                 passedMsg->fromModule = getId();
         }
         upperLayerIn  = findGate("upperLayerIn");
@@ -156,7 +157,7 @@ void BaseLayer::recordPacket(PassedMessage::direction_t dir,
                              PassedMessage::gates_t     gate,
                              const cMessage*            msg)
 {
-    if (passedMsg == NULL)
+    if (passedMsg == nullptr)
         return;
     passedMsg->direction = dir;
     passedMsg->gateType  = gate;
@@ -172,6 +173,6 @@ void BaseLayer::finish()
 
 BaseLayer::~BaseLayer()
 {
-    if (passedMsg != NULL)
+    if (passedMsg != nullptr)
         delete passedMsg;
 }

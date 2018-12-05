@@ -30,41 +30,14 @@ import org.car2x.veins.nodes.UAV;
 network scenario extends Scenario
 {
 	parameters:
-		int numRSU = 3; // number of RSUs
+		int numRSU = 2; // number of RSUs
 		int numUAV = 2; // number of UAVs
 
 	submodules:
-		BS: BaseStation {
-			@display("p=900,24");
-		}
-		server: BaseServer {
-			parameters:
-				rsuNum = numRSU;
-			@display("p=1000,24");
-		}
 		rsu[numRSU]: RSU {
 			@display("p=$posX,$posY;b=10,10,oval");
-		}
-		dummyRSU: DummyRSU {
-			@display("p=$posX,$posY");
 		}
 		uav[numUAV]: UAV {
 			@display("p=$posX,$posY;b=10,10,oval");
 		}
-
-	connections:
-		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.cellularOut;
-		BS.wiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.cellularIn;
-		for i = 0..numRSU-1 {
-			rsu[i].veinswiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.rsuOut[i];
-			rsu[i].veinswiredOut --> ned.DatarateChannel{datarate=100Mbps;} --> server.rsuIn[i];
-		}
-		for i = 0..numRSU-2 {
-			rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;
-			rsu[i].veinseastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[i+1].veinswestIn;
-		}
-		dummyRSU.eastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[0].veinswestOut;
-		dummyRSU.eastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[0].veinswestIn;
-		dummyRSU.westIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[numRSU-1].veinseastOut;
-		dummyRSU.westOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[numRSU-1].veinseastIn;
 }

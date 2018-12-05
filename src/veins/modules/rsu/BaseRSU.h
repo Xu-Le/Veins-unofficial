@@ -79,7 +79,7 @@ protected:
 	virtual void handleRSUMsg(WiredMessage *wiredMsg, int direction) {}
 
 	/** @brief wave short message factory method. */
-	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial);
+	void prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient=-1);
 	/** @brief wave short message send method. */
 	void sendWSM(WaveShortMessage *wsm);
 	/** @brief call-back method of receiving beacon message. */
@@ -125,17 +125,16 @@ protected:
 
 	bool dataOnSch;   ///< whether send data on service channel.
 
-	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 	int whichSide;         ///< which side direction relative to road this RSU locate.
 
 	double V2XRadius; ///< the biggest transmission distance of transmitter.
 	double U2URadius; ///< the biggest transmission distance of transmitter.
-
-	double examineVehiclesInterval; ///< the interval of examining the connectivity with vehicles.
-	double forgetMemoryInterval;    ///< the interval of forgetting message received too long time ago.
-	double vehicleElapsed;   ///< the maximum time haven't receive message from vehicles leading to assume lose connectivity with it.
-	double memoryElapsed;    ///< the maximum time can a message store in memory.
 	double distFromRoadhead; ///< the distance from vertical point to fromRoadhead.
+
+	simtime_t examineVehiclesInterval; ///< the interval of examining the connectivity with vehicles.
+	simtime_t forgetMemoryInterval;    ///< the interval of forgetting message received too long time ago.
+	simtime_t vehicleElapsed;   ///< the maximum time haven't receive message from vehicles leading to assume lose connectivity with it.
+	simtime_t memoryElapsed;    ///< the maximum time can a message store in memory.
 
 	Coord curPosition;      ///< current position of this RSU.
 

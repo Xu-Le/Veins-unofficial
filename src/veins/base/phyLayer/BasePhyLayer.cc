@@ -821,10 +821,6 @@ void BasePhyLayer::rescheduleMessage(cMessage* msg, simtime_t_cref t) {
 	scheduleAt(t, msg);
 }
 
-void BasePhyLayer::drawCurrent(double amount, int activity) {
-	BatteryAccess::drawCurrent(amount, activity);
-}
-
 BaseWorldUtility* BasePhyLayer::getWorldUtility() {
 	return world;
 }

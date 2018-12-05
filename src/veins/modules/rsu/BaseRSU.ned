@@ -35,12 +35,11 @@ simple BaseRSU extends BaseApplLayer
 	int eastDistance; // distance between self and east neighbor RSU
 
 	int wiredHeaderLength = 224bit @unit(bit); // header length of the wired IP and UDP packet
-	int maxHopConstraint = default(5); // the maximum of routing message hop count constraint
 	int whichSide = default(0); // which side direction relative to road this RSU locate
 
-	double examineVehiclesInterval = default(2s) @unit(s); // the intervall between 2 examine vehicle whether in communication range messages
+	double examineVehiclesInterval = default(1.5s) @unit(s); // the intervall between 2 examine vehicle whether in communication range messages
 	double forgetMemoryInterval = default(15s) @unit(s);   // the intervall between 2 forget the memory of received packets messages
-	double vehicleElapsed = default(3s) @unit(s); // if exceeds this time, assuming has lose connectivity with the vehicle
+	double vehicleElapsed = default(2s) @unit(s); // if exceeds this time, assuming has lose connectivity with the vehicle
 	double memoryElapsed = default(15s) @unit(s); // if exceeds this time, the memory of received packet will be forgotten
 
 	gates:

@@ -51,6 +51,8 @@ private:
 	void handleSelfMsg(cMessage *msg) override;
 	/** @brief handle messages from lower layer. */
 	void handleLowerMsg(cMessage *msg) override;
+	/** @brief handle control messages from lower layer. */
+	void handleLowerControl(cMessage *msg) override;
 
 	/** @brief routing message decorate method. */
 	void decorateRouting(RoutingMessage *routingMsg);
@@ -59,6 +61,8 @@ private:
 	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg);
+	/** @brief call-back method of receiving data control message. */
+	void onDataLost(DataMessage *lostDataMsg);
 
 	/** @brief call a routing request to a certain receiver determined by routingPlanList. */
 	void callRouting(long receiver);
@@ -86,6 +90,7 @@ private:
 	int routingPriority;   ///< the priority of routing message.
 	int dataLengthBits;    ///< the length of data message measured in bits.
 	int dataPriority;      ///< the priority of data message.
+	int maxHopConstraint;  ///< the maximum of routing message hop count constraint.
 
 	cMessage *callRoutingEvt;  ///< self message event used to call routing request to certain destination determined by routingPlanList.
 

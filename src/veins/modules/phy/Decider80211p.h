@@ -52,9 +52,10 @@ class Decider80211p: public BaseDecider
 public:
     enum Decider80211ControlKinds {
         NOTHING = 22100,
-        BITERROR,       //the phy has recognized a bit error in the packet
-        LAST_DECIDER_80211_CONTROL_KIND,
-        RECWHILESEND
+        BITERROR, // the phy has recognized a bit error in the packet
+		RECVWHILESEND,
+		NOT_SYNCHRONIZED, // the phy has already synchronized to another AirFrame
+        LAST_DECIDER_80211_CONTROL_KIND
     };
 
     /**
@@ -119,6 +120,9 @@ protected:
     /** @brief count the number of collisions */
     unsigned int collisions;
 
+    /** @brief notify PHY-RXSTART.indication  */
+    bool notifyRxStart;
+
 protected:
     /**
      * @brief Checks a mapping against a specific threshold (element-wise).
@@ -142,7 +146,7 @@ protected:
     virtual simtime_t processSignalEnd(AirFrame* frame);
 
     /** @brief computes if packet is ok or has errors*/
-    enum PACKET_OK_RESULT packetOk(double snirMin, double snrMin, int lengthMPDU, double bitrate);
+    enum PACKET_OK_RESULT packetOk(double sinrMin, double snrMin, int lengthMPDU, double bitrate);
 
     /**
      * @brief Calculates the RSSI value for the passed ChannelSenseRequest.
@@ -200,7 +204,8 @@ public:
         myBusyTime(0),
         myStartTime(simTime().dbl()),
         collectCollisionStats(collectCollisionStatistics),
-        collisions(0)
+        collisions(0),
+		notifyRxStart(false)
     {
         phy11p = dynamic_cast<Decider80211pToPhy80211pInterface*>(phy);
         assert(phy11p);
@@ -243,6 +248,11 @@ public:
      * because of the transmission.
      */
     virtual void switchToTx();
+
+    /**
+     * @brief notify PHY-RXSTART.indication
+     */
+    void setNotifyRxStart(bool enable);
 };
 
 #endif /* DECIDER80211p_H_ */

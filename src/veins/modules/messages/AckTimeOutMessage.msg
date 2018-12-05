@@ -1,5 +1,7 @@
 //
-// Copyright (C) 2018-2019 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2018 Gurjashan Pannu <pannu@ccs-labs.org>
+//
+// Documentation for these modules is at http://veins.car2x.org/
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,15 +18,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-cplusplus {{
-#include "veins/modules/messages/WaveShortMessage_m.h"
-typedef std::list<long> AccessHopList;
-}}
-
-class WaveShortMessage;
-class noncobject AccessHopList;
-
-packet UavNotifyMessage extends WaveShortMessage
+message AckTimeOutMessage
 {
-	AccessHopList hopList; // access hop list from the originator UAV to the RSU
+	unsigned long wsmId = -1; // The corresponding WSM's tree id
+	int ac = -1; // Access category on which the AckTimer is set
 }

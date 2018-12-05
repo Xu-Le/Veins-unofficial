@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "veins/base/utils/MiXiMDefs.h"
-#include "veins/base/modules/BatteryAccess.h"
+#include "veins/base/modules/BaseModule.h"
 
 #include "veins/base/utils/FindModule.h"
 #include "veins/base/modules/BaseMobility.h"
@@ -55,7 +55,7 @@ class BaseWorldUtility;
  * @ingroup baseModules
  **/
 namespace Veins {
-class MIXIM_API ChannelAccess : public BatteryAccess, protected ChannelMobilityAccessType
+class MIXIM_API ChannelAccess : public BaseModule, protected ChannelMobilityAccessType
 {
 protected:
 	/** @brief A signal used to subscribe to mobility state changes. */

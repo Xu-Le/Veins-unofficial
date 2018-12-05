@@ -114,6 +114,7 @@ void BaseUAV::handleMessage(cMessage *msg)
 	{
 		recordPacket(PassedMessage::INCOMING, PassedMessage::LOWER_CONTROL, msg);
 		handleLowerControl(msg);
+		DELETE_SAFELY(msg);
 	}
 	else if (msg->getArrivalGateId() == -1)
 		throw cRuntimeError("No self message and no gateID! Check configuration.");
@@ -154,8 +155,8 @@ void BaseUAV::handleLowerMsg(cMessage *msg)
 		DYNAMIC_CAST_CMESSAGE(Beacon, beacon)
 	else if (strcmp(msg->getName(), "uavBeacon") == 0)
 		DYNAMIC_CAST_CMESSAGE(UavBeacon, uavBeacon)
-	else
-		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
+	//else
+	//	EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
 }
 
 void BaseUAV::handleMobilityUpdate(cObject *obj)
@@ -165,25 +166,25 @@ void BaseUAV::handleMobilityUpdate(cObject *obj)
 	EV << "position: " << curPosition.info() << ", speed: " << curSpeed << std::endl;
 }
 
-void BaseUAV::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseUAV::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
-	if (channel == type_CCH)
-		wsm->setChannelNumber(Channels::CCH);
-	else // channel == type_SCH
-		wsm->setChannelNumber(Channels::SCH1); // will be rewritten at Mac1609_4 to actual Service Channel.
+	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
+	WAVEInformationElement dataRate(16, 1, 12);
+	WAVEInformationElement transmitPowerUsed(4, 1, 30);
+	WAVEInformationElement channelLoad(23, 1, 0);
+	wsm->setChannelNumber(channelNumber); // will be rewritten at Mac1609_4 to actual Service Channel. This is just so no controlInfo is needed
+	wsm->setDataRate(dataRate);
+	wsm->setTransmitPowerUsed(transmitPowerUsed);
+	wsm->setChannelLoad(channelLoad);
 
 	wsm->setPriority(priority);
-	wsm->setSerial(serial);
 	wsm->setSenderAddress(myAddr);
-	wsm->setSenderPos(curPosition);
-	wsm->setSenderSpeed(curSpeed);
-	wsm->setTimestamp(simTime());
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseUAV::sendWSM(WaveShortMessage *wsm)
@@ -196,6 +197,8 @@ void BaseUAV::sendUavBeacon()
 	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at BaseUAV at " << simTime() << std::endl;
 	UavBeaconMessage *uavBeaconMsg = new UavBeaconMessage("uavBeacon");
 	prepareWSM(uavBeaconMsg, beaconLengthBits, t_channel::type_CCH, beaconPriority, -1);
+	uavBeaconMsg->setSenderPos(curPosition);
+	uavBeaconMsg->setSenderSpeed(curSpeed);
 	decorateUavBeacon(uavBeaconMsg);
 	sendWSM(uavBeaconMsg);
 }
@@ -223,10 +226,11 @@ void BaseUAV::onBeacon(BeaconMessage *beaconMsg)
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all vehicles' information of " << logName() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
+	EV << "display all vehicles' information as follows:\n";
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
-		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << std::endl;
+		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 
@@ -254,12 +258,12 @@ void BaseUAV::onUavBeacon(UavBeaconMessage *uavBeaconMsg)
 
 void BaseUAV::examineVehicles()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (itV = vehicles.begin(); itV != vehicles.end();)
 	{
-		if ( curTime - itV->second->receivedAt.dbl() > vehicleElapsed )
+		if ( curTime - itV->second->receivedAt > vehicleElapsed )
 		{
-			EV << logName() << " disconnected from vehicle[" << itV->first << "], delete its info.\n";
+			EV << "disconnected from vehicle[" << itV->first << "], delete its info.\n";
 			/* derived class's extension write here before it is deleted */
 			delete itV->second;
 			vehicles.erase(itV++);
@@ -271,12 +275,12 @@ void BaseUAV::examineVehicles()
 
 void BaseUAV::examineNeighbors()
 {
-	double curTime = simTime().dbl(); // alias
+	simtime_t curTime = simTime(); // alias
 	for (itN = neighbors.begin(); itN != neighbors.end();)
 	{
-		if ( curTime - itN->second->receivedAt.dbl() > neighborElapsed )
+		if ( curTime - itN->second->receivedAt > neighborElapsed )
 		{
-			EV << logName() << " disconnected from neighbor[" << itN->first << "], delete its info.\n";
+			EV << "disconnected from neighbor[" << itN->first << "], delete its info.\n";
 			/* derived class's extension write here before it is deleted */
 			delete itN->second;
 			neighbors.erase(itN++);

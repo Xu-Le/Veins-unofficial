@@ -22,7 +22,6 @@
 #include "veins/modules/uav/BaseUAV.h"
 #include "veins/modules/messages/RoutingMessage_m.h"
 #include "veins/modules/messages/DataMessage_m.h"
-#include "veins/modules/messages/UavNotifyMessage_m.h"
 #include "veins/modules/routing/RoutingStatisticCollector.h"
 
 /**
@@ -57,43 +56,38 @@ private:
 	void handleSelfMsg(cMessage *msg) override;
 	/** @brief handle messages from lower layer. */
 	void handleLowerMsg(cMessage *msg) override;
+	/** @brief handle control messages from lower layer. */
+	void handleLowerControl(cMessage *msg) override;
 
 	/** @brief UAV beacon message decorate method. */
 	void decorateUavBeacon(UavBeaconMessage *uavBeaconMsg) override;
 
 	/** @brief call-back method of receiving UAV beacon message. */
 	void onUavBeacon(UavBeaconMessage *uavBeaconMsg) override;
-	/** @brief call-back method of receiving UAV notify message. */
-	void onUavNotify(UavNotifyMessage *uavNotifyMsg);
 	/** @brief call-back method of receiving routing message. */
 	void onRouting(RoutingMessage *routingMsg);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataMsg);
+	/** @brief call-back method of receiving data control message. */
+	void onDataLost(DataMessage *lostDataMsg);
 
 private:
 	/** @brief The derived class to store neighbor's information collected by beacon message. */
 	class RoutingNeighborInfo : public BaseUAV::NeighborInfo
 	{
 	public:
-		RoutingNeighborInfo(Coord& p, Coord& s, simtime_t ra, int h, int rm, double hd)
-			: BaseUAV::NeighborInfo(p, s, ra), hop(h), remainingMs(rm), hopDist(hd) {}
+		RoutingNeighborInfo(Coord& p, Coord& s, simtime_t ra, int r) : NeighborInfo(p, s, ra), reserved(r) {}
 
-		int hop;         ///< minimum hop count to the RSU.
-		int remainingMs; ///< milliseconds left for the next deployment decision.
-		double hopDist;  ///< distance to the next hop.
+		int reserved; ///< reserved field.
 	};
 
 	int routingLengthBits; ///< the length of routing message measured in bits.
 	int routingPriority;   ///< the priority of routing message.
 	int dataLengthBits;    ///< the length of data message measured in bits.
 	int dataPriority;      ///< the priority of data message.
-	int hop;         ///< minimum hop count to the RSU.
-	int remainingMs; ///< milliseconds left for the next deployment decision.
-
-	double hopDist;  ///< distance to the next hop.
 
 	cMessage *flyingEvt; ///< self message event used to periodically flying a little distance.
-	cMessage *decideEvt; ///< self message event used to periodically make a deployment decision.
+	cMessage *decideEvt; ///< self message event used to periodically make a flying decision.
 };
 
 #endif /* __ROUTINGUAV_H__ */

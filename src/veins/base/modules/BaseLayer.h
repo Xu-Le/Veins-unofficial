@@ -24,10 +24,8 @@
 #define BASE_LAYER_H
 
 #include "veins/base/utils/MiXiMDefs.h"
-#include "veins/base/modules/BatteryAccess.h"
+#include "veins/base/modules/BaseModule.h"
 #include "veins/base/utils/PassedMessage.h"
-
-using Veins::BatteryAccess;
 
 /**
  * @brief A very simple layer template
@@ -38,7 +36,7 @@ using Veins::BatteryAccess;
  * @ingroup baseModules
  * @author Andreas Koepke
  */
-class MIXIM_API BaseLayer : public BatteryAccess
+class MIXIM_API BaseLayer : public BaseModule
 {
 public:
     /** @brief SignalID for packets. */
@@ -47,8 +45,8 @@ public:
     const static simsignalwrap_t catPassedMsgSignal;
     /** @brief Signal for dropped packets.*/
     const static simsignalwrap_t catDroppedPacketSignal;
-protected:
 
+protected:
     /** @name gate ids*/
     /*@{*/
     int upperLayerIn;
@@ -66,14 +64,8 @@ protected:
     PassedMessage *passedMsg;
 
 public:
-    BaseLayer()
-        : BatteryAccess()
-        , passedMsg(NULL)
-    {}
-    BaseLayer(unsigned stacksize)
-        : BatteryAccess(stacksize)
-        , passedMsg(NULL)
-    {}
+    BaseLayer() : BaseModule(), passedMsg(nullptr) {}
+    BaseLayer(unsigned stacksize) : BaseModule(stacksize), passedMsg(nullptr) {}
     virtual ~BaseLayer();
     //Module_Class_Members(BaseLayer, BaseModule, 0 );
 

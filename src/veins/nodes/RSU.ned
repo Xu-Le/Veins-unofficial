@@ -36,12 +36,12 @@ module RSU
 		string nicType = default("Nic80211p"); // type of network interface card
 
 	gates:
-		input veinswiredIn;   // transmit data to appl module
-		output veinswiredOut; // receive data from appl module
-		input veinswestIn;   // transmit data to appl module
-		output veinswestOut; // receive data from appl module
-		input veinseastIn;   // transmit data to appl module
-		output veinseastOut; // receive data from appl module
+		input veinswiredIn @loose;   // transmit data to appl module
+		output veinswiredOut @loose; // receive data from appl module
+		input veinswestIn @loose;   // transmit data to appl module
+		output veinswestOut @loose; // receive data from appl module
+		input veinseastIn @loose;   // transmit data to appl module
+		output veinseastOut @loose; // receive data from appl module
 		input veinsradioIn @directIn; // gate for sendDirect
 
 	submodules:
