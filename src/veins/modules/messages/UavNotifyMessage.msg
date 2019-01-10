@@ -28,8 +28,9 @@ class noncobject AccessTable;
 
 packet UavNotifyMessage extends WaveShortMessage
 {
-    bool acknowledgment; // whether this message is an acknowledgment
-    long receiver = -1; // destination node
+	@descriptor(false);
+	bool acknowledgment; // whether this message is an acknowledgment
+	long receiver = -1; // destination node
 	AccessHopList hopList; // access hop list from the originator UAV to the RSU
 	AccessTable table; // access table from the direct previous hop
 }

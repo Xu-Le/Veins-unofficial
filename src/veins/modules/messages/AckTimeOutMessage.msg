@@ -20,6 +20,7 @@
 
 message AckTimeOutMessage
 {
+	@descriptor(false);
 	unsigned long wsmId = -1; // The corresponding WSM's tree id
 	int ac = -1; // Access category on which the AckTimer is set
 }

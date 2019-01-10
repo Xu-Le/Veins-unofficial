@@ -25,6 +25,8 @@ long RoutingStatisticCollector::gRREQs = 0;
 long RoutingStatisticCollector::gRREPs = 0;
 long RoutingStatisticCollector::gRERRs = 0;
 long RoutingStatisticCollector::gRREPACKs = 0;
+long RoutingStatisticCollector::gRREQps = 0;
+long RoutingStatisticCollector::gRREPps = 0;
 long RoutingStatisticCollector::gLocalRepairs = 0;
 long RoutingStatisticCollector::gPktsLinkLost = 0;
 long RoutingStatisticCollector::gPktsOverLost = 0;
@@ -59,12 +61,18 @@ void RoutingStatisticCollector::finish()
 	EV << "RoutingStatisticCollector::finish() called.\n";
 
 	// record statistics
-	double gCtrlBitsFraction = static_cast<double>(gCtrlBitsTransmitted) / (gDataBitsTransmitted+gCtrlBitsTransmitted);
+	double gCtrlBitsFraction = 0.0;
+	if (gCtrlBitsTransmitted > 0)
+		gCtrlBitsFraction = static_cast<double>(gCtrlBitsTransmitted) / (gDataBitsTransmitted+gCtrlBitsTransmitted);
+	if (gDataPktsRecv == 0)
+		gDataPktsRecv = 1;
 	gEndtoendDelay /= gDataPktsRecv;
 	recordScalar("gRREQs", gRREQs);
 	recordScalar("gRREPs", gRREPs);
 	recordScalar("gRERRs", gRERRs);
 	recordScalar("gRREPACKs", gRREPACKs);
+	recordScalar("gRREQps", gRREQps);
+	recordScalar("gRREPps", gRREPps);
 	recordScalar("gLocalRepairs", gLocalRepairs);
 	recordScalar("gPktsLinkLost", gPktsLinkLost);
 	recordScalar("gPktsOverLost", gPktsOverLost);

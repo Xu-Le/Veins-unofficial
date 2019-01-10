@@ -241,7 +241,7 @@ void BaseUAV::onBeacon(BeaconMessage *beaconMsg)
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
 	EV << "display all vehicles' information:\n";
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
 		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << "\n";

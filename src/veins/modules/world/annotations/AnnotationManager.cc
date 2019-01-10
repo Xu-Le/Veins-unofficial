@@ -37,8 +37,6 @@ namespace {
 void AnnotationManager::initialize() {
     EV << "AnnotationManager::initialize() called.\n";
 
-    debug = par("debug").boolValue();
-
     scheduledEraseEvts.clear();
 
     annotations.clear();

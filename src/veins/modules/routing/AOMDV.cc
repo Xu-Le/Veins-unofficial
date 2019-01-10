@@ -34,7 +34,8 @@ void AOMDV::initialize(int stage)
 		routingPriority = par("routingPriority").longValue();
 		dataLengthBits = par("dataLengthBits").longValue();
 		dataPriority = par("dataPriority").longValue();
-		bufferQueueCap = par("bufferQueueCap").longValue();
+		bQueueSize = 0;
+		bQueueCap = par("bufferQueueCap").longValue();
 
 		pktTransmitDelay = SimTime(dataLengthBits/6, SIMTIME_US); // assume link layer rate is 6Mb/s
 		pktNetLayerDelay = SimTime(par("pktNetLayerDelay").longValue(), SIMTIME_US);
@@ -56,6 +57,8 @@ void AOMDV::initialize(int stage)
 				callRoutingEvt = new cMessage("call routing evt", WaveApplMsgKinds::CALL_ROUTING_EVT);
 				scheduleAt(routingPlanList.front().first, callRoutingEvt);
 			}
+			sendBufDataEvt = new cMessage("send buf data evt", AOMDVMsgKinds::SEND_BUF_DATA_EVT);
+			sendBufDataEvt->setSchedulingPriority(1);
 			purgeRoutingTableEvt = new cMessage("purge routing table evt", AOMDVMsgKinds::PURGE_ROUTING_TABLE_EVT);
 			purgeBroadcastCacheEvt = new cMessage("purge broadcast cache evt", AOMDVMsgKinds::PURGE_BROADCAST_CACHE_EVT);
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
@@ -72,6 +75,7 @@ void AOMDV::initialize(int stage)
 		}
 		else
 		{
+			sendBufDataEvt = nullptr;
 			purgeRoutingTableEvt = nullptr;
 			purgeBroadcastCacheEvt = nullptr;
 		}
@@ -81,26 +85,22 @@ void AOMDV::initialize(int stage)
 void AOMDV::finish()
 {
 	// clear containers
-	linkTable.clear();
 	for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
 		delete itRT->second;
 	routingTable.clear();
-	for (itBC = broadcastCache.begin(); itBC != broadcastCache.end(); ++itBC)
-		delete itBC->second;
 	broadcastCache.clear();
 	for (itSS = senderStates.begin(); itSS != senderStates.end(); ++itSS)
 		cancelAndDelete(itSS->second.sendDataEvt);
 	senderStates.clear();
 	receiverStates.clear();
-	for (itRQ = rQueues.begin(); itRQ != rQueues.end(); ++itRQ)
-		clearBufferQueue(itRQ->second);
-	rQueues.clear();
+	clearBufferQueue();
 
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
 	triggerPlanList.clear();
 	cancelAndDelete(callTriggerEvt);
 #endif
 	cancelAndDelete(callRoutingEvt);
+	cancelAndDelete(sendBufDataEvt);
 	cancelAndDelete(purgeRoutingTableEvt);
 	cancelAndDelete(purgeBroadcastCacheEvt);
 
@@ -146,91 +146,110 @@ void AOMDV::handleSelfMsg(cMessage *msg)
 	}
 	case AOMDVMsgKinds::SEND_DATA_EVT:
 	{
-		LAddress::L3Type *receiver = static_cast<LAddress::L3Type*>(msg->getContextPointer());
+		simtime_t moment = pktApplLayerDelay;
+		if (bQueueSize == bQueueCap)
+		{
+			EV << "buffer queue is full, wait a moment: " << moment << std::endl;
+			scheduleAt(simTime() + moment, msg);
+			break;
+		}
 
-		AomdvRtEntry *rt = lookupRoutingEntry(*receiver);
+		LAddress::L3Type *dest = static_cast<LAddress::L3Type*>(msg->getContextPointer());
+
+		AomdvRtEntry *rt = lookupRoutingEntry(*dest);
 		ASSERT(rt != nullptr);
 
-		SendState &sendState = senderStates[*receiver]; // must exists
+		SendState &sendState = senderStates[*dest]; // must exists
 		int bytesNum = dataLengthBits / 8;
 		if (bytesNum > sendState.totalBytes - sendState.curOffset)
 			bytesNum = sendState.totalBytes - sendState.curOffset;
 
 		EV << "packet seqno: " << sendState.curSeqno << ", current offset: " << sendState.curOffset << "\n";
 		DataMessage *dataPkt = new DataMessage("data");
-		prepareWSM(dataPkt, 8*bytesNum, t_channel::type_CCH, dataPriority);
-		dataPkt->setSender(myAddr);
-		dataPkt->setReceiver(*receiver);
+		prepareWSM(dataPkt, 8*bytesNum, dataOnSch ? t_channel::type_SCH : t_channel::type_CCH, dataPriority);
+		dataPkt->setSource(myAddr);
+		dataPkt->setDestination(*dest);
 		dataPkt->setSequence(sendState.curSeqno++);
 		dataPkt->setBytesNum(bytesNum);
 		sendState.curOffset += bytesNum;
 
-		itRQ = rQueues.find(*receiver);
-		ASSERT(itRQ != rQueues.end());
-		pushBufferQueue(itRQ->second, dataPkt);
+		++rt->bufPktsNum;
 		if (rt->flags == RTF_UP)
 		{
 			ASSERT(!rt->pathList.empty());
 
-			EV << "RTF_UP, prepare send it to next hop: " << rt->pathSelect()->nextHop << std::endl;
+			pushBufferQueue(dataPkt); // will never overflow
+			EV << "RTF_UP, prepare send it to next hop: " << rt->pathSelect()->nextHop << ", queue size: " << bQueueSize << std::endl;
+
+			if (!sendBufDataEvt->isScheduled())
+				scheduleAt(simTime() + pktNetLayerDelay, sendBufDataEvt);
 			// we have sent all buffered packets and application layer has no data to send
-			if (sendState.curOffset == sendState.totalBytes && itRQ->second.empty())
+			if (sendState.curOffset == sendState.totalBytes && rt->bufPktsNum == 1)
 			{
 				EV << "I have sent all data, purge send state." << std::endl;
 				cancelAndDelete(sendState.sendDataEvt);
-				senderStates.erase(*receiver);
+				senderStates.erase(*dest);
+				if (!findBufferQueue(*dest))
+					rt->connected = false;
 				break;
 			}
 		}
 		else if (rt->flags == RTF_DOWN)
 		{
 			EV << "RTF_DOWN, buffer and send RREQ.\n";
-
+			rQueue.push_back(dataPkt);
 			rt->flags = RTF_IN_REPAIR;
-			sendRREQ(*receiver);
+			sendRREQ(*dest);
 		}
 		else // rt->flags == RTF_IN_REPAIR
+		{
 			EV << "RTF_IN_REPAIR, just buffer." << std::endl;
+			rQueue.push_back(dataPkt);
+		}
 
 		if (sendState.curOffset < sendState.totalBytes)
-		{
-			simtime_t moment = pktNetLayerDelay + pktApplLayerDelay;
-			if (itRQ->second.size() < bufferQueueCap)
-				scheduleAt(simTime() + moment, msg);
-			else
-			{
-				EV << "buffer queue is full, flush buffered packets first." << std::endl;
-				if (rt->flags == RTF_UP && !rt->sendBufDataEvt->isScheduled())
-					scheduleAt(simTime() + moment, rt->sendBufDataEvt);
-			}
-		}
-		else if (rt->flags == RTF_UP && !itRQ->second.empty() && !rt->sendBufDataEvt->isScheduled())
-			scheduleAt(simTime() + pktTransmitDelay + pktNetLayerDelay, rt->sendBufDataEvt);
+			scheduleAt(simTime() + moment, msg);
 		break;
 	}
 	case AOMDVMsgKinds::SEND_BUF_DATA_EVT:
 	{
-		simtime_t moment = pktTransmitDelay + pktNetLayerDelay;
-		if (myMac->getEDCAQueueRoom(t_channel::type_CCH, dataPriority) == 0)
+		simtime_t moment = pktNetLayerDelay;
+		if (bQueue.empty())
 		{
-			moment *= myMac->getEDCAQueueRoom(t_channel::type_CCH, dataPriority, true);
+			EV << "buffer queue is empty." << std::endl;
+			break;
+		}
+		t_channel chan = dataOnSch ? t_channel::type_SCH : t_channel::type_CCH;
+		if (myMac->getEDCAQueueRoom(chan, dataPriority) == 0)
+		{
+			moment += pktTransmitDelay;
+			moment *= myMac->getEDCAQueueRoom(chan, dataPriority, true);
 			EV << "EDCA queue is full, wait a moment: " << moment << std::endl;
 			scheduleAt(simTime() + moment, msg);
 			break;
 		}
 
-		LAddress::L3Type *receiver = static_cast<LAddress::L3Type*>(msg->getContextPointer());
+		DataMessage *dataPkt = bQueue.front();
+		bQueue.pop_front();
+		--bQueueSize;
 
-		AomdvRtEntry *rt = lookupRoutingEntry(*receiver);
-		ASSERT(rt != nullptr && rt->flags == RTF_UP);
+		AomdvRtEntry *rt = lookupRoutingEntry(dataPkt->getDestination());
+		ASSERT(rt != nullptr);
+		if (rt->flags != RTF_UP)
+		{
+			EV << "RTF_DOWN || RTF_IN_REPAIR, push it into rqueue." << std::endl;
+			rQueue.push_back(dataPkt);
+			scheduleAt(simTime() + moment, msg);
+			break;
+		}
+
 		LAddress::L3Type nextHop = rt->pathSelect()->nextHop;
-
-		itRQ = rQueues.find(*receiver);
-		ASSERT(itRQ != rQueues.end());
-		DataMessage *dataPkt = itRQ->second.front();
-		itRQ->second.pop();
 		dataPkt->setSenderAddress(myAddr);
+#ifdef USE_L2_UNICAST_DATA
 		dataPkt->setRecipientAddress(lookupL2Address(nextHop));
+#else
+		dataPkt->setReceiverAddress(nextHop);
+#endif
 
 		// Note that this should include not only the bits in the routing control packets,
 		// but also the bits in the header of the data packets.	In other words, anything that is
@@ -238,35 +257,40 @@ void AOMDV::handleSelfMsg(cMessage *msg)
 		RoutingStatisticCollector::gDataBitsTransmitted += dataPkt->getBitLength() - headerLength;
 		RoutingStatisticCollector::gCtrlBitsTransmitted += headerLength;
 		RoutingStatisticCollector::gDataPktsTransmitted++;
-		if (dataPkt->getSender() == myAddr)
+		if (dataPkt->getSource() == myAddr)
 		{
 			RoutingStatisticCollector::gDataBitsSent += dataPkt->getBitLength() - headerLength;
 			RoutingStatisticCollector::gDataPktsSent++;
 		}
 		sendDelayedDown(dataPkt, moment);
-
-		if (itRQ->second.empty())
+		// trick: simulate packet lost without MAC ACK
+		Coord &nextHopPos = MobilityObserver::Instance()->globalPosition[nextHop];
+		if (curPosition.distance(nextHopPos) > transmissionRadius)
 		{
-			if (dataPkt->getSender() != myAddr)
+			onDataLost(dataPkt->dup());
+		}
+
+		if (--rt->bufPktsNum == 0)
+		{
+			if (dataPkt->getSource() != myAddr)
 				EV << "I have forwarded all data." << std::endl;
 			else
 			{
-				SendState &sendState = senderStates[*receiver]; // must exists
+				SendState &sendState = senderStates[dataPkt->getDestination()]; // must exists
 				if (sendState.curOffset < sendState.totalBytes)
-				{
 					EV << "application layer still has data to send.\n";
-					scheduleAt(simTime(), sendState.sendDataEvt);
-				}
 				else // we have sent all buffered packets and application layer has no data to send
 				{
 					EV << "I have sent all data, purge send state." << std::endl;
 					cancelAndDelete(sendState.sendDataEvt);
-					senderStates.erase(*receiver);
+					senderStates.erase(dataPkt->getDestination());
+					if (!findBufferQueue(dataPkt->getDestination()))
+						rt->connected = false;
 				}
 			}
 		}
-		else
-			scheduleAt(simTime() + moment, msg);
+
+		scheduleAt(simTime() + moment, msg);
 		break;
 	}
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
@@ -281,8 +305,7 @@ void AOMDV::handleSelfMsg(cMessage *msg)
 #endif
 	case WaveApplMsgKinds::CALL_ROUTING_EVT:
 	{
-		std::pair<LAddress::L3Type, int> planInfo(routingPlanList.front().second);
-		callRouting(planInfo.first, planInfo.second);
+		callRouting(routingPlanList.front().second);
 		routingPlanList.pop_front();
 		if (!routingPlanList.empty())
 			scheduleAt(routingPlanList.front().first, callRoutingEvt);
@@ -340,12 +363,7 @@ void AOMDV::onBeacon(BeaconMessage *beaconMsg)
 	if (path != nullptr)
 		path->expireAt = simTime() + neighborElapsed;
 	else
-		path = rt->pathInsert(sender, myAddr, 1, simTime()+neighborElapsed);
-
-	// retrieve control information generated by physical layer
-	PhyToMacControlInfo *phyInfo = dynamic_cast<PhyToMacControlInfo*>(beaconMsg->removeControlInfo());
-	DeciderResult80211 *ctrlInfo = dynamic_cast<DeciderResult80211*>(phyInfo->getDeciderResult());
-	EV << "SINR: " << ctrlInfo->getSnr() << ", recv power: " << ctrlInfo->getRecvPower_dBm() << "dBm." << std::endl;
+		path = rt->pathInsert(sender, myAddr, 1, neighborElapsed);
 }
 
 void AOMDV::onRouting(RoutingMessage *msg)
@@ -463,6 +481,7 @@ void AOMDV::onRREQ(RREQMessage *rq)
 		EV << "create an entry for the reverse route.\n";
 		rt0 = insertRoutingEntry(rqsrc);
 	}
+	rt0->connected = true;
 
 	/*
 	 * 3.1.1.1. Sufficient Conditions
@@ -482,6 +501,7 @@ void AOMDV::onRREQ(RREQMessage *rq)
 	 * more number of alternate paths to be maintained.
 	 */
 	AomdvPath *reversePath = nullptr;
+	uint32_t rqHopCount = rq->getHopCount() + 1;
 	// Create/update reverse path (i.e. path back to RREQ source)
 	// If RREQ contains more recent seq number than route table entry - update route entry to source.
 	if (rt0->seqno < rq->getOriginatorSeqno())
@@ -494,17 +514,17 @@ void AOMDV::onRREQ(RREQMessage *rq)
 		rt0->flags = RTF_UP;
 		// Insert new path for route entry to source of RREQ.
 		// (src addr, hop count + 1, lifetime, last hop (first hop for RREQ))
-		reversePath = rt0->pathInsert(ipsrc, rq->getFirstHop(), rq->getHopCount()+1, simTime()+REVERSE_ROUTE_LIFE);
+		reversePath = rt0->pathInsert(ipsrc, rq->getFirstHop(), rq->getHopCount()+1, REVERSE_ROUTE_LIFE);
 		rt0->lastHopCount = rq->getHopCount() + 1;
 		EV << "new reverse path: " << reversePath->info() << ", last hop count: " << (uint32_t)rt0->lastHopCount << std::endl;
 	}
 	// If a new path with smaller hop count is received
 	// (same seqno, better hop count) - try to insert new path in route table.
-	else if (rt0->seqno == rq->getOriginatorSeqno() && (rt0->advertisedHops > rq->getHopCount()))
+	else if (rt0->seqno == rq->getOriginatorSeqno() && rt0->advertisedHops > rq->getHopCount())
 	{
 		ASSERT(rt0->flags == RTF_UP); // Make sure path is up
 
-		EV << "Case II: get shorter route (" << (uint32_t)rt0->advertisedHops << " > " << (uint32_t)rq->getHopCount() << ").\n";
+		EV << "Case II: get useful route (" << (uint32_t)rt0->advertisedHops << " >= " << rqHopCount << ").\n";
 
 		AomdvPath *erp = nullptr;
 		// If path already exists - adjust the lifetime of the path.
@@ -526,7 +546,7 @@ void AOMDV::onRREQ(RREQMessage *rq)
 			// and new path does not differ too much in length compared to previous paths
 			if (rt0->pathList.size() < AOMDV_MAX_PATHS && rq->getHopCount() + 1 - rt0->pathGetMinHopCount() <= AOMDV_MAX_PATH_HOP_DIFF)
 			{
-				reversePath = rt0->pathInsert(ipsrc, rq->getFirstHop(), rq->getHopCount()+1, simTime()+REVERSE_ROUTE_LIFE);
+				reversePath = rt0->pathInsert(ipsrc, rq->getFirstHop(), rq->getHopCount()+1, REVERSE_ROUTE_LIFE);
 				rt0->lastHopCount = rt0->pathGetMaxHopCount();
 				EV << "new reverse path: " << reversePath->info() << ", last hop count: " << (uint32_t)rt0->lastHopCount << std::endl;
 			}
@@ -541,26 +561,23 @@ void AOMDV::onRREQ(RREQMessage *rq)
 	}
 	// Older seqno (or same seqno with higher hopcount), i.e. I have a more recent route entry - so drop packet.
 	else
+	{
+		if (rt0->seqno > rq->getOriginatorSeqno())
+			EV << "get stale route (" << rt0->seqno << " > " << rq->getOriginatorSeqno() << ")." << std::endl;
+		else if (rt0->advertisedHops < rq->getHopCount())
+			EV << "get useless route (" << (uint32_t)rt0->advertisedHops << " < " << rqHopCount << ")." << std::endl;
 		return;
+	}
 	// End for putting reverse route in routing table
 
-	// If route is up
-	if (rt0->flags == RTF_UP)
-	{
-		// Reset the soft state
-		rt0->reqTimeout = SimTime::ZERO;
-		rt0->reqCount = 0;
-		rt0->reqLastTTL = 0;
+	// Reset the soft state
+	rt0->reqTimeout = SimTime::ZERO;
+	rt0->reqCount = 0;
+	rt0->reqLastTTL = 0;
 
-		// Find out whether any buffered packet can benefit from the reverse route.
-		itRQ = rQueues.find(rqsrc);
-		ASSERT(itRQ != rQueues.end());
-		if (!itRQ->second.empty())
-		{
-			EV << "reverse path becomes RTF_UP and buffer queue is not empty, send buffered packets.\n";
-			trySendBufPackets(rt0);
-		}
-	}
+	// Find out whether any buffered packet can benefit from the reverse route.
+	EV << "reverse path becomes RTF_UP, transfer corresponding packets from rQueue to bQueue.\n";
+	transferBufPackets(rqsrc);
 
 	// Check route entry for RREQ destination
 	AomdvRtEntry *rt = lookupRoutingEntry(rqdst);
@@ -596,7 +613,7 @@ void AOMDV::onRREQ(RREQMessage *rq)
 		// is calculated by	subtracting the current time from the expiration time in its route table entry.
 		if (reversePath != nullptr)
 		{
-			EV << "I have a fresh route to RREQ dest, b->count: " << b->count << std::endl;
+			EV << "I have a fresh route to RREQ dest, b->count: " << b->count << " (" << rt->seqno << " >= " << rq->getDestSeqno() << ')' << std::endl;
 #ifdef AOMDV_NODE_DISJOINT_PATHS
 			if (b->count == 0)
 			{
@@ -608,6 +625,7 @@ void AOMDV::onRREQ(RREQMessage *rq)
 
 				AomdvPath *forwardPath = rt->pathSelect();
 				rt->error = true;
+				rt->connected = true;
 				sendRREP(rq, rt->advertisedHops, rt->seqno, forwardPath->expireAt-simTime(), forwardPath->lastHop);
 			}
 #endif
@@ -672,8 +690,10 @@ void AOMDV::onRREP(RREPMessage *rp)
 		EV << "create an entry for the forward route.\n";
 		rt = insertRoutingEntry(rpdst);
 	}
+	rt->connected = true;
 
 	AomdvPath *forwardPath = nullptr;
+	uint32_t rpHopCount = rp->getHopCount() + 1;
 	// If RREP contains more recent seqno for (RREQ) destination
 	// - delete all old paths and add the new forward path to (RREQ) destination
 	if (rt->seqno < rp->getDestSeqno())
@@ -685,7 +705,7 @@ void AOMDV::onRREP(RREPMessage *rp)
 		rt->pathList.clear();
 		rt->flags = RTF_UP;
 		// Insert forward path to RREQ destination.
-		forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, simTime()+rp->getLifeTime());
+		forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, rp->getLifeTime());
 		rt->lastHopCount = rp->getHopCount() + 1;
 		EV << "new forward path: " << forwardPath->info() << ", last hop count: " << (uint32_t)rt->lastHopCount << std::endl;
 	}
@@ -693,7 +713,7 @@ void AOMDV::onRREP(RREPMessage *rp)
 	// with a smaller hop count - try to insert new forward path to (RREQ) dest.
 	else if (rt->seqno == rp->getDestSeqno() && rt->advertisedHops > rp->getHopCount())
 	{
-		EV << "Case II: get shorter route (" << (uint32_t)rt->advertisedHops << " > " << (uint32_t)rp->getHopCount() << ").\n";
+		EV << "Case II: get useful route (" << (uint32_t)rt->advertisedHops << " >= " << rpHopCount << ").\n";
 
 		rt->flags = RTF_UP;
 		// If the path already exists - increase path lifetime
@@ -711,7 +731,7 @@ void AOMDV::onRREP(RREPMessage *rp)
 				&& rp->getHopCount() + 1 - rt->pathGetMinHopCount() <= AOMDV_MAX_PATH_HOP_DIFF)
 		{
 			// Insert forward path to RREQ destination.
-			forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, simTime()+rp->getLifeTime());
+			forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, rp->getLifeTime());
 			rt->lastHopCount = rt->pathGetMaxHopCount();
 			EV << "new forward path: " << forwardPath->info() << ", last hop count: " << (uint32_t)rt->lastHopCount << std::endl;
 		}
@@ -721,7 +741,13 @@ void AOMDV::onRREP(RREPMessage *rp)
 	}
 	// The received RREP did not contain more recent information than route table - so drop packet
 	else
+	{
+		if (rt->seqno > rp->getDestSeqno())
+			EV << "get stale route (" << rt->seqno << " > " << rp->getDestSeqno() << ")." << std::endl;
+		else if (rt->advertisedHops < rp->getHopCount())
+			EV << "get useless route (" << (uint32_t)rt->advertisedHops << " < " << rpHopCount << ")." << std::endl;
 		return;
+	}
 
 #if ROUTING_DEBUG_LOG
 	printRoutingTable();
@@ -736,13 +762,8 @@ void AOMDV::onRREP(RREPMessage *rp)
 		rt->reqLastTTL = 0;
 
 		// Find out whether any buffered packet can benefit from the forward route.
-		itRQ = rQueues.find(rpdst);
-		ASSERT(itRQ != rQueues.end());
-		if (!itRQ->second.empty())
-		{
-			EV << "forward path becomes RTF_UP and buffer queue is not empty, send buffered packets.\n";
-			trySendBufPackets(rt);
-		}
+		EV << "forward path becomes RTF_UP, transfer corresponding packets from rQueue to bQueue.\n";
+		transferBufPackets(rpdst);
 	}
 
 	// If I am the intended recipient of the RREP, nothing more needs to be done - so drop packet.
@@ -764,6 +785,7 @@ void AOMDV::onRREP(RREPMessage *rp)
 	if (rt0 == nullptr || rt0->flags != RTF_UP || b == nullptr || b->count > 0)
 		return;
 
+	rt0->connected = true;
 	b->count = 1;
 	AomdvPath *reversePath = rt0->pathSelect();
 	reversePath->expireAt = simTime() + ACTIVE_ROUTE_TIMEOUT;
@@ -858,12 +880,17 @@ void AOMDV::onData(DataMessage *dataPkt)
 {
 	EV << "node[" << myAddr << "]: onData!\n";
 
-	LAddress::L3Type dest = dataPkt->getReceiver(); // alias
+#ifndef USE_L2_UNICAST_DATA
+	if (dataPkt->getReceiverAddress() != myAddr)
+		return;
+#endif
+
+	LAddress::L3Type dest = dataPkt->getDestination(); // alias
 	if (dest == myAddr)
 	{
-		itRS = receiverStates.find(dataPkt->getSender());
+		itRS = receiverStates.find(dataPkt->getSource());
 		if (itRS == receiverStates.end())
-			itRS = receiverStates.insert(std::pair<LAddress::L3Type, RecvState>(dataPkt->getSender(), RecvState())).first;
+			itRS = receiverStates.insert(std::pair<LAddress::L3Type, RecvState>(dataPkt->getSource(), RecvState())).first;
 		RecvState &recvState = itRS->second;
 		bool duplicated = recvState.onRecv(dataPkt->getSequence());
 		RoutingStatisticCollector::gDataBitsRecv += dataPkt->getBitLength() - headerLength;
@@ -874,8 +901,8 @@ void AOMDV::onData(DataMessage *dataPkt)
 		RoutingStatisticCollector::gEndtoendDelay += simTime() - dataPkt->getCreationTime();
 
 		EV << "this data packet is for me, seqno: " << dataPkt->getSequence() << ", seqno intervals:\n";
-		for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS)
-			EV << '[' << recvState.itS->first << ',' << recvState.itS->second << "), ";
+		//for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS)
+		//	EV << '[' << recvState.itS->first << ',' << recvState.itS->second << "), ";
 		EV << std::endl;
 		return;
 	}
@@ -905,23 +932,22 @@ void AOMDV::onData(DataMessage *dataPkt)
 		re->setUnreachableNodes(0, unreach);
 		sendRERR(re);
 	}
-	else // rt->flags == RTF_UP || rt->flags == RTF_IN_REPAIR
+	else if (rt->flags == RTF_UP)
 	{
-		itRQ = rQueues.find(dest);
-		ASSERT(itRQ != rQueues.end());
-		size_t queueSize = pushBufferQueue(itRQ->second, dataPkt->dup());
+		size_t queueSize = pushBufferQueue(dataPkt->dup());
+		if (queueSize > 0 && !sendBufDataEvt->isScheduled())
+			scheduleAt(simTime(), sendBufDataEvt);
 
-		if (rt->flags == RTF_UP)
-		{
-			ASSERT(rt->lastHopCount != INFINITE_HOPS && !rt->pathList.empty());
-			LAddress::L3Type nextHop = rt->pathSelect()->nextHop;
-			if (queueSize > 0)
-				trySendBufPackets(rt);
+		ASSERT(rt->lastHopCount != INFINITE_HOPS && !rt->pathList.empty());
+		LAddress::L3Type nextHop = rt->pathSelect()->nextHop;
 
-			EV << "RTF_UP, prepare forward it to next hop: " << nextHop << ", queue size: " << queueSize << std::endl;
-		}
-		else
-			EV << "RTF_IN_REPAIR, buffer it, queue size: " << queueSize << std::endl;
+		EV << "RTF_UP, prepare forward it to next hop: " << nextHop << ", queue size: " << queueSize << std::endl;
+	}
+	else // rt->flags == RTF_IN_REPAIR
+	{
+		rQueue.push_back(dataPkt->dup());
+
+		EV << "RTF_IN_REPAIR, buffer it in rQueue." << std::endl;
 	}
 }
 
@@ -929,7 +955,11 @@ void AOMDV::onDataLost(DataMessage *lostDataPkt)
 {
 	EV << "node[" << myAddr << "]: onDataLost!\n";
 
+#ifdef USE_L2_UNICAST_DATA
 	LAddress::L3Type nextHop = lookupL3Address(lostDataPkt->getRecipientAddress());
+#else
+	LAddress::L3Type nextHop = lostDataPkt->getReceiverAddress();
+#endif
 	ASSERT(nextHop != -1);
 
 	onLinkBroken(nextHop, lostDataPkt);
@@ -950,10 +980,9 @@ void AOMDV::forward(AomdvRtEntry *rt, RoutingMessage *pkt)
 		ASSERT(rt->flags == RTF_UP);
 
 		AomdvPath *path = rt->pathSelect();
+		ASSERT(path != nullptr);
 		path->expireAt = simTime() + ACTIVE_ROUTE_TIMEOUT;
-		itN = neighbors.find(path->nextHop);
-		ASSERT(itN != neighbors.end());
-		pkt->setRecipientAddress(itN->second->macAddr);
+		pkt->setRecipientAddress(lookupL2Address(path->nextHop));
 	}
 	else
 		ASSERT(pkt->getIpDest() == LAddress::L3BROADCAST());
@@ -997,9 +1026,13 @@ void AOMDV::sendRREQ(LAddress::L3Type dest, uint8_t TTL)
 		return;
 	}
 
-	if (rt->sendBufDataEvt->isScheduled())
-		cancelEvent(rt->sendBufDataEvt);
-
+	// A destination node increments its own sequence number in two circumstances:
+	//   - Immediately before a node originates a route discovery, it MUST increment
+	//     its own sequence number. This prevents conflicts with previously established
+	//     reverse routes towards the originator of a RREQ.
+	//   - Immediately before a destination node originates a RREP in response to a RREQ,
+	//     it MUST update its own sequence number to the maximum of its current sequence
+	//     number and the destination sequence number in the RREQ packet.
 	seqno += 2;
 	ASSERT(seqno % 2 == 0);
 
@@ -1043,14 +1076,13 @@ void AOMDV::sendRREQ(LAddress::L3Type dest, uint8_t TTL)
 		}
 	}
 	else // local repair
+	{
+		rq->setRepairFlag(true);
 		rq->setTTL(TTL);
+	}
 	// remember the TTL used  for the next time
 	rt->reqLastTTL = rq->getTTL();
 
-	// PerHopTime is the roundtrip time per hop for route requests.
-	// The factor 2.0 is just to be safe .. SRD 5/22/99
-	// Also note that we are making timeouts to be larger if we have
-	// done network wide broadcast before.
 	rt->reqTimeout = 2 * rq->getTTL() * NODE_TRAVERSAL_TIME;
 	if (rt->reqCount > 1)
 		rt->reqTimeout *= rt->reqCount;
@@ -1064,7 +1096,6 @@ void AOMDV::sendRREQ(LAddress::L3Type dest, uint8_t TTL)
 		rt->rrepTimeoutEvt->setContextPointer(&rt->brokenNb);
 		rt->rrepTimeoutEvt->setDestAddr(dest);
 	}
-	rt->rrepTimeoutEvt->setLastTTL(rq->getTTL());
 	ASSERT(!rt->rrepTimeoutEvt->isScheduled());
 	scheduleAt(rt->reqTimeout, rt->rrepTimeoutEvt);
 
@@ -1080,9 +1111,7 @@ void AOMDV::sendRREP(RREQMessage *rq, uint8_t hopCount, uint32_t rpseq, simtime_
 {
 	RREPMessage *rp = new RREPMessage("routing");
 	LAddress::L3Type ipsrc = rq->getSenderAddress();
-	itN = neighbors.find(ipsrc);
-	ASSERT(itN != neighbors.end());
-	prepareWSM(rp, routingLengthBits+224, t_channel::type_CCH, routingPriority, itN->second->macAddr);
+	prepareWSM(rp, routingLengthBits+224, t_channel::type_CCH, routingPriority, lookupL2Address(ipsrc));
 	rp->setIpDest(rq->getOriginatorAddr());
 	rp->setTTL(rq->getHopCount()+1);
 	rp->setPacketType(AOMDVPacketType::RREP);
@@ -1142,7 +1171,26 @@ void AOMDV::onNeighborLost(LAddress::L3Type neighbor)
 	seqno += 2; // Set of neighbors changed
 	ASSERT(seqno % 2 == 0);
 
-	onLocalRepairFailure(neighbor);
+	AomdvPath *path = nullptr;
+	for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
+	{
+		AomdvRtEntry *rt = itRT->second;
+		if ((path = rt->pathLookup(neighbor)) != nullptr)
+		{
+			if (rt->connected && rt->pathList.size() == 1)
+			{
+				rt->brokenNb = neighbor;
+				rt->flags = RTF_IN_REPAIR;
+				rt->advertisedHops = INFINITE_HOPS;
+				++rt->seqno;
+				if (rt->seqno < rt->highestSeqnoHeard)
+					rt->seqno = rt->highestSeqnoHeard;
+				++RoutingStatisticCollector::gLocalRepairs;
+				sendRREQ(itRT->first, path->hopCount + LOCAL_ADD_TTL);
+			}
+			rt->pathDelete(neighbor);
+		}
+	}
 }
 
 /**
@@ -1163,7 +1211,7 @@ void AOMDV::onNeighborLost(LAddress::L3Type neighbor)
  */
 void AOMDV::localRepair(AomdvRtEntry *rt, DataMessage *dataPkt)
 {
-	AomdvRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSender());
+	AomdvRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSource());
 	ASSERT(rt0 != nullptr && rt0->flags == RTF_UP);
 
 	if (rt->flags == RTF_IN_REPAIR)
@@ -1174,7 +1222,7 @@ void AOMDV::localRepair(AomdvRtEntry *rt, DataMessage *dataPkt)
 	++RoutingStatisticCollector::gLocalRepairs;
 
 	uint8_t MIN_REPAIR_TTL = rt->lastHopCount, halfReverseHop = rt0->lastHopCount/2;
-	sendRREQ(dataPkt->getReceiver(), std::max(MIN_REPAIR_TTL, halfReverseHop) + LOCAL_ADD_TTL);
+	sendRREQ(dataPkt->getDestination(), std::max(MIN_REPAIR_TTL, halfReverseHop) + LOCAL_ADD_TTL);
 }
 
 //////////////////////////////    RouteRepairInterface    //////////////////////////////
@@ -1186,9 +1234,9 @@ void AOMDV::localRepair(AomdvRtEntry *rt, DataMessage *dataPkt)
  */
 void AOMDV::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 {
-	EV << "link with neighbor " << neighbor << " is broken when transmitting to " << dataPkt->getReceiver() << "\n";
+	EV << "link with neighbor " << neighbor << " is broken when transmitting to " << dataPkt->getDestination() << "\n";
 
-	AomdvRtEntry *rt = lookupRoutingEntry(dataPkt->getReceiver());
+	AomdvRtEntry *rt = lookupRoutingEntry(dataPkt->getDestination());
 	ASSERT(rt != nullptr);
 	rt->brokenNb = neighbor;
 	rt->pathDelete(neighbor);
@@ -1196,10 +1244,12 @@ void AOMDV::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	if (rt->flags == RTF_UP && !rt->pathList.empty())
 	{
 		LAddress::L3Type nextHop = rt->pathSelect()->nextHop;
-		itN = neighbors.find(nextHop);
-		ASSERT(itN != neighbors.end());
 		dataPkt->setSenderAddress(myAddr);
-		dataPkt->setRecipientAddress(itN->second->macAddr);
+#ifdef USE_L2_UNICAST_DATA
+		dataPkt->setRecipientAddress(lookupL2Address(nextHop));
+#else
+		dataPkt->setReceiverAddress(nextHop);
+#endif
 
 		RoutingStatisticCollector::gDataBitsTransmitted += dataPkt->getBitLength() - headerLength;
 		RoutingStatisticCollector::gCtrlBitsTransmitted += headerLength;
@@ -1210,12 +1260,12 @@ void AOMDV::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	}
 	else if (rt->lastHopCount <= MAX_REPAIR_TTL)
 	{
-		if (dataPkt->getSender() != myAddr)
+		if (dataPkt->getSource() != myAddr)
 			localRepair(rt, dataPkt);
 		else
 		{
 			rt->flags = RTF_IN_REPAIR;
-			sendRREQ(dataPkt->getReceiver(), rt->lastHopCount + LOCAL_ADD_TTL);
+			sendRREQ(dataPkt->getDestination());
 		}
 		++RoutingStatisticCollector::gPktsLinkLost;
 	}
@@ -1279,27 +1329,25 @@ void AOMDV::onRouteReachable(LAddress::L3Type dest)
 	std::string paths = rt->pathPrint();
 	EV << paths.c_str() << std::endl;
 
-	if ((itSS = senderStates.find(dest)) == senderStates.end()) // I am an intermediate node
-		return;
-	SendState &sendState = itSS->second;
-	itRQ = rQueues.find(dest);
-	ASSERT(itRQ != rQueues.end());
-	if (!itRQ->second.empty()) // flush buffer queue first
-	{
-		if (!rt->sendBufDataEvt->isScheduled())
-			scheduleAt(simTime(), rt->sendBufDataEvt);
-	}
-	else if (!sendState.sendDataEvt->isScheduled() && sendState.curOffset < sendState.totalBytes)
-		scheduleAt(simTime(), sendState.sendDataEvt);
+	if (!sendBufDataEvt->isScheduled())
+		scheduleAt(simTime(), sendBufDataEvt);
 }
 
 void AOMDV::onRouteUnreachable(LAddress::L3Type dest)
 {
 	EV << "route to dest " << dest << " becomes unreachable, discard buffered packets." << std::endl;
 
-	itRQ = rQueues.find(dest);
-	ASSERT(itRQ != rQueues.end());
-	clearBufferQueue(itRQ->second);
+	for (itRQ = rQueue.begin(); itRQ != rQueue.end();)
+	{
+		if ((*itRQ)->getDestination() == dest)
+		{
+			++RoutingStatisticCollector::gPktsLinkLost;
+			delete *itRQ;
+			itRQ = rQueue.erase(itRQ);
+		}
+		else
+			++itRQ;
+	}
 
 	if ((itSS = senderStates.find(dest)) != senderStates.end()) // I am RREQ source
 	{
@@ -1308,18 +1356,23 @@ void AOMDV::onRouteUnreachable(LAddress::L3Type dest)
 	}
 }
 
-void AOMDV::callRouting(LAddress::L3Type receiver, int contentSize)
+void AOMDV::callRouting(const PlanEntry& entry)
 {
 	EV << "node[" << myAddr << "]: callRouting!\n";
 
+	LAddress::L3Type receiver = entry.receiver;
+	itN = neighbors.find(receiver);
+	ASSERT(itN != neighbors.end());
+
 	itSS = senderStates.find(receiver);
 	ASSERT(itSS == senderStates.end());
-	itSS = senderStates.insert(std::pair<LAddress::L3Type, SendState>(receiver, SendState(contentSize, receiver))).first;
+	itSS = senderStates.insert(std::pair<LAddress::L3Type, SendState>(receiver, SendState(entry.totalBytes, receiver))).first;
 	SendState &sendState = itSS->second;
 	sendState.sendDataEvt = new cMessage("send data evt", AOMDVMsgKinds::SEND_DATA_EVT);
 	sendState.sendDataEvt->setContextPointer(&sendState.receiver);
-	scheduleAt(simTime(), sendState.sendDataEvt);
-	EV << "receiver: " << receiver << ", content size: " << contentSize << "\n";
+	scheduleAt(simTime() + entry.calcTime, sendState.sendDataEvt); // only can be cancelled in onRouteUnreachable()
+
+	EV << "receiver: " << receiver << ", total bytes: " << entry.totalBytes << ", calc time: " << entry.calcTime << "\n";
 
 	AomdvRtEntry *rt = lookupRoutingEntry(receiver);
 	if (rt == nullptr)
@@ -1327,6 +1380,7 @@ void AOMDV::callRouting(LAddress::L3Type receiver, int contentSize)
 		EV << "create an entry for the forward route.\n";
 		rt = insertRoutingEntry(receiver);
 	}
+	rt->connected = true;
 
 	ASSERT(rt->flags != RTF_IN_REPAIR);
 	if (rt->flags == RTF_DOWN)
@@ -1355,7 +1409,6 @@ AOMDV::AomdvRtEntry* AOMDV::insertRoutingEntry(LAddress::L3Type dest)
 {
 	AomdvRtEntry *entry = new AomdvRtEntry(this, dest);
 	routingTable.insert(std::pair<LAddress::L3Type, AomdvRtEntry*>(dest, entry));
-	rQueues.insert(std::pair<LAddress::L3Type, std::queue<DataMessage*> >(dest, std::queue<DataMessage*>()));
 	return entry;
 }
 
@@ -1370,12 +1423,11 @@ void AOMDV::downRoutingEntry(AomdvRtEntry *rt)
 	if (rt->flags == RTF_DOWN)
 		return;
 	EV << "down routing entry, dest: " << rt->dest << ", broken nb: " << rt->brokenNb << std::endl;
+	rt->connected = false;
 	rt->flags = RTF_DOWN;
 	rt->advertisedHops = INFINITE_HOPS;
 	ASSERT(rt->pathList.empty());
 	rt->expireAt = simTime() + DELETE_PERIOD;
-	if (rt->sendBufDataEvt->isScheduled())
-		cancelEvent(rt->sendBufDataEvt);
 }
 
 void AOMDV::purgeRoutingTable()
@@ -1400,6 +1452,8 @@ void AOMDV::purgeRoutingTable()
 				if (rt->seqno % 2 == 0)
 					++rt->seqno;
 				downRoutingEntry(rt);
+				if (senderStates.find(itRT->first) != senderStates.end())
+					sendRREQ(itRT->first);
 			}
 			++itRT;
 		}
@@ -1418,7 +1472,7 @@ void AOMDV::purgeRoutingTable()
 				// If the route is down and if there is a packet for this destination waiting in
 				// the send buffer, then send out route request. sendRequest will check whether
 				// it is time to really send out request or not.
-				if ((itRQ = rQueues.find(itRT->first)) != rQueues.end() && !itRQ->second.empty())
+				if (findBufferQueue(itRT->first))
 					sendRREQ(itRT->first);
 				++itRT;
 			}
@@ -1431,35 +1485,25 @@ void AOMDV::purgeRoutingTable()
 //////////////////////////////    BCAST_ID functions    //////////////////////////////
 AOMDV::AomdvBroadcastID* AOMDV::insertBroadcastID(LAddress::L3Type src, uint32_t bid)
 {
-	AomdvBroadcastID *bcastEntry = nullptr;
-	if ((itBC = broadcastCache.find(src)) == broadcastCache.end())
+	for (itBC = broadcastCache.begin(); itBC != broadcastCache.end(); ++itBC)
 	{
-		bcastEntry = new AomdvBroadcastID(bid);
-		broadcastCache.insert(std::pair<LAddress::L3Type, AomdvBroadcastID*>(src, bcastEntry));
-	}
-	else
-	{
-		bcastEntry = itBC->second;
-		if (bcastEntry->rreqId == bid)
-			++bcastEntry->count;
-		else
+		if (itBC->source == src && itBC->rreqId == bid)
 		{
-			bcastEntry->rreqId = bid;
-			bcastEntry->count = 0;
-#ifdef AOMDV_LINK_DISJOINT_PATHS
-			bcastEntry->forwardPathList.clear();
-			bcastEntry->reversePathList.clear();
-#endif
+			++itBC->count;
+			itBC->expireAt = simTime() + BCAST_ID_SAVE;
+			return &*itBC;
 		}
-		bcastEntry->expireAt = simTime() + BCAST_ID_SAVE;
 	}
-	return bcastEntry;
+
+	broadcastCache.push_front(AomdvBroadcastID(src, bid));
+	return &broadcastCache.front();
 }
 
 AOMDV::AomdvBroadcastID* AOMDV::lookupBroadcastID(LAddress::L3Type src, uint32_t bid)
 {
-	if ((itBC = broadcastCache.find(src)) != broadcastCache.end())
-		return itBC->second->rreqId == bid ? itBC->second : nullptr;
+	for (itBC = broadcastCache.begin(); itBC != broadcastCache.end(); ++itBC)
+		if (itBC->source == src && itBC->rreqId == bid)
+			return &*itBC;
 	return nullptr;
 }
 
@@ -1468,20 +1512,27 @@ void AOMDV::purgeBroadcastCache()
 	simtime_t curTime = simTime();
 	for (itBC = broadcastCache.begin(); itBC != broadcastCache.end();)
 	{
-		if (itBC->second->expireAt <= curTime)
-		{
-			delete itBC->second;
-			broadcastCache.erase(itBC++);
-		}
+		if (itBC->expireAt <= curTime)
+			itBC = broadcastCache.erase(itBC);
 		else
 			++itBC;
 	}
 }
 
-void AOMDV::trySendBufPackets(AomdvRtEntry *rt)
+void AOMDV::transferBufPackets(LAddress::L3Type dest)
 {
-	if (!rt->sendBufDataEvt->isScheduled())
-		scheduleAt(simTime(), rt->sendBufDataEvt);
+	for (itRQ = rQueue.begin(); itRQ != rQueue.end();)
+	{
+		if ((*itRQ)->getDestination() == dest)
+		{
+			pushBufferQueue(*itRQ);
+			itRQ = rQueue.erase(itRQ);
+		}
+		else
+			++itRQ;
+	}
+	if (!sendBufDataEvt->isScheduled() && !bQueue.empty())
+		scheduleAt(simTime(), sendBufDataEvt);
 }
 
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
@@ -1565,34 +1616,33 @@ void AOMDV::initializeTriggerPlanList(cXMLElement *xmlConfig)
 #endif
 
 //////////////////////////////    AOMDV::AomdvRtEntry    //////////////////////////////
-AOMDV::AomdvRtEntry::AomdvRtEntry(AOMDV *o, LAddress::L3Type d) : owner(o), error(false), expireAt(), reqTimeout(), reqCount(0), reqLastTTL(0),
-		flags(RTF_DOWN), advertisedHops(INFINITE_HOPS), lastHopCount(INFINITE_HOPS), seqno(0), highestSeqnoHeard(0), dest(d), brokenNb(-1)
+AOMDV::AomdvRtEntry::AomdvRtEntry(AOMDV *o, LAddress::L3Type d) : owner(o), error(false), connected(false), expireAt(simTime()+DELETE_PERIOD),
+		reqTimeout(), reqCount(0), reqLastTTL(0), flags(RTF_DOWN), advertisedHops(INFINITE_HOPS), lastHopCount(INFINITE_HOPS),
+		seqno(0), highestSeqnoHeard(0), bufPktsNum(0), dest(d), brokenNb(-1)
 {
-	sendBufDataEvt = new cMessage("send buf data evt", AOMDVMsgKinds::SEND_BUF_DATA_EVT);
-	sendBufDataEvt->setContextPointer(&dest);
 	rrepTimeoutEvt = rrepAckTimeoutEvt = nullptr;
 }
 
 AOMDV::AomdvRtEntry::~AomdvRtEntry()
 {
-	owner->cancelAndDelete(sendBufDataEvt);
 	owner->cancelAndDelete(rrepTimeoutEvt);
 	owner->cancelAndDelete(rrepAckTimeoutEvt);
 }
 
 AOMDV::AomdvPath* AOMDV::AomdvRtEntry::pathInsert(LAddress::L3Type nextHop, LAddress::L3Type lastHop, uint8_t hopCount, simtime_t expire)
 {
-	AOMDV::AomdvPath path(nextHop, lastHop, hopCount, expire);
+	simtime_t _expireAt = simTime() + expire;
+	AOMDV::AomdvPath path(nextHop, lastHop, hopCount, _expireAt);
 	pathList.push_front(path);
 	itSP = pathList.begin();
-	if (expireAt < expire)
-		expireAt = expire;
+	if (expireAt < _expireAt)
+		expireAt = _expireAt;
 	return &pathList.front();
 }
 
 AOMDV::AomdvPath* AOMDV::AomdvRtEntry::pathSelect()
 {
-	if (++itSP == pathList.end()) // poll all disjoint paths
+	if (++itSP == pathList.end()) // round robin all disjoint paths
 		itSP = pathList.begin();
 	return &*itSP;
 }
@@ -1682,7 +1732,7 @@ std::string AOMDV::AomdvRtEntry::pathPrint()
 	std::ostringstream oss;
 	oss << "    nextHop  lastHop  hopCount  expireAt\n";
 	for (itPL = pathList.begin(); itPL != pathList.end(); ++itPL)
-		oss << "      " << itPL->nextHop << ws << itPL->lastHop << ws << (uint32_t)itPL->hopCount << ws << itPL->expireAt << "\n";
+		oss << "      " << itPL->nextHop << ws << itPL->lastHop << ws << (uint32_t)itPL->hopCount << ws << itPL->expireAt.dbl() << "\n";
 	return oss.str();
 }
 

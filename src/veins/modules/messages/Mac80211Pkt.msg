@@ -22,12 +22,13 @@ class MacPkt;
 //
 packet Mac80211Pkt extends MacPkt
 {
-    int address3;
-    int address4;
-    int fragmentation; // part of the Frame Control field
-    int informationDS; // part of the Frame Control field
-    int sequenceControl;
-    bool retry;
-    bool isAck;
-    simtime_t duration; //the expected remaining duration the current transaction 
+	@descriptor(readonly);
+	int address3;
+	int address4;
+	int fragmentation; // part of the Frame Control field
+	int informationDS; // part of the Frame Control field
+	int sequenceControl;
+	bool retry;
+	bool isAck;
+	simtime_t duration; // the expected remaining duration the current transaction 
 }

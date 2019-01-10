@@ -15,8 +15,7 @@ class Mapping;
 
 using Veins::AirFrame;
 
-// #define deciderEV EV << "[Host " << myIndex << "] - PhyLayer(Decider): "
-#define deciderEV if (false) EV
+#define deciderEV if (false) EV_INFO
 
 /**
  * @brief Provides some base functionality for most common deciders.
@@ -101,8 +100,7 @@ protected:
 	 * start-time */
 	CSRInfo currentChannelSenseRequest;
 
-	/** @brief index for this Decider-instance given by Phy-Layer (mostly
-	 * Host-index) */
+	/** @brief index for this Decider-instance given by Phy-Layer (mostly Host-index) */
 	int myIndex;
 
 	/** @brief toggles display of debugging messages */

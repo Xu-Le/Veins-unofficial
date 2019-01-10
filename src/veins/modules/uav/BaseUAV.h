@@ -21,7 +21,6 @@
 
 #include "veins/base/modules/BaseApplLayer.h"
 #include "veins/base/connectionManager/BaseConnectionManager.h"
-#include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/modules/messages/UavBeaconMessage_m.h"
 #include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/routing/MobilityObserver.h"

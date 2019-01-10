@@ -17,13 +17,14 @@
 //
 
 cplusplus {{
-#include "veins/modules/messages/WaveShortMessage_m.h"
+#include "veins/modules/messages/BeaconMessage_m.h"
 }}
 
-class WaveShortMessage;
+class BeaconMessage;
 
-packet UavBeaconMessage extends WaveShortMessage
+packet UavBeaconMessage extends BeaconMessage
 {
+	@descriptor(false);
 	int hop; // minimum hop count to the RSU
 	simtime_t decideAt; // time instant when making the last deployment decision
 	double hopDist; // distance to the next hop

@@ -79,18 +79,18 @@ void Mac1609_4::initialize(int stage)
 		myEDCA[type_CCH]->myId = myId;
 		myEDCA[type_CCH]->myId.append(" CCH");
 
-		myEDCA[type_CCH]->createQueue(2,(((CWMIN_11P+1)/4)-1),(((CWMIN_11P+1)/2)-1),AC_VO);
-		myEDCA[type_CCH]->createQueue(3,(((CWMIN_11P+1)/2)-1),CWMIN_11P,AC_VI);
-		myEDCA[type_CCH]->createQueue(6,CWMIN_11P,CWMAX_11P,AC_BE);
-		myEDCA[type_CCH]->createQueue(9,CWMIN_11P,(CWMAX_11P+1)/16-1,AC_BK);
+		myEDCA[type_CCH]->createQueue(2, ((CWMIN_11P+1)/4)-1, ((CWMIN_11P+1)/2)-1, AC_VO);
+		myEDCA[type_CCH]->createQueue(3, ((CWMIN_11P+1)/2)-1, CWMIN_11P, AC_VI);
+		myEDCA[type_CCH]->createQueue(6, CWMIN_11P, CWMAX_11P, AC_BE);
+		myEDCA[type_CCH]->createQueue(9, CWMIN_11P, CWMAX_11P, AC_BK);
 
 		myEDCA[type_SCH] = new EDCA(this, type_SCH,par("queueSize").longValue());
 		myEDCA[type_SCH]->myId = myId;
 		myEDCA[type_SCH]->myId.append(" SCH");
-		myEDCA[type_SCH]->createQueue(2,(((CWMIN_11P+1)/4)-1),(((CWMIN_11P +1)/2)-1),AC_VO);
-		myEDCA[type_SCH]->createQueue(3,(((CWMIN_11P+1)/2)-1),CWMIN_11P,AC_VI);
-		myEDCA[type_SCH]->createQueue(6,CWMIN_11P,CWMAX_11P,AC_BE);
-		myEDCA[type_SCH]->createQueue(9,CWMIN_11P,(CWMAX_11P+1)/16-1,AC_BK);
+		myEDCA[type_SCH]->createQueue(2, ((CWMIN_11P+1)/4)-1, ((CWMIN_11P+1)/2)-1, AC_VO);
+		myEDCA[type_SCH]->createQueue(3, ((CWMIN_11P+1)/2)-1, CWMIN_11P, AC_VI);
+		myEDCA[type_SCH]->createQueue(6, CWMIN_11P, CWMAX_11P, AC_BE);
+		myEDCA[type_SCH]->createQueue(9, CWMIN_11P, CWMAX_11P, AC_BK);
 
 		useSCH = par("useServiceChannel").boolValue();
 		if (useSCH)
@@ -305,7 +305,7 @@ void Mac1609_4::handleSelfMsg(cMessage *msg)
 			// revoke TXOP
 			myEDCA[activeChannel]->revokeTxOPs();
 			delete mac;
-			channelIdle();
+			// channelIdle();
 			// do nothing. contention will automatically start after channel switch
 		}
 	}
@@ -318,14 +318,14 @@ void Mac1609_4::handleSelfMsg(cMessage *msg)
 		switch (activeChannel)
 		{
 		case type_CCH:
-			DBG_MAC << "CCH --> SCH" << std::endl;
+			EV_INFO << "CCH --> SCH" << std::endl;
 			channelBusySelf(false);
 			setActiveChannel(type_SCH);
 			channelIdle(true);
 			phy11p->changeListeningFrequency(frequency[mySCH]);
 			break;
 		case type_SCH:
-			DBG_MAC << "SCH --> CCH" << std::endl;
+			EV_INFO << "SCH --> CCH" << std::endl;
 			channelBusySelf(false);
 			setActiveChannel(type_CCH);
 			channelIdle(true);
@@ -353,7 +353,7 @@ void Mac1609_4::handleLowerMsg(cMessage *msg)
 	WaveShortMessage *wsm = nullptr;
 	if (!macPkt->getIsAck())
 		wsm = dynamic_cast<WaveShortMessage*>(macPkt->decapsulate());
-	if (wsm != nullptr && strcmp(wsm->getName(), "beacon") == 0) // pass information about received frame to the upper layers
+	if (wsm != nullptr && (strcmp(wsm->getName(), "beacon") == 0 || strcmp(wsm->getName(), "uavBeacon") == 0)) // pass information about received frame to the upper layers
 	{
 		wsm->setRecipientAddress(srcAddr); // trick, there is no field indicates the source's MAC address
 		wsm->setControlInfo(msg->removeControlInfo());
@@ -730,9 +730,7 @@ void Mac1609_4::channelBusy()
 	lastBusy = simTime();
 
 	// channel turned busy
-	if (nextMacEvent->isScheduled() == true)
-		cancelEvent(nextMacEvent);
-	// else: the edca subsystem was not doing anything anyway.
+	cancelEvent(nextMacEvent);
 
 	myEDCA[activeChannel]->stopContent(true, false);
 

@@ -388,7 +388,7 @@ void BasePhyLayer::handleAirFrameStartReceive(AirFrame* frame) {
 		simtime_t signalEndTime = signal.getReceptionStart() + frame->getDuration();
 		frame->setState(END_RECEIVE);
 
-		sendSelfMessage(frame, signalEndTime);
+		scheduleAt(signalEndTime, frame);
 	}
 }
 
@@ -420,7 +420,7 @@ void BasePhyLayer::handleAirFrameReceiving(AirFrame* frame) {
 
 	coreEV << "Handed AirFrame with ID " << frame->getId() << " to Decider. Next handling in " << nextHandleTime - simTime() << "s." << endl;
 
-	sendSelfMessage(frame, nextHandleTime);
+	scheduleAt(nextHandleTime, frame);
 }
 
 void BasePhyLayer::handleAirFrameEndReceive(AirFrame* frame) {
@@ -460,16 +460,14 @@ void BasePhyLayer::handleUpperMessage(cMessage* msg){
 	}
 
 	// build the AirFrame to send
-	assert(dynamic_cast<cPacket*>(msg) != 0);
-
-	AirFrame* frame = encapsMsg(static_cast<cPacket*>(msg));
+	AirFrame* frame = encapsMsg(dynamic_cast<cPacket*>(msg));
 
 	// make sure there is no self message of kind TX_OVER scheduled
 	// and schedule the actual one
 	assert (!txOverTimer->isScheduled());
-	sendSelfMessage(txOverTimer, simTime() + frame->getDuration());
+	scheduleAt(simTime() + frame->getDuration(), txOverTimer);
 
-	sendMessageDown(frame);
+	sendToChannel(frame);
 }
 
 AirFrame *BasePhyLayer::encapsMsg(cPacket *macPkt)
@@ -529,7 +527,7 @@ void BasePhyLayer::handleChannelSenseRequest(cMessage* msg) {
 	simtime_t nextHandleTime = decider->handleChannelSenseRequest(senseReq);
 
 	if(nextHandleTime >= simTime()) { //schedule request for next handling
-		sendSelfMessage(msg, nextHandleTime);
+		scheduleAt(nextHandleTime, msg);
 
 		//don't throw away any AirFrames while ChannelSenseRequest is active
 		if(!channelInfo.isRecording()) {
@@ -572,7 +570,7 @@ void BasePhyLayer::handleSelfMessage(cMessage* msg) {
 
 	//AirFrame
 	case AIR_FRAME:
-		handleAirFrame(static_cast<AirFrame*>(msg));
+		handleAirFrame(dynamic_cast<AirFrame*>(msg));
 		break;
 
 	//ChannelSenseRequest
@@ -594,19 +592,6 @@ void BasePhyLayer::sendControlMessageUp(cMessage* msg) {
 void BasePhyLayer::sendMacPktUp(cMessage* pkt) {
 	send(pkt, upperLayerOut);
 }
-
-void BasePhyLayer::sendMessageDown(AirFrame* msg) {
-
-	sendToChannel(msg);
-}
-
-void BasePhyLayer::sendSelfMessage(cMessage* msg, simtime_t_cref time) {
-	//TODO: maybe delete this method because it doesn't makes much sense,
-	//		or change it to "scheduleIn(msg, timeDelta)" which schedules
-	//		a message to +timeDelta from current time
-	scheduleAt(time, msg);
-}
-
 
 void BasePhyLayer::filterSignal(AirFrame *frame) {
 	if (analogueModels.empty())
@@ -730,7 +715,7 @@ simtime_t BasePhyLayer::setRadioState(int rs) {
 		finishRadioSwitching();
 	} else
 	{
-		sendSelfMessage(radioSwitchingOverTimer, simTime() + switchTime);
+		scheduleAt(simTime() + switchTime, radioSwitchingOverTimer);
 	}
 
 	return switchTime;

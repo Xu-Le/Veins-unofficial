@@ -47,6 +47,8 @@ public:
 	static long gRREPs;    ///< how many RREPs generated in simulation.
 	static long gRERRs;    ///< how many RERRs generated in simulation.
 	static long gRREPACKs; ///< how many RREPACKs generated in simulation.
+	static long gRREQps;   ///< how many RREQps generated in simulation.
+	static long gRREPps;   ///< how many RREPps generated in simulation.
 	static long gLocalRepairs; ///< how many times local repair performs in simulation.
 	static long gPktsLinkLost; ///< how many data packets lost due to link broken in simulation.
 	static long gPktsOverLost; ///< how many data packets lost due to buffer queue overflow in simulation.

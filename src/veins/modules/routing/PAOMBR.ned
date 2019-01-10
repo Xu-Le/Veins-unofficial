@@ -19,19 +19,22 @@ package org.car2x.veins.modules.routing;
 
 import org.car2x.veins.modules.wave.BaseWaveApplLayer;
 
-simple AOMDV extends BaseWaveApplLayer
+simple PAOMBR extends BaseWaveApplLayer
 {
-	@class(AOMDV);
+	@class(PAOMBR);
 	@display("i=block/routing");
-	int routingLengthBits = default(40bit) @unit(bit); // the length of a routing packet
+	int routingLengthBits = default(424bit) @unit(bit); // the length of a routing packet
 	int routingPriority = default(0); // the access category of the routing messages
 	// see "Figure 8-33——A-MSDU Subframe structure for Mesh Data" of IEEE Std 802.11-2012
 	int dataLengthBits = default(18432bit) @unit(bit); // the length of a data packet 8*2304
 	int dataPriority = default(2); // the access category for data packets
+	int sendRRPktsThres = default(5); // how many data packets received will trigger a receiver report
 	int bufferQueueCap = default(64); // the capacity of data packets buffer queue
 
 	int pktNetLayerDelay = default(1000);  // network layer to MAC layer measured in us
 	int pktApplLayerDelay = default(1000); // application layer to network layer measured in us
+
+	double recvPowerThres = default(-77dBm) @unit(dBm); // received power threshold below which the link is going to break
 
 	xml routingPlan;
 	xml triggerPlan;

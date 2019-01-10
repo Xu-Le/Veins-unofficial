@@ -13,14 +13,27 @@
 	<RoutingPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter -->
 		<RoutingPlan type="0">
-			<parameter name="simtime" type="double" value="10.5"/>
+			<parameter name="simtime" type="double" value="1.6"/>
+			<parameter name="receiver" type="long" value="4"/>
+			<parameter name="totalbytes" type="int" value="20480"/>
+			<parameter name="calctime" type="double" value="10.0"/>
+		</RoutingPlan>
+		<RoutingPlan type="5">
+			<parameter name="simtime" type="double" value="1.65"/>
 			<parameter name="receiver" type="long" value="10"/>
-			<parameter name="contentsize" type="int" value="1048576"/>
+			<parameter name="totalbytes" type="int" value="20480"/>
+			<parameter name="calctime" type="double" value="10.0"/>
+		</RoutingPlan>
+		<RoutingPlan type="11">
+			<parameter name="simtime" type="double" value="1.7"/>
+			<parameter name="receiver" type="long" value="16"/>
+			<parameter name="totalbytes" type="int" value="20480"/>
+			<parameter name="calctime" type="double" value="10.0"/>
 		</RoutingPlan>
 	</RoutingPlans>
 	<TriggerPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter -->
-		<TriggerPlan type="8">
+		<TriggerPlan type="88">
 			<parameter name="simtime" type="double" value="19.5"/>
 			<parameter name="eventtype" type="int" value="0"/>
 			<parameter name="simtime" type="double" value="21.5"/>
@@ -30,70 +43,74 @@
 	<TrajectoryPlans>
 		<!-- Notes: do not specify address as the type of TrajectoryPlan, use the full name of UAV module instead -->
 		<TrajectoryPlan type="node[0]">
-			<parameter name="pos" type="coord" value="300.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="250.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="140.0,800.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[1]">
-			<parameter name="pos" type="coord" value="700.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="20.0"/>
-			<parameter name="pos" type="coord" value="600.0,200.0,1.5"/>
+			<parameter name="pos" type="coord" value="320.0,800.0,1.5"/>
 			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[2]">
-			<parameter name="pos" type="coord" value="1100.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="1150.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="500.0,800.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[3]">
-			<parameter name="pos" type="coord" value="1500.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="20.0"/>
-			<parameter name="pos" type="coord" value="1600.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="20.0"/>
+			<parameter name="pos" type="coord" value="675.0,800.0,1.5"/>
+			<parameter name="speed" type="double" value="15.0"/>
+			<parameter name="pos" type="coord" value="765.0,800.0,1.5"/>
+			<parameter name="speed" type="double" value="15.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[4]">
-			<parameter name="pos" type="coord" value="1900.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="1950.0,200.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="850.0,800.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[5]">
-			<parameter name="pos" type="coord" value="300.0,500.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="350.0,500.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="290.0,520.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[6]">
-			<parameter name="pos" type="coord" value="1100.0,500.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="1150.0,500.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="360.0,670.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[7]">
-			<parameter name="pos" type="coord" value="1900.0,500.0,1.5"/>
-			<parameter name="speed" type="double" value="20.0"/>
-			<parameter name="pos" type="coord" value="2000.0,500.0,1.5"/>
+			<parameter name="pos" type="coord" value="450.0,410.0,1.5"/>
 			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[8]">
-			<parameter name="pos" type="coord" value="300.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="5.0"/>
-			<parameter name="pos" type="coord" value="325.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="5.0"/>
+			<parameter name="pos" type="coord" value="600.0,530.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[9]">
-			<parameter name="pos" type="coord" value="700.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
-			<parameter name="pos" type="coord" value="650.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="10.0"/>
+			<parameter name="pos" type="coord" value="610.0,700.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 		<TrajectoryPlan type="node[10]">
-			<parameter name="pos" type="coord" value="1100.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="15.0"/>
-			<parameter name="pos" type="coord" value="1025.0,900.0,1.5"/>
-			<parameter name="speed" type="double" value="15.0"/>
+			<parameter name="pos" type="coord" value="805.0,695.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[11]">
+			<parameter name="pos" type="coord" value="290.0,1080.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[12]">
+			<parameter name="pos" type="coord" value="360.0,930.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[13]">
+			<parameter name="pos" type="coord" value="450.0,1190.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[14]">
+			<parameter name="pos" type="coord" value="600.0,1070.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[15]">
+			<parameter name="pos" type="coord" value="610.0,900.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
+		</TrajectoryPlan>
+		<TrajectoryPlan type="node[16]">
+			<parameter name="pos" type="coord" value="805.0,905.0,1.5"/>
+			<parameter name="speed" type="double" value="20.0"/>
 		</TrajectoryPlan>
 	</TrajectoryPlans>
 </root>

@@ -27,5 +27,6 @@ enum WiredMsgCC {
 
 packet WiredMessage
 {
+	@descriptor(false);
 	int controlCode; // express which kind of control signaling message, see enum WiredMsgCC
 }

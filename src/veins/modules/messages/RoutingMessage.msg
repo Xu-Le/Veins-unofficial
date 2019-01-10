@@ -24,7 +24,8 @@ class WaveShortMessage;
 
 packet RoutingMessage extends WaveShortMessage
 {
-    long ipDest = -1; // L3 address
-    unsigned char TTL = 1; // the same as that in IP
+	@descriptor(readonly);
+	long ipDest = -1; // L3 address
+	unsigned char TTL = 1; // the same as that in IP
 	unsigned char packetType; // packet type
 }

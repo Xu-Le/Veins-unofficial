@@ -37,25 +37,27 @@
 
 // Should be set by the user using best guess (conservative)
 #define NET_DIAMETER           10
-#define NODE_TRAVERSAL_TIME    0.01
+// In worst cases, CCH -> SCH happens just before packet arrives at MAC layer,
+// and note that CCH -> SCH worst case happens at a probability of 50%, thus expected delay is 25ms
+#define NODE_TRAVERSAL_TIME    0.025
 #define NET_TRAVERSAL_TIME     (2 * NODE_TRAVERSAL_TIME * NET_DIAMETER)
 #define PATH_DISCOVERY_TIME    (2 * NET_TRAVERSAL_TIME)
 
 // TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
 #define TTL_START         2
-#define TTL_INCREMENT     2
+#define TTL_INCREMENT     1
 #define TTL_THRESHOLD     7
 #define MAX_REPAIR_TTL    0.3 * NET_DIAMETER
-#define LOCAL_ADD_TTL     2
+#define LOCAL_ADD_TTL     1
 
 #define PURGE_ROUTE_PERIOD        0.5
 // ACTIVE_ROUTE_TIMEOUT SHOULD be set to a longer value (at least 10,000 milliseconds)
 // if link-layer indications are used to detect link breakages such as in IEEE 802.11 standard.
-#define ACTIVE_ROUTE_TIMEOUT     10.0
+#define ACTIVE_ROUTE_TIMEOUT      6.0
 // The configured value for MY_ROUTE_TIMEOUT MUST be at least 2 * PATH_DISCOVERY_TIME.
 #define MY_ROUTE_TIMEOUT          6.0
 #define REVERSE_ROUTE_LIFE        6.0
-#define PURGE_BCAST_ID_PERIOD     5.0
+#define PURGE_BCAST_ID_PERIOD     2.5
 #define BCAST_ID_SAVE             5.0
 // Must be larger than the time difference between a node propagates a route request and gets the route reply back.
 #define RREP_WAIT_TIME            1.0
@@ -175,7 +177,8 @@ public:
 		AOMDV *owner; ///< usage: owner->cancelAndDelete(sendBufDataEvt) in destructor.
 
 	public:
-		bool error;
+		bool error;     ///< need to broadcast RERR if true.
+		bool connected; ///< is upper protocol connection based on this routing entry.
 		simtime_t expireAt;   ///< expiration time instant of this routing entry.
 		simtime_t reqTimeout; ///< when I can send another request.
 		uint8_t reqCount;     ///< number of route requests.
@@ -185,9 +188,9 @@ public:
 		uint8_t lastHopCount;   ///< last valid hop count.
 		uint32_t seqno;         ///< sequence number of destination.
 		uint32_t highestSeqnoHeard; ///< highest sequence number ever heard.
-		LAddress::L3Type dest;      ///< usage: sendBufDataEvt->setContextPointer(&dest).
+		uint32_t bufPktsNum;  ///< number of data packets toward this destination buffered in queue.
+		LAddress::L3Type dest;      ///< used inside a function whose parameters contain AomdvRtEntry*.
 		LAddress::L3Type brokenNb;  ///< usage: rrepTimeoutEvt->setContextPointer(&brokenNb).
-		cMessage *sendBufDataEvt;   ///< self message event used to periodically send buffered data packet to the receiver.
 		WaitForRREPMessage *rrepTimeoutEvt;    ///< self message event used to wait for RREP (RREP timeout).
 		WaitForRREPMessage *rrepAckTimeoutEvt; ///< self message event used to wait for RREP-ACK (RREP-ACK timeout).
 
@@ -199,13 +202,14 @@ public:
 	class AomdvBroadcastID
 	{
 	public:
-		explicit AomdvBroadcastID(uint32_t bid) : rreqId(bid), count(0), expireAt(simTime()+BCAST_ID_SAVE) {}
+		AomdvBroadcastID(LAddress::L3Type src, uint32_t bid) : source(src), rreqId(bid), count(0), expireAt(simTime()+BCAST_ID_SAVE) {}
 #ifdef AOMDV_LINK_DISJOINT_PATHS
 		void forwardPathInsert(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 		void reversePathInsert(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 		AomdvRoute* forwardPathLookup(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 		AomdvRoute* reversePathLookup(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 #endif
+		LAddress::L3Type source; ///< RREQ source.
 		uint32_t rreqId;    ///< RREQ ID of the RREQ source.
 		uint32_t count;     ///< how many times I have sent RREP for the same <RREQ src IP, RREQ ID> pair.
 		simtime_t expireAt; ///< expiration time instant.
@@ -283,7 +287,7 @@ private:
 	/** @brief Notified that there is no reachable route to a destination. */
 	void onRouteUnreachable(LAddress::L3Type dest) override;
 	/** @brief call a routing request to a certain receiver determined by routingPlanList. */
-	void callRouting(LAddress::L3Type receiver, int contentSize) override;
+	void callRouting(const PlanEntry& entry) override;
 	/** @brief List all the routing path maintained in the routing table. */
 	void printRoutingTable() override;
 	///@}
@@ -303,8 +307,8 @@ private:
 	void purgeBroadcastCache();
 	///@}
 
-	/** @brief when buffer queue is not empty, try scheduling sendBufDataEvt to send buffered data packets. */
-	void trySendBufPackets(AomdvRtEntry *entry);
+	/** @brief reschedule data packets in rQueue, transfer them to bQueue. */
+	void transferBufPackets(LAddress::L3Type dest);
 
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
 	/** @brief call a trigger event determined by triggerPlanList. */
@@ -317,13 +321,14 @@ private:
 	uint32_t seqno;  ///< Sequence Number.
 	uint32_t rreqID; ///< Each node maintains only one RREQ ID.
 
+	cMessage *sendBufDataEvt; ///< self message event used to periodically send buffered data packet to the receiver.
 	cMessage *purgeRoutingTableEvt;   ///< self message event used to periodically purge routing table.
 	cMessage *purgeBroadcastCacheEvt; ///< self message event used to periodically purge broadcast cache.
 
+	std::list<AomdvBroadcastID> broadcastCache; ///< store (RREQ source, RREQ ID) pair and related information.
+	std::list<AomdvBroadcastID>::iterator itBC; ///< an iterator used to traverse container broadcastCache.
 	std::map<LAddress::L3Type, AomdvRtEntry*> routingTable;   ///< a map from L3 address of the destination to its entry in the routing table.
 	std::map<LAddress::L3Type, AomdvRtEntry*>::iterator itRT; ///< an iterator used to traverse container routingTable.
-	std::map<LAddress::L3Type, AomdvBroadcastID*> broadcastCache; ///< a map from L3 address of the source to its entry in the broadcast cache.
-	std::map<LAddress::L3Type, AomdvBroadcastID*>::iterator itBC; ///< an iterator used to traverse container broadcastCache.
 #ifdef TEST_ROUTE_REPAIR_PROTOCOL
 	cMessage *callTriggerEvt; ///< self message event used to call trigger events determined by triggerPlanList.
 	std::list<std::pair<double, int> > triggerPlanList; ///< trigger plans of all vehicles configured by a xmlfile.

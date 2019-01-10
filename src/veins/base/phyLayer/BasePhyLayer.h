@@ -336,16 +336,6 @@ protected:
 	 */
 	void sendMacPktUp(cMessage* pkt);
 
-	/**
-	 * @brief Sends the passed AirFrame to the channel
-	 */
-	void sendMessageDown(AirFrame* pkt);
-
-	/**
-	 * @brief Schedule self message to passed point in time.
-	 */
-	void sendSelfMessage(cMessage* msg, simtime_t_cref time);
-
 	/*@}*/
 
 	/**

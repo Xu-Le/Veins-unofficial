@@ -37,7 +37,9 @@ struct WAVEInformationElement
 class noncobject Coord;
 class noncobject WAVEInformationElement;
 
-packet WaveShortMessage {
+packet WaveShortMessage
+{
+	@descriptor(false);
 	unsigned char wsmpVersion = 11; // Subtype, Option Indicator, WSMP Version, see "8.3.2.1 General" of IEEE Std 1609.3-2016
 	unsigned char nHeaderExCount = 4; // WAVE Information Element Extension of WSMP-N-Header
 	WAVEInformationElement channelNumber; // see 8.3.4.2 of IEEE Std 1609.3-2016

@@ -123,6 +123,7 @@ protected:
 	{
 	public:
 		NeighborInfo(Coord& p, Coord& s, LAddress::L2Type ma, simtime_t ra) : pos(p), speed(s), macAddr(ma), receivedAt(ra) {}
+		virtual ~NeighborInfo() {}
 
 		Coord pos;    ///< current position of the neighbor.
 		Coord speed;  ///< current speed of the neighbor.
@@ -150,6 +151,10 @@ protected:
 	simtime_t forgetMemoryInterval; ///< the interval of forgetting message received too long time ago.
 	simtime_t neighborElapsed; ///< the maximum time haven't receive message from neighbors leading to assume lose connectivity with it.
 	simtime_t memoryElapsed;   ///< the maximum time can a message store in memory.
+#if ROUTING_DEBUG_LOG
+	double nextBeaconInstant;  ///< time instant of next sendBeaconEvt.
+	double nextExamineInstant; ///< time instant of next examineNeighborsEvt.
+#endif
 	///@}
 
 	simtime_t maxStoreTime; ///< the maximum time a relay vehicle will store a routing message before discarding it.

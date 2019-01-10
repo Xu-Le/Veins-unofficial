@@ -243,8 +243,6 @@ void RoutingRSU::onUavNotify(UavNotifyMessage *uavNotifyMsg)
 void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 {
 	EV << logName() << ": onRouting!\n";
-
-
 }
 
 void RoutingRSU::onData(DataMessage *dataMsg)

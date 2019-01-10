@@ -31,11 +31,6 @@ void ObstacleControl::initialize(int stage)
 {
 	if (stage == 1)
 	{
-		debug = par("debug");
-
-		obstacles.clear();
-		cacheEntries.clear();
-
 		annotations = AnnotationManagerAccess().getIfExists();
 		if (annotations) annotationGroup = annotations->createGroup("obstacles");
 
@@ -55,6 +50,7 @@ void ObstacleControl::finish()
 		}
 	}
 	obstacles.clear();
+	cacheEntries.clear();
 }
 
 void ObstacleControl::handleMessage(cMessage *msg)
