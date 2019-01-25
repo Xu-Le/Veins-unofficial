@@ -24,8 +24,9 @@
 #include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/routing/RoutingStatisticCollector.h"
 
-#define USE_L2_UNICAST_DATA
-#define USE_RECEIVER_REPORT
+#define USE_XML_CONFIG_FILE
+// #define USE_L2_UNICAST_DATA
+// #define USE_RECEIVER_REPORT
 #define INFINITE_HOPS    255
 
 /**
@@ -60,14 +61,6 @@ protected:
 	/** @brief called when local repair timer is timeout. */
 	virtual void onLocalRepairFailure(LAddress::L3Type neighbor) = 0;
 
-	/**
-	 * @brief Searches for alternative routes before the communication is disrupted.
-	 *
-	 * If searched an alternative path, then update old one in the routing table with the new one and return true,
-	 * else keep the old one unchanged and return false.
-	 */
-	// virtual bool seekAlternativePath(std::list<LAddress::L3Type>& existingPath, int destination) { return false; };
-
 	/** @brief Notified that there is a reachable route to a destination. */
 	virtual void onRouteReachable(LAddress::L3Type dest) = 0;
 	/** @brief Notified that there is no reachable route to a destination. */
@@ -77,8 +70,10 @@ protected:
 
 	/** @brief call a routing request to a certain receiver determined by routingPlanList. */
 	virtual void callRouting(const PlanEntry& entry) = 0;
+#ifdef USE_XML_CONFIG_FILE
 	/** @brief initialize routingPlanList through configured xmlfile. */
 	void initializeRoutingPlanList(cXMLElement *xmlConfig, LAddress::L3Type myIdentifier);
+#endif
 	/** @brief insert a neighbor's L2 address and L3 address pair. */
 	bool insertL2L3Address(LAddress::L2Type addr2, LAddress::L3Type addr3);
 	/** @brief given a neighbor's L3 address, return its L2 address. */
@@ -87,7 +82,7 @@ protected:
 	LAddress::L3Type lookupL3Address(LAddress::L2Type addr);
 
 	/** @brief push a data packet into send buffer (FIFO) if buffer is not full, or this data packet is discarded. */
-	size_t pushBufferQueue(DataMessage *dataPkt);
+	bool pushBufferQueue(DataMessage *dataPkt);
 	/** @brief check if there exists any packet for a specific destination in send buffer. */
 	bool findBufferQueue(LAddress::L3Type dest);
 	/** @brief discard all packets in send buffer. */
@@ -169,6 +164,7 @@ protected:
 
 	static int routingLengthBits; ///< the length of routing message measured in bits.
 	static int routingPriority;   ///< the priority of routing message.
+	static int dataHeaderBits;    ///< the length of data header measured in bits.
 	static int dataLengthBits;    ///< the length of data message measured in bits.
 	static int dataPriority;      ///< the priority of data message.
 #ifdef USE_RECEIVER_REPORT

@@ -25,10 +25,9 @@ enum AOMDVPacketType
 	RREP = 2,
 	RERR = 3,
 	RREPACK = 4,
-	RREQp = 5,
-	RREPp = 6,
-	RR = 7,
-	LR = 8
+	LR = 5,
+	DPSR = 6,
+	RR = 7
 };
 // Helper struct to represent (L3Address, sequence number) pairs in a RERR message
 struct UnreachableNode
@@ -116,41 +115,6 @@ packet RREPMessage extends RoutingMessage
 	long breakingNb;
 }
 
-// Represents an PAOMBR Route Request
-packet RREQpMessage extends RoutingMessage
-{
-	@descriptor(false);
-	packetType = AOMDVPacketType::RREQp;
-	bool joinFlag;
-	bool repairFlag;
-	bool gratuitousRREPFlag;
-	bool destOnlyFlag;
-	unsigned char hopCount;
-	unsigned int rreqId;
-	long originatorAddr;
-	unsigned int originatorSeqno;
-	long firstHop;
-	long breakingNb;
-	Coord breakingDir;
-	simtime_t minLET;
-	unsigned int nbNum;
-	unsigned char destCount;
-	RepairingNode repairingNodes[];
-}
-
-// Represents an PAOMBR Route Reply
-packet RREPpMessage extends RoutingMessage
-{
-	@descriptor(false);
-	packetType = AOMDVPacketType::RREPp;
-	long originatorAddr;
-	unsigned int rreqId;
-	long breakingNb;
-	simtime_t minLET;
-	unsigned char destCount;
-	RepairedNode repairedNodes[];
-}
-
 // Represents an AOMDV Route Error
 packet RERRMessage extends RoutingMessage
 {
@@ -163,6 +127,27 @@ packet RERRMessage extends RoutingMessage
 
 // Represents an AOMDV Route Reply ACK
 // packet RREPACKMessage extends RoutingMessage {}
+
+// Represents an PAOMBR Last hop Report
+packet LRMessage extends RoutingMessage
+{
+	@descriptor(readonly);
+	packetType = AOMDVPacketType::LR;
+	long destination;
+	long oldLastHop;
+	long newLastHop;
+	unsigned char hopCount;
+}
+
+// Represents an PAOMBR Dynamic Path Shortening Report
+packet DPSRMessage extends RoutingMessage
+{
+	@descriptor(readonly);
+	packetType = AOMDVPacketType::DPSR;
+	long destination;
+	long originator;
+	long lastHop;
+}
 
 // Represents an PAOMBR Receiver Report
 packet RRMessage extends RoutingMessage
@@ -177,22 +162,9 @@ packet RRMessage extends RoutingMessage
 	simtime_t jitter;
 }
 
-// Represents an PAOMBR Last hop Report
-packet LRMessage extends RoutingMessage
-{
-	@descriptor(readonly);
-	packetType = AOMDVPacketType::LR;
-	long destination;
-	long oldLastHop;
-	long newLastHop;
-	unsigned char hopCount;
-	simtime_t lifeTime;
-	simtime_t minLET;
-}
-
 // Represents a timer for a Route Reply packet
 message WaitForRREPMessage
 {
 	@descriptor(false);
-    long destAddr;
+	long destAddr;
 }

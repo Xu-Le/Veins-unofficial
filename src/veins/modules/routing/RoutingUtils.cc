@@ -75,6 +75,42 @@ short RoutingUtils::relativeDirection(double ownDir, double otherDir)
 		return SAME;
 }
 
+short RoutingUtils::relativeDirection(Coord ownSpeed, Coord otherSpeed)
+{
+	double ownDir = 0.0, otherDir = 0.0;
+	if (fabs(ownSpeed.x) > Epsilon)
+	{
+		if (fabs(ownSpeed.y) > Epsilon)
+		{
+			ownDir = atan(ownSpeed.y/ownSpeed.x);
+			if (ownSpeed.x < 0)
+				ownDir += M_PI;
+			else if (ownSpeed.y < 0)
+				ownDir += 2*M_PI;
+		}
+		else
+			ownDir = ownSpeed.x > 0 ? 0 : M_PI;
+	}
+	else
+		ownDir = ownSpeed.y > 0 ? M_PI/2 : 3*M_PI/2;
+	if (fabs(otherSpeed.x) > Epsilon)
+	{
+		if (fabs(otherSpeed.y) > Epsilon)
+		{
+			otherDir = atan(otherSpeed.y/otherSpeed.x);
+			if (otherSpeed.x < 0)
+				otherDir += M_PI;
+			else if (otherSpeed.y < 0)
+				otherDir += 2*M_PI;
+		}
+		else
+			otherDir = otherSpeed.x > 0 ? 0 : M_PI;
+	}
+	else
+		otherDir = otherSpeed.y > 0 ? M_PI/2 : 3*M_PI/2;
+	return relativeDirection(ownDir, otherDir);
+}
+
 int RoutingUtils::generateGUID()
 {
 	int high = rand(), low = rand();

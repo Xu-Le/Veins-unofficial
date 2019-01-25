@@ -33,6 +33,8 @@ simple AOMDV extends BaseWaveApplLayer
 	int pktNetLayerDelay = default(1000);  // network layer to MAC layer measured in us
 	int pktApplLayerDelay = default(1000); // application layer to network layer measured in us
 
+	int totalBytes = default(10240);
+	double loPrewait = default(5.0);
+	double hiPrewait = default(15.0);
 	xml routingPlan;
-	xml triggerPlan;
 }

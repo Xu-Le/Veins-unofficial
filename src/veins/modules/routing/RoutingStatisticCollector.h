@@ -43,12 +43,16 @@ public:
 	void finish() override;
 
 public:
+	static long gRoutings; ///< how many Routings generated in simulation.
 	static long gRREQs;    ///< how many RREQs generated in simulation.
 	static long gRREPs;    ///< how many RREPs generated in simulation.
 	static long gRERRs;    ///< how many RERRs generated in simulation.
 	static long gRREPACKs; ///< how many RREPACKs generated in simulation.
 	static long gRREQps;   ///< how many RREQps generated in simulation.
 	static long gRREPps;   ///< how many RREPps generated in simulation.
+	static long gLRs;      ///< how many LRs generated in simulation.
+	static long gDPSRs;    ///< how many DPSRs generated in simulation.
+	static long gRouteSuccess; ///< how many times routing is successful.
 	static long gLocalRepairs; ///< how many times local repair performs in simulation.
 	static long gPktsLinkLost; ///< how many data packets lost due to link broken in simulation.
 	static long gPktsOverLost; ///< how many data packets lost due to buffer queue overflow in simulation.

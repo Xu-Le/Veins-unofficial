@@ -32,10 +32,10 @@
 
 // TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
 #define TTL_START         2
-#define TTL_INCREMENT     1
+#define TTL_INCREMENT     2
 #define TTL_THRESHOLD     7
 #define MAX_REPAIR_TTL    5
-#define LOCAL_ADD_TTL     1
+#define LOCAL_ADD_TTL     2
 
 // Should be set by the user using best guess (conservative)
 #define NET_DIAMETER           10
@@ -50,26 +50,25 @@
 #define ACTIVE_ROUTE_TIMEOUT      6.0
 #define MY_ROUTE_TIMEOUT          6.0
 #define REVERSE_ROUTE_LIFE        6.0
-#define PURGE_BCAST_ID_PERIOD     2.5
+#define PURGE_BCAST_ID_PERIOD     2.0
 #define BCAST_ID_SAVE             5.0
 // Must be larger than the time difference between a node propagates a route request and gets the route reply back.
 #define RREP_WAIT_TIME            1.0
-#define RREPACK_WAIT_TIME         1.0
 // If the link layer feedback is used to detect loss of link, DELETE_PERIOD must be at least ACTIVE_ROUTE_TIMEOUT.
 #define DELETE_PERIOD    ACTIVE_ROUTE_TIMEOUT
 
-#define USE_DYNAMIC_PATH_SHORTENING
 #define USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
-#define PLRR_SUPPRESSION_TIME     3
-#define MAX_RECV_POWER_POLYNOMIAL_DEGREE 4
+#define USE_DYNAMIC_PATH_SHORTENING
 
 #ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
 #define USE_IRRESPONSIBLE_REBROADCAST
-// #define USE_DESTINATION_AGGREGATION
+#define PLRR_SUPPRESSION_TIME     3
+#define MAX_RECV_POWER_POLYNOMIAL_DEGREE 4
 #endif
 
 #ifdef USE_DYNAMIC_PATH_SHORTENING
 #undef USE_L2_UNICAST_DATA
+#define DPS_OPERATION_TIME    0.05
 #endif
 
 /**
@@ -80,8 +79,13 @@
  * @see BaseWaveApplLayer
  * @see RouteRepairInterface
  *
- * T. Goff, N. A.-Ghazaleh, D. Phatak, and R. Kahvecioglu, "Preemptive Routing in Ad Hoc Networks," Journal of Parallel and Distributed Computing, Jun. 2002.
- * C. Sengul, and R. Kravets, "Bypass routing: An on-demand local recovery protocol for ad hoc networks," Ad Hoc Networks, vol. 4, pp. 380-397, 2006.
+ * [1] T. Goff, N. Abu-Ghazaleh, D. Phatak, and R. Kahvecioglu, "Preemptive routing in ad hoc networks,"
+ *     in Proc. ACM Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Rome, Italy, 2001, pp. 43-52.
+ * [2] S. Crisostomo, S. Sargento, P. Brandao, and R. Prior, "Improving AODV with preemptive local route repair,"
+ *     in IEEE International Workshop on Wireless Ad-Hoc Networks, Oulu, Finland, 2004.
+ * [3] A. Gorrieri, and G. Ferrari, "Irresponsible AODV routing," Vehicular Communications, vol. 2, pp. 47-57, Feb. 2015.
+ * [4] Rei-H. Cheng, Tung-K. Wu, and C. W. Yu, "A highly topology adaptable ad hoc routing protocol with complementary
+ *     preemptive link breaking avoidance and path shortening mechanisms," Wireless Netw., vol. 16, pp. 1289-1311, Aug. 2010.
  */
 class PAOMBR : public BaseWaveApplLayer, private RouteRepairInterface
 {
@@ -92,8 +96,10 @@ public:
 		PURGE_BROADCAST_CACHE_EVT,
 		RREP_TIMEOUT_EVT,
 		RREPACK_TIMEOUT_EVT,
+#ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
 		PLRR_TIMEOUT_EVT,
 		LET_TIMEOUT_EVT,
+#endif
 		SEND_DATA_EVT,
 		SEND_BUF_DATA_EVT,
 		LAST_PAOMBR_MESSAGE_KIND
@@ -124,6 +130,20 @@ public:
 		simtime_t PET;            ///< path expiration time.
 	};
 
+	class AssistedOrig
+	{
+	public:
+		AssistedOrig(LAddress::L3Type o, LAddress::L3Type lh) : originator(o), lastHop(lh), minAltitude(INFINITE_HOPS), minSender(-1), maxSeqno(-1) {}
+
+		LAddress::L3Type originator; ///< originator for whom I provide routing assistance.
+		LAddress::L3Type lastHop;    ///< last hop address.
+#ifdef USE_DYNAMIC_PATH_SHORTENING
+		uint8_t minAltitude;         ///< minimum altitude among recently received data packets.
+		LAddress::L3Type minSender;  ///< sender corresponding to minAltitude.
+		int maxSeqno;                ///< maximum sequence number among recently received data packets.
+#endif
+	};
+
 	class PaombrRtEntry
 	{
 	public:
@@ -146,10 +166,14 @@ public:
 		uint8_t     pathGetMaxHopCount();
 		simtime_t   pathGetMaxExpirationTime();
 		simtime_t   pathGetMaxPET();
-		bool revPathInsert(LAddress::L3Type source, LAddress::L3Type lastHop);
-		LAddress::L3Type revPathLookup(LAddress::L3Type source);
-		void revPathDelete(LAddress::L3Type source);
-		std::string revPathPrint();
+		bool aoInsert(LAddress::L3Type orig, LAddress::L3Type lastHop);
+		AssistedOrig* aoLookup(LAddress::L3Type orig);
+		LAddress::L3Type aoLookupLastHop(LAddress::L3Type orig);
+		void aoDelete(LAddress::L3Type orig);
+		std::string aoPrint();
+#ifdef USE_DYNAMIC_PATH_SHORTENING
+		void aoReset();
+#endif
 		///@}
 
 	private:
@@ -170,14 +194,13 @@ public:
 		uint32_t bufPktsNum;  ///< number of data packets toward this destination buffered in queue.
 		LAddress::L3Type dest;      ///< used inside a function whose parameters contain PaombrRtEntry*.
 		LAddress::L3Type brokenNb;  ///< usage: rrepTimeoutEvt->setContextPointer(&brokenNb).
-		WaitForRREPMessage *rrepTimeoutEvt;    ///< self message event used to wait for RREP (RREP timeout).
-		WaitForRREPMessage *rrepAckTimeoutEvt; ///< self message event used to wait for RREP-ACK (RREP-ACK timeout).
+		WaitForRREPMessage *rrepTimeoutEvt;   ///< self message event used to wait for RREP (RREP timeout).
 
 		std::list<PaombrPath> pathList; ///< store all disjoint paths to a destination.
 		std::list<PaombrPath>::iterator itPL; ///< an iterator used to traverse container pathList.
 		std::list<PaombrPath>::iterator itSP; ///< an iterator used to select a path in pathList when calling pathSelect().
-		std::list<std::pair<LAddress::L3Type, LAddress::L3Type> > revPathList; ///< store sources that use this intermediate node and last hops on these paths.
-		std::list<std::pair<LAddress::L3Type, LAddress::L3Type> >::iterator itRPL; ///< an iterator used to traverse container revPathList.
+		std::list<AssistedOrig> ao; ///< store originators' information that use this intermediate node.
+		std::list<AssistedOrig>::iterator itAO; ///< an iterator used to traverse container ao.
 	};
 
 	class PaombrBroadcastID
@@ -222,18 +245,16 @@ private:
 	void onRREP(RREPMessage *rrep);
 	/** @brief call-back method of receiving PAOMBR RERR message. */
 	void onRERR(RERRMessage *rerr);
-#ifdef USE_DESTINATION_AGGREGATION
-	/** @brief call-back method of receiving PAOMBR RREQp message. */
-	void onRREQp(RREQpMessage *rreqp);
-	/** @brief call-back method of receiving PAOMBR RREPp message. */
-	void onRREPp(RREPpMessage *rrepp);
+	/** @brief call-back method of receiving PAOMBR LR message. */
+	void onLR(LRMessage *lr);
+#ifdef USE_DYNAMIC_PATH_SHORTENING
+	/** @brief call-back method of receiving PAOMBR DPSR message. */
+	void onDPSR(DPSRMessage *dpsr);
 #endif
 #ifdef USE_RECEIVER_REPORT
 	/** @brief call-back method of receiving PAOMBR RR message. */
 	void onRR(RRMessage *rr);
 #endif
-	/** @brief call-back method of receiving PAOMBR LR message. */
-	void onLR(LRMessage *lr);
 	/** @brief call-back method of receiving data message. */
 	void onData(DataMessage *dataPkt);
 	/** @brief call-back method of receiving data control message. */
@@ -253,10 +274,6 @@ private:
 #ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
 	/** @brief broadcast PAOMBR RREQp message. */
 	void sendRREQp(LAddress::L3Type neighbor);
-#ifdef USE_DESTINATION_AGGREGATION
-	/** @brief send PAOMBR RREPp message. */
-	void sendRREPp(RREQpMessage *rreqp, RREPpMessage *rrepp);
-#endif
 #endif
 	/** @brief send PAOMBR LR message. */
 	void sendLR(PaombrRtEntry *entry, RREPMessage *rrep);

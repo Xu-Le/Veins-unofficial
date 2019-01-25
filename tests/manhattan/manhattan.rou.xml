@@ -1,0 +1,76 @@
+<routes>
+	<vType id="car" sigma="0.5" minGap="5" speedFactor="1" speedDev="0.1" maxSpeed="40"/>
+	<route id="route1" edges="E1 E10 E19 E28 E37 E46 E55 E64 E73 E82"></route>
+	<route id="route2" edges="-E82 -E73 -E64 -E55 -E46 -E37 -E28 -E19 -E10 -E1"></route>
+	<route id="route3" edges="E2 E11 E20 E29 E38 E47 E56 E65 E74 E83"></route>
+	<route id="route4" edges="-E83 -E74 -E65 -E56 -E47 -E38 -E29 -E20 -E11 -E2"></route>
+	<route id="route5" edges="E3 E12 E21 E30 E39 E48 E57 E66 E75 E84"></route>
+	<route id="route6" edges="-E84 -E75 -E66 -E57 -E48 -E39 -E30 -E21 -E12 -E3"></route>
+	<route id="route7" edges="E4 E13 E22 E31 E40 E49 E58 E67 E76 E85"></route>
+	<route id="route8" edges="-E85 -E76 -E67 -E58 -E49 -E40 -E31 -E22 -E13 -E4"></route>
+	<route id="route9" edges="E5 E14 E23 E32 E41 E50 E59 E68 E77 E86"></route>
+	<route id="route10" edges="-E86 -E77 -E68 -E59 -E50 -E41 -E32 -E23 -E14 -E5"></route>
+	<route id="route11" edges="E6 E15 E24 E33 E42 E51 E60 E69 E78 E87"></route>
+	<route id="route12" edges="-E87 -E78 -E69 -E60 -E51 -E42 -E33 -E24 -E15 -E6"></route>
+	<route id="route13" edges="E7 E16 E25 E34 E43 E52 E61 E70 E79 E88"></route>
+	<route id="route14" edges="-E88 -E79 -E70 -E61 -E52 -E43 -E34 -E25 -E16 -E7"></route>
+	<route id="route15" edges="E8 E17 E26 E35 E44 E53 E62 E71 E80 E89"></route>
+	<route id="route16" edges="-E89 -E80 -E71 -E62 -E53 -E44 -E35 -E26 -E17 -E8"></route>
+	<route id="route17" edges="E9 E18 E27 E36 E45 E54 E63 E72 E81 E90"></route>
+	<route id="route18" edges="-E90 -E81 -E72 -E63 -E54 -E45 -E36 -E27 -E18 -E9"></route>
+	<route id="route19" edges="E91 E92 E93 E94 E95 E96 E97 E98 E99 E100"></route>
+	<route id="route20" edges="-E100 -E99 -E98 -E97 -E96 -E95 -E94 -E93 -E92 -E91"></route>
+	<route id="route21" edges="E101 E102 E103 E104 E105 E106 E107 E108 E109 E110"></route>
+	<route id="route22" edges="-E110 -E109 -E108 -E107 -E106 -E105 -E104 -E103 -E102 -E101"></route>
+	<route id="route23" edges="E111 E112 E113 E114 E115 E116 E117 E118 E119 E120"></route>
+	<route id="route24" edges="-E120 -E119 -E118 -E117 -E116 -E115 -E114 -E113 -E112 -E111"></route>
+	<route id="route25" edges="E121 E122 E123 E124 E125 E126 E127 E128 E129 E130"></route>
+	<route id="route26" edges="-E130 -E129 -E128 -E127 -E126 -E125 -E124 -E123 -E122 -E121"></route>
+	<route id="route27" edges="E131 E132 E133 E134 E135 E136 E137 E138 E139 E140"></route>
+	<route id="route28" edges="-E140 -E139 -E138 -E137 -E136 -E135 -E134 -E133 -E132 -E131"></route>
+	<route id="route29" edges="E141 E142 E143 E144 E145 E146 E147 E148 E149 E150"></route>
+	<route id="route30" edges="-E150 -E149 -E148 -E147 -E146 -E145 -E144 -E143 -E142 -E141"></route>
+	<route id="route31" edges="E151 E152 E153 E154 E155 E156 E157 E158 E159 E160"></route>
+	<route id="route32" edges="-E160 -E159 -E158 -E157 -E156 -E155 -E154 -E153 -E152 -E151"></route>
+	<route id="route33" edges="E161 E162 E163 E164 E165 E166 E167 E168 E169 E170"></route>
+	<route id="route34" edges="-E170 -E169 -E168 -E167 -E166 -E165 -E164 -E163 -E162 -E161"></route>
+	<route id="route35" edges="E171 E172 E173 E174 E175 E176 E177 E178 E179 E180"></route>
+	<route id="route36" edges="-E180 -E179 -E178 -E177 -E176 -E175 -E174 -E173 -E172 -E171"></route>
+	<!-- "0,0,1"=blue; "0,1,0"=green; "0,1,1"=cyan; "1,0,0"=red; "1,0,1"=magenta; "1,1,0"=yellow; "1,1,1"=white -->
+	<flow id="flow1" type="car" route="route1" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow2" type="car" route="route2" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow3" type="car" route="route3" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow4" type="car" route="route4" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow5" type="car" route="route5" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow6" type="car" route="route6" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow7" type="car" route="route7" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow8" type="car" route="route8" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow9" type="car" route="route9" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow10" type="car" route="route10" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow11" type="car" route="route11" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow12" type="car" route="route12" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow13" type="car" route="route13" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow14" type="car" route="route14" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow15" type="car" route="route15" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow16" type="car" route="route16" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow17" type="car" route="route17" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,1,0"></flow>
+	<flow id="flow18" type="car" route="route18" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,0,1"></flow>
+	<flow id="flow19" type="car" route="route19" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow20" type="car" route="route20" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow21" type="car" route="route21" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow22" type="car" route="route22" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow23" type="car" route="route23" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow24" type="car" route="route24" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow25" type="car" route="route25" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow26" type="car" route="route26" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow27" type="car" route="route27" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow28" type="car" route="route28" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow29" type="car" route="route29" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow30" type="car" route="route30" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow31" type="car" route="route31" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow32" type="car" route="route32" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow33" type="car" route="route33" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow34" type="car" route="route34" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+	<flow id="flow35" type="car" route="route35" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="1,0,0"></flow>
+	<flow id="flow36" type="car" route="route36" begin="0" end="1800" probability="0.05" departLane="random" departSpeed="10" color="0,1,1"></flow>
+</routes>

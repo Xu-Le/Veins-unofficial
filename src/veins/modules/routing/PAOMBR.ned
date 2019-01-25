@@ -36,6 +36,8 @@ simple PAOMBR extends BaseWaveApplLayer
 
 	double recvPowerThres = default(-77dBm) @unit(dBm); // received power threshold below which the link is going to break
 
+	int totalBytes = default(10240);
+	double loPrewait = default(5.0);
+	double hiPrewait = default(15.0);
 	xml routingPlan;
-	xml triggerPlan;
 }

@@ -45,10 +45,10 @@
 
 // TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
 #define TTL_START         2
-#define TTL_INCREMENT     1
+#define TTL_INCREMENT     2
 #define TTL_THRESHOLD     7
-#define MAX_REPAIR_TTL    0.3 * NET_DIAMETER
-#define LOCAL_ADD_TTL     1
+#define MAX_REPAIR_TTL    5
+#define LOCAL_ADD_TTL     2
 
 #define PURGE_ROUTE_PERIOD        0.5
 // ACTIVE_ROUTE_TIMEOUT SHOULD be set to a longer value (at least 10,000 milliseconds)
@@ -65,11 +65,6 @@
 // If the link layer feedback is used to detect loss of link, DELETE_PERIOD must be at least ACTIVE_ROUTE_TIMEOUT.
 #define DELETE_PERIOD    ACTIVE_ROUTE_TIMEOUT
 
-#ifdef TEST_ROUTE_REPAIR_PROTOCOL
-#define STOP_SEND_BEACON_EVENT_TYPE    0
-#define CONT_SEND_BEACON_EVENT_TYPE    1
-#endif
-
 /**
  * @brief A well known routing protocol designed for MANET.
  *
@@ -78,7 +73,7 @@
  * @see BaseWaveApplLayer
  * @see RouteRepairInterface
  *
- * M. K. Marina, and S. R. Das, "Ad hoc on-demand multipath distance vector routing," Wirel. Commun. Mob. Comput., 2006; 6:969–988.
+ * M. K. Marina, and S. R. Das, "Ad hoc on-demand multipath distance vector routing," Wirel. Commun. Mob. Comput., vol. 6, pp. 969-988, 2006.
  * 3.1. Protocol Overview
  * AOMDV shares several characteristics with AODV. It is based on the distance vector concept and uses
  * hop-by-hop routing approach. Moreover, AOMDV also finds routes on demand using a route discovery procedure.
@@ -108,12 +103,8 @@ public:
 		PURGE_BROADCAST_CACHE_EVT,
 		RREP_TIMEOUT_EVT,
 		RREPACK_TIMEOUT_EVT,
-		LOCAL_REPAIR_TIMEOUT_EVT,
 		SEND_DATA_EVT,
 		SEND_BUF_DATA_EVT,
-#ifdef TEST_ROUTE_REPAIR_PROTOCOL
-		CALL_TRIGGER_EVT,
-#endif
 		LAST_AOMDV_MESSAGE_KIND
 	};
 #ifdef AOMDV_LINK_DISJOINT_PATHS
@@ -310,13 +301,6 @@ private:
 	/** @brief reschedule data packets in rQueue, transfer them to bQueue. */
 	void transferBufPackets(LAddress::L3Type dest);
 
-#ifdef TEST_ROUTE_REPAIR_PROTOCOL
-	/** @brief call a trigger event determined by triggerPlanList. */
-	void callTrigger(int eventType);
-	/** @brief initialize triggerPlanList through configured xmlfile. */
-	void initializeTriggerPlanList(cXMLElement *xmlConfig);
-#endif
-
 private:
 	uint32_t seqno;  ///< Sequence Number.
 	uint32_t rreqID; ///< Each node maintains only one RREQ ID.
@@ -329,10 +313,6 @@ private:
 	std::list<AomdvBroadcastID>::iterator itBC; ///< an iterator used to traverse container broadcastCache.
 	std::map<LAddress::L3Type, AomdvRtEntry*> routingTable;   ///< a map from L3 address of the destination to its entry in the routing table.
 	std::map<LAddress::L3Type, AomdvRtEntry*>::iterator itRT; ///< an iterator used to traverse container routingTable.
-#ifdef TEST_ROUTE_REPAIR_PROTOCOL
-	cMessage *callTriggerEvt; ///< self message event used to call trigger events determined by triggerPlanList.
-	std::list<std::pair<double, int> > triggerPlanList; ///< trigger plans of all vehicles configured by a xmlfile.
-#endif
 };
 
 #endif /* __AOMDV_H__ */

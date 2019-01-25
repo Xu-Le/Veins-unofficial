@@ -23,15 +23,6 @@
 			<parameter name="calctime" type="double" value="15.0"/>
 		</RoutingPlan>
 	</RoutingPlans>
-	<TriggerPlans>
-		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter -->
-		<TriggerPlan type="88">
-			<parameter name="simtime" type="double" value="19.5"/>
-			<parameter name="eventtype" type="int" value="0"/>
-			<parameter name="simtime" type="double" value="21.5"/>
-			<parameter name="eventtype" type="int" value="1"/>
-		</TriggerPlan>
-	</TriggerPlans>
 	<TrajectoryPlans>
 		<!-- Notes: do not specify address as the type of TrajectoryPlan, use the full name of UAV module instead -->
 		<TrajectoryPlan type="node[0]">

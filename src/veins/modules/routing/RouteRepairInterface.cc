@@ -19,6 +19,7 @@
 
 int RouteRepairInterface::routingLengthBits = 0;
 int RouteRepairInterface::routingPriority = 0;
+int RouteRepairInterface::dataHeaderBits = 0;
 int RouteRepairInterface::dataLengthBits = 0;
 int RouteRepairInterface::dataPriority = 0;
 #ifdef USE_RECEIVER_REPORT
@@ -61,6 +62,7 @@ bool RouteRepairInterface::RecvState::onRecv(int seqno)
 	return false;
 }
 
+#ifdef USE_XML_CONFIG_FILE
 void RouteRepairInterface::initializeRoutingPlanList(cXMLElement *xmlConfig, LAddress::L3Type myIdentifier)
 {
 	if (xmlConfig == 0)
@@ -132,6 +134,7 @@ void RouteRepairInterface::initializeRoutingPlanList(cXMLElement *xmlConfig, LAd
 		}
 	}
 }
+#endif
 
 bool RouteRepairInterface::insertL2L3Address(LAddress::L2Type addr2, LAddress::L3Type addr3)
 {
@@ -161,18 +164,19 @@ LAddress::L3Type RouteRepairInterface::lookupL3Address(LAddress::L2Type addr)
 	return -1;
 }
 
-size_t RouteRepairInterface::pushBufferQueue(DataMessage *dataPkt)
+bool RouteRepairInterface::pushBufferQueue(DataMessage *dataPkt)
 {
 	if (bQueueSize < bQueueCap)
 	{
 		bQueue.push_back(dataPkt);
-		return ++bQueueSize;
+		++bQueueSize;
+		return false;
 	}
 	else
 	{
 		delete dataPkt;
 		++RoutingStatisticCollector::gPktsOverLost;
-		return bQueueSize;
+		return true;
 	}
 }
 

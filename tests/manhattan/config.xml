@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+	<AnalogueModels>
+		<AnalogueModel type="SimplePathlossModel">
+			<parameter name="alpha" type="double" value="2.0"/>
+			<parameter name="carrierFrequency" type="double" value="5.890e+9"/>
+		</AnalogueModel>
+	</AnalogueModels>
+	<Decider type="Decider80211p">
+		<!-- The center frequency on which the phy listens-->
+		<parameter name="centerFrequency" type="double" value="5.890e9"/>
+	</Decider>
+	<RoutingPlans>
+		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
+		<RoutingPlan type="-1">
+			<parameter name="simtime" type="double" value="60.1"/>
+			<parameter name="receiver" type="long" value="-1"/>
+			<parameter name="totalbytes" type="int" value="1048576"/>
+			<parameter name="calctime" type="double" value="10.0"/>
+		</RoutingPlan>
+	</RoutingPlans>
+	<TrajectoryPlans>
+		<!-- Notes: do not specify address as the type of TrajectoryPlan, use the full name of UAV module instead -->
+		<TrajectoryPlan type="uav[0]">
+			<parameter name="pos" type="coord" value="600.0,146.5,30.0"/>
+			<parameter name="speed" type="double" value="5.0"/>
+			<parameter name="pos" type="coord" value="650.0,146.5,30.0"/>
+			<parameter name="speed" type="double" value="5.0"/>
+		</TrajectoryPlan>
+	</TrajectoryPlans>
+</root>

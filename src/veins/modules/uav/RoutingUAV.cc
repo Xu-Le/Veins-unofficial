@@ -470,7 +470,8 @@ void RoutingUAV::attainSectorDensity()
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
 	{
 		VehicleInfo *veh = itV->second;
-		double angle = acos((veh->pos.x - curPosition.x) / curPosition.distance(veh->pos));
+		double diffX = veh->pos.x - curPosition.x, diffY = veh->pos.y - curPosition.y;
+		double angle = acos(diffX / sqrt(diffX*diffX + diffY*diffY));
 		if (veh->pos.y < curPosition.y)
 			angle = 2*M_PI - angle;
 		int sector = angle / radTheta;

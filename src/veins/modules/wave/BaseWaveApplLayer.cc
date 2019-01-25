@@ -80,7 +80,6 @@ void BaseWaveApplLayer::initialize(int stage)
 			WATCH(nextBeaconInstant);
 			WATCH(nextExamineInstant);
 #endif
-			EV_DEBUG << "beacon offset: " << beaconOffset << "s, examine offset: " << examineOffset << "s.\n";
 			scheduleAt(simTime() + beaconOffset, sendBeaconEvt);
 			scheduleAt(simTime() + examineOffset, examineNeighborsEvt);
 		}

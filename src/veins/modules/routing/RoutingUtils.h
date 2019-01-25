@@ -76,6 +76,8 @@ public:
 	};
 	/** @brief obtain relative direction by absolute direction. */
 	static short relativeDirection(double ownDir, double otherDir);
+	/** @brief obtain relative direction by absolute speed. */
+	static short relativeDirection(Coord ownSpeed, Coord otherSpeed);
 
 	/** @name routing packet's GUID utils. */
 	///@{

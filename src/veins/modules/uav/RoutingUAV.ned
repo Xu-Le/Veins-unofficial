@@ -25,18 +25,23 @@ simple RoutingUAV extends BaseUAV
 	@class(RoutingUAV);
 	@display("i=block/routing");
 
-	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
-	int routingPriority = default(1); // the access category of the routing messages
-	int dataLengthBits = default(18272bit) @unit(bit); // the length of a data packet 8 * (2312-20-8)
+	int routingLengthBits = default(424bit) @unit(bit); // the length of a routing packet
+	int routingPriority = default(0); // the access category of the routing messages
+	// see "Figure 8-33——A-MSDU Subframe structure for Mesh Data" of IEEE Std 802.11-2012
+	int dataLengthBits = default(18432bit) @unit(bit); // the length of a data packet 8*2304
 	int dataPriority = default(2); // the access category for data packets
+	int bufferQueueCap = default(64); // the capacity of data packets buffer queue
+	int pktNetLayerDelay = default(1000); // network layer to MAC layer measured in us
+
 	int flyingInterval = default(500ms) @unit(ms); // the interval of actually updating position while flying
 	int decideInterval = default(10000ms) @unit(ms); // the interval of making a decision
 	int stopFlyingMs = default(5000ms) @unit(ms); // when remainingMs reach this value, stop flying
-	int theta = default(20); // sector granularity measured in degree
+	int theta = default(30); // sector granularity measured in degree
 	int expand = default(3); // expand to how many adjacent sectors to smooth the density in average
 
-	double minGap = default(200); // minimum distance between two UAVs
-	double k_a = default(1000);   // coefficient of attractive force of ground users
-	double K_r = default(2000);   // coefficient of repulsive force of other UAVs
+	double minGap = default(100); // minimum distance between two UAVs
+	double k_a = default(100);   // coefficient of attractive force of ground users
+	double K_r = default(1000);   // coefficient of repulsive force of other UAVs
 	double R_opt = default(200);  // distance threshold within which bring about repulsive force
+	double recvPowerThres = default(-81dBm) @unit(dBm); // received power threshold below which the link is going to break
 }

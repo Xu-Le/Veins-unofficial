@@ -21,12 +21,16 @@
 
 Define_Module(RoutingStatisticCollector);
 
+long RoutingStatisticCollector::gRoutings = 0;
 long RoutingStatisticCollector::gRREQs = 0;
 long RoutingStatisticCollector::gRREPs = 0;
 long RoutingStatisticCollector::gRERRs = 0;
 long RoutingStatisticCollector::gRREPACKs = 0;
 long RoutingStatisticCollector::gRREQps = 0;
 long RoutingStatisticCollector::gRREPps = 0;
+long RoutingStatisticCollector::gLRs = 0;
+long RoutingStatisticCollector::gDPSRs = 0;
+long RoutingStatisticCollector::gRouteSuccess = 0;
 long RoutingStatisticCollector::gLocalRepairs = 0;
 long RoutingStatisticCollector::gPktsLinkLost = 0;
 long RoutingStatisticCollector::gPktsOverLost = 0;
@@ -61,11 +65,16 @@ void RoutingStatisticCollector::finish()
 	EV << "RoutingStatisticCollector::finish() called.\n";
 
 	// record statistics
-	double gCtrlBitsFraction = 0.0;
-	if (gCtrlBitsTransmitted > 0)
-		gCtrlBitsFraction = static_cast<double>(gCtrlBitsTransmitted) / (gDataBitsTransmitted+gCtrlBitsTransmitted);
+	double gCtrlBitsFraction = 0.0, gCtrlPktsFraction = 0.0;
+	if (gCtrlBitsTransmitted > 0 && gDataBitsRecv > 0)
+		gCtrlBitsFraction = static_cast<double>(gCtrlBitsTransmitted) / gDataBitsRecv;
+	if (gCtrlPktsTransmitted > 0 && gDataPktsRecv > 0)
+		gCtrlPktsFraction = static_cast<double>(gCtrlPktsTransmitted) / gDataPktsRecv;
+	if (gRouteSuccess == 0)
+		gRouteSuccess = 1;
 	if (gDataPktsRecv == 0)
 		gDataPktsRecv = 1;
+	gRouteAcquisitionTime /= gRouteSuccess;
 	gEndtoendDelay /= gDataPktsRecv;
 	recordScalar("gRREQs", gRREQs);
 	recordScalar("gRREPs", gRREPs);
@@ -73,6 +82,8 @@ void RoutingStatisticCollector::finish()
 	recordScalar("gRREPACKs", gRREPACKs);
 	recordScalar("gRREQps", gRREQps);
 	recordScalar("gRREPps", gRREPps);
+	recordScalar("gLRs", gLRs);
+	recordScalar("gDPSRs", gDPSRs);
 	recordScalar("gLocalRepairs", gLocalRepairs);
 	recordScalar("gPktsLinkLost", gPktsLinkLost);
 	recordScalar("gPktsOverLost", gPktsOverLost);
@@ -86,7 +97,8 @@ void RoutingStatisticCollector::finish()
 	recordScalar("gDataPktsTransmitted", gDataPktsTransmitted);
 	recordScalar("gCtrlPktsTransmitted", gCtrlPktsTransmitted);
 	recordScalar("gCtrlBitsFraction", gCtrlBitsFraction);
-	recordScalar("gRouteAcquisitionTime", gRouteAcquisitionTime.dbl());
+	recordScalar("gCtrlPktsFraction", gCtrlPktsFraction);
+	recordScalar("gAverageRouteAcquisitionTime", gRouteAcquisitionTime.dbl());
 	recordScalar("gAverageEndtoendDelay", gEndtoendDelay.dbl());
 
 	// append statistic to file for figuring in MATLAB
@@ -97,7 +109,8 @@ void RoutingStatisticCollector::finish()
 	}
 	else
 	{
-		fout << gRREQs << ',' << gRREPs << ',' << gRERRs << ',' << gRREPACKs << std::endl;
+		fout << gRREQs << ',' << gRREPs << ',' << gRERRs << ',' << gRREPACKs << ',';
+		fout << gRREQps << ',' << gRREPps << ',' << gLRs << ',' << gDPSRs << std::endl;
 	}
 	fout.close();
 
