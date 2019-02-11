@@ -20,10 +20,8 @@ package org.car2x.veins.tests.highway_short;
 
 import org.car2x.veins.nodes.Scenario;
 
-import org.car2x.veins.modules.routing.WarningStatisticCollector;
 import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.BaseServer;
-import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
 import org.car2x.veins.nodes.UAV;
 

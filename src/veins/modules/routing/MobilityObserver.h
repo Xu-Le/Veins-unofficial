@@ -26,7 +26,7 @@
  * @brief Observer class for recording the mobility of vehicles and UAVs.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  */
 class MobilityObserver
 {

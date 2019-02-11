@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,21 +16,14 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-cplusplus {{
-#include "veins/modules/messages/WaveShortMessage_m.h"
-}}
+package org.car2x.veins.modules.application;
 
-class WaveShortMessage;
+import org.car2x.veins.modules.wave.BaseWaveApplLayer;
 
-class noncobject HopItems;
-
-packet WarningMessage extends WaveShortMessage
+simple DummyApp extends BaseWaveApplLayer
 {
-	bool warningSuccess = false; // Is warning message successfully arrive at farthest vehicle?
-	bool direction = false; // Is target to opposite vehicle?
-	int GUID = 0; // Unique identifier of this WarningMessage
-	int hopCount = 0;   // Total hop count from sender
-	double farthestDistance = 1000; // The farthest target vehicle for warning message in ROI
-	string laneId; // Indicates which lane is the warning message's target
-	HopItems hopInfo;   // Info about every hop vehicle
+	@class(DummyApp);
+	@display("i=block/app");
+	int dataLengthBits = default(18432bit) @unit(bit); // the length of a data packet 8 * 2304
+	int dataPriority = default(1); //the access category for data packets
 }

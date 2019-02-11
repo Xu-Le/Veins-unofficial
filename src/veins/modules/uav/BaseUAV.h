@@ -21,9 +21,9 @@
 
 #include "veins/base/modules/BaseApplLayer.h"
 #include "veins/base/connectionManager/BaseConnectionManager.h"
+#include "veins/modules/utility/Utils.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/modules/messages/UavBeaconMessage_m.h"
-#include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/routing/MobilityObserver.h"
 #include "veins/modules/mobility/AircraftMobility.h"
 #include "veins/modules/mac/ieee80211p/WaveAppToMac1609_4Interface.h"
@@ -34,7 +34,7 @@
  *
  * @author Xu Le
  *
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  *
  * @see BaseWaveApplLayer
  * @see Mac1609_4

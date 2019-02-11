@@ -57,8 +57,8 @@ void BaseRSU::initialize(int stage)
 		vehicleElapsed = par("vehicleElapsed").doubleValue();
 		memoryElapsed = par("memoryElapsed").doubleValue();
 
-		examineVehiclesEvt = new cMessage("examine vehicles evt", RSUMessageKinds::EXAMINE_VEHICLES_EVT);
-		forgetMemoryEvt = new cMessage("forget memory evt", RSUMessageKinds::FORGET_MEMORY_EVT); // derived classes schedule it
+		examineVehiclesEvt = new cMessage("examine vehicles evt", BaseRSUMsgKinds::EXAMINE_VEHICLES_EVT);
+		forgetMemoryEvt = new cMessage("forget memory evt", BaseRSUMsgKinds::FORGET_MEMORY_EVT); // derived classes schedule it
 		scheduleAt(simTime() + dblrand()*examineVehiclesInterval, examineVehiclesEvt);
 	}
 }
@@ -128,13 +128,13 @@ void BaseRSU::handleSelfMsg(cMessage *msg)
 {
 	switch (msg->getKind())
 	{
-	case RSUMessageKinds::EXAMINE_VEHICLES_EVT:
+	case BaseRSUMsgKinds::EXAMINE_VEHICLES_EVT:
 	{
 		examineVehicles();
 		scheduleAt(simTime() + examineVehiclesInterval, examineVehiclesEvt);
 		break;
 	}
-	case RSUMessageKinds::FORGET_MEMORY_EVT:
+	case BaseRSUMsgKinds::FORGET_MEMORY_EVT:
 	{
 		forgetMemory();
 		scheduleAt(simTime() + forgetMemoryInterval, forgetMemoryEvt);

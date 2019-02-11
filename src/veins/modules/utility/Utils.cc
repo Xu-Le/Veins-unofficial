@@ -16,35 +16,35 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include "veins/modules/routing/RoutingUtils.h"
+#include "veins/modules/utility/Utils.h"
 
 #if RAND_MAX == 0x7fff
-bool RoutingUtils::GUIDPool[32767] = { 0 };
+bool WaveUtils::GUIDPool[32767] = { 0 };
 #else
-bool RoutingUtils::GUIDPool[65535] = { 0 };
+bool WaveUtils::GUIDPool[65535] = { 0 };
 #endif
 
-double RoutingUtils::_length(Coord& point1, Coord& point2)
+double WaveUtils::_length(Coord& point1, Coord& point2)
 {
 	return sqrt(square(point1.x - point2.x) + square(point1.y - point2.y));
 }
 
-double RoutingUtils::dotProduct(Coord& point1, Coord& point2)
+double WaveUtils::dotProduct(Coord& point1, Coord& point2)
 {
 	return point1.x * point2.x + point1.y * point2.y;
 }
 
-double RoutingUtils::crossProduct(Coord& point1, Coord& point2)
+double WaveUtils::crossProduct(Coord& point1, Coord& point2)
 {
 	return point1.x * point2.y - point1.y * point2.x;
 }
 
-double RoutingUtils::distanceToLine(Coord& P, Coord& A, Coord& B)
+double WaveUtils::distanceToLine(Coord& P, Coord& A, Coord& B)
 {
 	return fabs((B.y - A.y) * P.x - (B.x - A.x) * P.y - crossProduct(A, B)) / _length(A, B);
 }
 
-double RoutingUtils::distanceToLine(Coord& P, Coord& A, Coord& B, Coord& D, double& _AD)
+double WaveUtils::distanceToLine(Coord& P, Coord& A, Coord& B, Coord& D, double& _AD)
 {
 	Vector AP(P.x - A.x, P.y - A.y);
 	Vector AB(B.x - A.x, B.y - A.y);
@@ -62,7 +62,7 @@ double RoutingUtils::distanceToLine(Coord& P, Coord& A, Coord& B, Coord& D, doub
 	return _length(P, D);
 }
 
-short RoutingUtils::relativeDirection(double ownDir, double otherDir)
+short WaveUtils::relativeDirection(double ownDir, double otherDir)
 {
 	double diff = fabs(ownDir - otherDir);
 	if ( diff > 0.75*M_PI && diff < 1.25*M_PI )
@@ -75,7 +75,7 @@ short RoutingUtils::relativeDirection(double ownDir, double otherDir)
 		return SAME;
 }
 
-int RoutingUtils::generateGUID()
+int WaveUtils::generateGUID()
 {
 	int high = rand(), low = rand();
 #if RAND_MAX == 0x7fff
@@ -97,7 +97,7 @@ int RoutingUtils::generateGUID()
 #endif
 }
 
-void RoutingUtils::recycleGUID(int GUID)
+void WaveUtils::recycleGUID(int GUID)
 {
 	int low = GUID & 0xffff, high = GUID >> 16;
 	GUIDPool[low] = false;

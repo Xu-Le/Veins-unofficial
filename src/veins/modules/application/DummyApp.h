@@ -16,32 +16,32 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#ifndef __DUMMYRSU_H__
-#define __DUMMYRSU_H__
+#ifndef __DUMMYAPP_H__
+#define __DUMMYAPP_H__
 
-#include "veins/modules/rsu/BaseRSU.h"
+#include "veins/modules/wave/BaseWaveApplLayer.h"
 #include "veins/modules/messages/DataMessage_m.h"
 
 /**
- * @brief A dummy application on RSU -- do nothing.
+ * @brief A dummy application -- do nothing.
  *
  * @author Xu Le
  * @ingroup waveAppLayer
- * @see BaseRSU
+ * @see BaseWaveApplLayer
  */
-class DummyRSU : public BaseRSU
+class DummyApp : public BaseWaveApplLayer
 {
 public:
-	/** @brief The message kinds dummy RSU uses. */
-	enum RSUMsgKinds {
-		DUMMY_RSU_EVT = LAST_BASE_RSU_MESSAGE_KIND
+	/** @brief The message kinds dummy application uses. */
+	enum AppMsgKinds {
+		DUMMY_APP_EVT = LAST_WAVE_APPL_MESSAGE_KIND
 	};
 
 	/** @name constructors, destructor. */
 	///@{
-	DummyRSU() : BaseRSU() {}
-	DummyRSU(unsigned stacksize) : BaseRSU(stacksize) {}
-	~DummyRSU() {}
+	DummyApp() : BaseWaveApplLayer() {}
+	DummyApp(unsigned stacksize) : BaseWaveApplLayer(stacksize) {}
+	~DummyApp() {}
 	///@}
 
 	void initialize(int stage) override;
@@ -61,8 +61,7 @@ private:
 	void onDataLost(DataMessage *lostDataMsg);
 
 private:
-	int dataLengthBits;    ///< the length of data message measured in bits.
-	int dataPriority;      ///< the priority of data message.
+	// TODO: application specified structures
 };
 
-#endif /* __DUMMYRSU_H__ */
+#endif /* __DUMMYAPP_H__ */

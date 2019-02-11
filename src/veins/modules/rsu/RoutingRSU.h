@@ -28,7 +28,7 @@
  * @brief A concrete RSU class which is aware of routing protocols.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  * @see BaseRSU
  */
 class RoutingRSU : public BaseRSU

@@ -25,7 +25,7 @@
  * @brief Collect global statistics produced by unicast routing protocol for performance assessment.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  */
 class RoutingStatisticCollector : public ::omnetpp::cSimpleModule
 {

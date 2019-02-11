@@ -32,18 +32,18 @@
 #define DYNAMIC_CAST_CMESSAGE(cls, obj) { cls##Message *obj##Msg = dynamic_cast<cls##Message*>(msg); ASSERT(obj##Msg != nullptr); on##cls(obj##Msg); }
 
 /**
- * @brief Utility class for routing protocol design.
+ * @brief Utility class for routing protocol and WAVE application design.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  */
-class RoutingUtils
+class WaveUtils
 {
 public:
 	/** @name constructor, destructor. */
 	///@{
-	RoutingUtils() {}
-	~RoutingUtils() {}
+	WaveUtils() {}
+	~WaveUtils() {}
 	///@}
 
 	/** @name math utils. */

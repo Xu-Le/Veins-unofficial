@@ -21,9 +21,9 @@
 
 #include "veins/base/modules/BaseApplLayer.h"
 #include "veins/base/connectionManager/BaseConnectionManager.h"
+#include "veins/modules/utility/Utils.h"
 #include "veins/modules/messages/WiredMessage_m.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
-#include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/mac/ieee80211p/WaveAppToMac1609_4Interface.h"
 #include "veins/modules/world/annotations/AnnotationManager.h"
 
@@ -32,7 +32,7 @@
  *
  * @author Xu Le
  *
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  *
  * @see BaseWaveApplLayer
  * @see Mac1609_4
@@ -41,7 +41,7 @@ class BaseRSU : public BaseApplLayer
 {
 public:
 	/** @brief The message kinds BaseRSU uses. */
-	enum RSUMessageKinds {
+	enum BaseRSUMsgKinds {
 		EXAMINE_VEHICLES_EVT = LAST_BASE_APPL_MESSAGE_KIND,
 		FORGET_MEMORY_EVT,
 		LAST_BASE_RSU_MESSAGE_KIND

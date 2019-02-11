@@ -20,10 +20,8 @@ package org.car2x.veins.tests.highway_notls;
 
 import org.car2x.veins.nodes.Scenario;
 
-import org.car2x.veins.modules.routing.WarningStatisticCollector;
 import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.BaseServer;
-import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
 
 network scenario extends Scenario
@@ -43,9 +41,6 @@ network scenario extends Scenario
 		rsu[numRSU]: RSU {
 			@display("p=$posX,$posY;b=10,10,oval");
 		}
-		dummyRSU: DummyRSU {
-			@display("p=$posX,$posY");
-		}
 
 	connections:
 		BS.wiredIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- server.cellularOut;
@@ -58,8 +53,4 @@ network scenario extends Scenario
 			rsu[i].veinseastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[i+1].veinswestOut;
 			rsu[i].veinseastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[i+1].veinswestIn;
 		}
-		dummyRSU.eastIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[0].veinswestOut;
-		dummyRSU.eastOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[0].veinswestIn;
-		dummyRSU.westIn <-- ned.DatarateChannel{datarate=100Mbps;} <-- rsu[numRSU-1].veinseastOut;
-		dummyRSU.westOut --> ned.DatarateChannel{datarate=100Mbps;} --> rsu[numRSU-1].veinseastIn;
 }

@@ -19,11 +19,9 @@ package org.car2x.veins.tests.multilane;
 
 import org.car2x.veins.nodes.Scenario;
 
-import org.car2x.veins.modules.rsu.DummyRSU;
 import org.car2x.veins.nodes.RSU;
 import org.car2x.veins.modules.cellular.BaseStation;
 import org.car2x.veins.modules.application.BaseServer;
-import org.car2x.veins.modules.routing.WarningStatisticCollector;
 
 network scenario extends Scenario
 {
@@ -33,8 +31,5 @@ network scenario extends Scenario
 	submodules:
 		rsu[numRSU]: RSU {
 			@display("p=$posX,$posY;b=10,10,oval");
-		}
-		warningCollector: WarningStatisticCollector {
-			@display("p=500,24");
 		}
 }

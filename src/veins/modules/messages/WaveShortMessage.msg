@@ -20,27 +20,11 @@
 
 cplusplus {{
 #include "veins/base/utils/Coord.h"
-class HopItem
-{
-public:
-	HopItem() : addr(0), posX(0.0), posY(0.0), posZ(0.0), speedX(0.0), speedY(0.0), speedZ(0.0) {}
-	HopItem(long a, double px, double py, double pz, double sx, double sy, double sz) : addr(a), posX(px), posY(py), posZ(pz), speedX(sx), speedY(sy), speedZ(sz) {}
-	HopItem(const HopItem& rhs) : addr(rhs.addr), posX(rhs.posX), posY(rhs.posY), posZ(rhs.posZ), speedX(rhs.speedX), speedY(rhs.speedY), speedZ(rhs.speedZ) {}
-	
-	long addr;
-	double posX;
-	double posY;
-	double posZ;
-	double speedX;
-	double speedY;
-	double speedZ;
-};
-typedef std::list<HopItem> HopItems;
 
 struct WAVEInformationElement
 {
-    WAVEInformationElement() : id(0), length(0) { value.uval = 0; }
-    WAVEInformationElement(unsigned char _id, unsigned char _length, unsigned char _uval) : id(_id), length(_length) { value.uval = _uval; }
+	WAVEInformationElement() : id(0), length(0) { value.uval = 0; }
+	WAVEInformationElement(unsigned char _id, unsigned char _length, unsigned char _uval) : id(_id), length(_length) { value.uval = _uval; }
 
 	unsigned char id;
 	unsigned char length;
@@ -54,7 +38,9 @@ struct WAVEInformationElement
 class noncobject Coord;
 class noncobject WAVEInformationElement;
 
-packet WaveShortMessage {
+packet WaveShortMessage
+{
+	@descriptor(false);
 	unsigned char wsmpVersion = 11; // Subtype, Option Indicator, WSMP Version, see "8.3.2.1 General" of IEEE Std 1609.3-2016
 	unsigned char nHeaderExCount = 4; // WAVE Information Element Extension of WSMP-N-Header
 	WAVEInformationElement channelNumber; // see 8.3.4.2 of IEEE Std 1609.3-2016

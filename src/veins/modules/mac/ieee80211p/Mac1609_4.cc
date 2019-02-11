@@ -360,9 +360,9 @@ void Mac1609_4::handleLowerMsg(cMessage *msg)
 	}
 
 	DBG_MAC << "Received frame name = " << macPkt->getName()
-	        << ", src = " << srcAddr
-	        << ", dst = " << dstAddr
-	        << ", myAddr = " << myMacAddr << std::endl;
+			<< ", src = " << srcAddr
+			<< ", dst = " << dstAddr
+			<< ", myAddr = " << myMacAddr << std::endl;
 
 	if (dstAddr == myMacAddr)
 	{

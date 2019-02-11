@@ -24,5 +24,6 @@ class WaveShortMessage;
 
 packet UavBeaconMessage extends WaveShortMessage
 {
+	@descriptor(false);
 	int reserved; // reserved field
 }

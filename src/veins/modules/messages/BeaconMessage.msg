@@ -24,6 +24,7 @@ class WaveServiceAdvertisment;
 
 packet BeaconMessage extends WaveServiceAdvertisment
 {
-    unsigned char elementID = 6; // see "8.2.2.6.3 3DLocation" of IEEE Std 1609.3-2016
-    unsigned char elementLength = 48;
+	@descriptor(false);
+	unsigned char elementID = 6; // see "8.2.2.6.3 3DLocation" of IEEE Std 1609.3-2016
+	unsigned char elementLength = 48;
 }

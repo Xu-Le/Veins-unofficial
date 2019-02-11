@@ -26,6 +26,7 @@ class WaveShortMessage;
 
 packet WaveServiceAdvertisment extends WaveShortMessage
 {
-    unsigned char wsaOptionIndicator = 56; // WSA Version, WSA Header Option Indicator, see 8.2.2.2 of IEEE Std 1609.3-2016
-    unsigned char wsaIdentifier; // WSA Identifier, Content Count, see 8.2.2.4 of IEEE Std 1609.3-2016
+	@descriptor(false);
+	unsigned char wsaOptionIndicator = 56; // WSA Version, WSA Header Option Indicator, see 8.2.2.2 of IEEE Std 1609.3-2016
+	unsigned char wsaIdentifier; // WSA Identifier, Content Count, see 8.2.2.4 of IEEE Std 1609.3-2016
 }

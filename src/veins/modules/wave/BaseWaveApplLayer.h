@@ -24,10 +24,9 @@
 #include "veins/base/modules/BaseApplLayer.h"
 #include "veins/base/connectionManager/ChannelAccess.h"
 #include "veins/modules/utility/Consts80211p.h"
+#include "veins/modules/utility/Utils.h"
 #include "veins/modules/cellular/BaseStation.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
-#include "veins/modules/messages/PacketExpiredMessage_m.h"
-#include "veins/modules/routing/RoutingUtils.h"
 #include "veins/modules/routing/MobilityObserver.h"
 #include "veins/modules/mobility/traci/TraCIMobility.h"
 #include "veins/modules/mobility/traci/TraCICommandInterface.h"
@@ -38,7 +37,7 @@
  *
  * @author David Eckhoff, Xu Le
  *
- * @defgroup routingLayer network layer for routing
+ * @defgroup waveAppLayer application layer over WAVE
  *
  * @see BaseApplLayer
  * @see Mac1609_4
@@ -61,7 +60,6 @@ public:
 		FORGET_MEMORY_EVT,
 		RECYCLE_GUID_EVT,
 		PACKET_EXPIRES_EVT,
-		WAIT_TIME_ELAPSED_EVT,
 		LAST_WAVE_APPL_MESSAGE_KIND
 	};
 	/** @brief The control message kinds this layer uses. */
@@ -107,6 +105,8 @@ protected:
 	virtual void examineNeighbors();
 	/** @brief forget packets received long time ago. */
 	virtual void forgetMemory();
+	/** @brief continuously failed to receive beacon message from the neighbor. */
+	virtual void onNeighborLost() {}
 
 	/** @name mobility relevant methods. */
 	///@{
@@ -139,12 +139,14 @@ protected:
 	bool isParking;        ///< whether vehicle is parked.
 	bool sendWhileParking; ///< whether send messages when vehicle is parked.
 	bool sendBeacons;      ///< whether send beacons periodically.
-	bool callRoutings;     ///< whether send routing requests.
-	bool callWarnings;     ///< whether send warning notifies when emergent incident happens.
 	bool dataOnSch;        ///< whether send data on service channel.
 	int beaconLengthBits;  ///< the length of beacon message measured in bits.
 	int beaconPriority;    ///< the priority of beacon message.
-	double transmissionRadius;   ///< the biggest transmission distance of transmitter.
+	double transmissionRadius; ///< the biggest transmission distance of transmitter.
+#if ROUTING_DEBUG_LOG
+	double nextBeaconInstant;  ///< time instant of next sendBeaconEvt.
+	double nextExamineInstant; ///< time instant of next examineNeighborsEvt.
+#endif
 	///@}
 
 	simtime_t beaconInterval; ///< the interval of sending beacon message.
@@ -172,7 +174,6 @@ protected:
 	cMessage *examineNeighborsEvt; ///< self message event used to examine the connectivity with neighbors.
 	cMessage *forgetMemoryEvt; ///< self message event used to periodically forget message received too long time ago in memory.
 	cMessage *recycleGUIDEvt;  ///< self message event used to periodically recycle GUIDs allocated before.
-	std::map<simtime_t, PacketExpiredMessage*> packetExpiresEvts; ///< self message events used to discard expired packets which exceed maxStoreTime from receiving it.
 	///@}
 
 	/** @name TraCI mobility interfaces. */

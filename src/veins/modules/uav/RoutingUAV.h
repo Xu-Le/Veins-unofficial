@@ -28,7 +28,7 @@
  * @brief A concrete UAV class which is aware of routing protocols.
  *
  * @author Xu Le
- * @ingroup routingLayer
+ * @ingroup waveAppLayer
  * @see BaseUAV
  */
 class RoutingUAV : public BaseUAV

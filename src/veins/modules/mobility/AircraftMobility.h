@@ -22,6 +22,13 @@
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/FindModule.h"
 
+/**
+ * @brief Used by UAVs.
+ *
+ * @author Xu Le
+ * @ingroup mobility
+ * @see BaseMobility
+ */
 class AircraftMobility : public BaseMobility
 {
 public:

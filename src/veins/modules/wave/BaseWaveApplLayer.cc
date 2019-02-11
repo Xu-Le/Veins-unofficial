@@ -68,8 +68,16 @@ void BaseWaveApplLayer::initialize(int stage)
 			examineNeighborsEvt = new cMessage("examine neighbors evt", WaveApplMsgKinds::EXAMINE_NEIGHBORS_EVT);
 			forgetMemoryEvt = new cMessage("forget memory evt", WaveApplMsgKinds::FORGET_MEMORY_EVT); // derived classes schedule it
 			recycleGUIDEvt = new cMessage("recycle guid evt", WaveApplMsgKinds::RECYCLE_GUID_EVT);
-			scheduleAt(simTime() + dblrand()*beaconInterval, sendBeaconEvt);
-			scheduleAt(simTime() + dblrand()*examineNeighborsInterval, examineNeighborsEvt);
+			simtime_t beaconOffset = dblrand() * beaconInterval;
+			simtime_t examineOffset = dblrand() * examineNeighborsInterval;
+#if ROUTING_DEBUG_LOG
+			nextBeaconInstant = beaconOffset.dbl();
+			nextExamineInstant = examineOffset.dbl();
+			WATCH(nextBeaconInstant);
+			WATCH(nextExamineInstant);
+#endif
+			scheduleAt(simTime() + beaconOffset, sendBeaconEvt);
+			scheduleAt(simTime() + examineOffset, examineNeighborsEvt);
 		}
 		else
 		{
@@ -101,9 +109,6 @@ void BaseWaveApplLayer::finish()
 	cancelAndDelete(examineNeighborsEvt);
 	cancelAndDelete(forgetMemoryEvt);
 	cancelAndDelete(recycleGUIDEvt);
-	for (std::map<simtime_t, PacketExpiredMessage*>::iterator iter = packetExpiresEvts.begin(); iter != packetExpiresEvts.end(); ++iter)
-		cancelAndDelete(iter->second);
-	packetExpiresEvts.clear();
 
 	findHost()->unsubscribe(mobilityStateChangedSignal, this);
 	findHost()->unsubscribe(parkingStateChangedSignal, this);
@@ -160,12 +165,18 @@ void BaseWaveApplLayer::handleSelfMsg(cMessage *msg)
 	case WaveApplMsgKinds::SEND_BEACON_EVT:
 	{
 		sendBeacon();
+#if ROUTING_DEBUG_LOG
+		nextBeaconInstant = simTime().dbl() + beaconInterval.dbl();
+#endif
 		scheduleAt(simTime() + beaconInterval, sendBeaconEvt);
 		break;
 	}
 	case WaveApplMsgKinds::EXAMINE_NEIGHBORS_EVT:
 	{
 		examineNeighbors();
+#if ROUTING_DEBUG_LOG
+		nextExamineInstant = simTime().dbl() + examineNeighborsInterval.dbl();
+#endif
 		scheduleAt(simTime() + examineNeighborsInterval, examineNeighborsEvt);
 		break;
 	}
@@ -177,21 +188,8 @@ void BaseWaveApplLayer::handleSelfMsg(cMessage *msg)
 	}
 	case WaveApplMsgKinds::RECYCLE_GUID_EVT:
 	{
-		RoutingUtils::recycleGUID(guidUsed.front());
+		WaveUtils::recycleGUID(guidUsed.front());
 		guidUsed.pop_front();
-		break;
-	}
-	case WaveApplMsgKinds::PACKET_EXPIRES_EVT:
-	{
-		simtime_t curTime(simTime());
-		curTime -= maxStoreTime;
-		std::map<simtime_t, PacketExpiredMessage*>::iterator itExpiredPacket = packetExpiresEvts.find(curTime);
-		EV << "packet(GUID=" << itExpiredPacket->second->getGUID() << ") expired, discard it.\n";
-		/* derived class's extension write here before it is deleted */
-
-		// delete this packet expired message and erase it from packetExpiresEvts
-		delete itExpiredPacket->second;
-		packetExpiresEvts.erase(itExpiredPacket);
 		break;
 	}
 	default:
@@ -272,7 +270,6 @@ void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
 		neighborInfo = new NeighborInfo(beaconMsg->getSenderPos(), beaconMsg->getSenderSpeed(), simTime());
 		neighbors.insert(std::pair<LAddress::L3Type, NeighborInfo*>(sender, neighborInfo));
 	}
-	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
 	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
@@ -291,7 +288,7 @@ void BaseWaveApplLayer::examineNeighbors()
 		if ( curTime - itN->second->receivedAt > neighborElapsed )
 		{
 			EV << "disconnected from neighbor[" << itN->first << "], delete its info.\n";
-			/* derived class's extension write here before it is deleted */
+			onNeighborLost();
 			delete itN->second;
 			neighbors.erase(itN++);
 		}

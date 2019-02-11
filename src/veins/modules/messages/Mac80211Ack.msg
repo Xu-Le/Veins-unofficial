@@ -26,5 +26,6 @@ class Mac80211Pkt;
 
 packet Mac80211Ack extends Mac80211Pkt
 {
+	@descriptor(readonly);
 	unsigned long messageId; // The ID of the aknowledged packet
 }

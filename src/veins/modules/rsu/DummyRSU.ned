@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2017 Xu Le <xmutongxinXuLe@163.com>
+// Copyright (C) 2019 Xu Le <xmutongxinXuLe@163.com>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,19 +18,13 @@
 
 package org.car2x.veins.modules.rsu;
 
-simple DummyRSU
+import org.car2x.veins.modules.rsu.BaseRSU;
+
+simple DummyRSU extends BaseRSU
 {
-	parameters:
-		@class(DummyRSU);
-		@display("b=10,10,oval");
+	@class(DummyRSU);
+	@display("i=block/app");
 
-		double posX;
-		double posY;
-		double posZ;
-
-	gates:
-		input westIn;    // westIn gate connected to west neighbor RSU
-		output westOut;  // westOut gate connected to west neighbor RSU
-		input eastIn;    // eastIn gate connected to east neighbor RSU
-		output eastOut;  // eastOut gate connected to east neighbor RSU
+	int dataLengthBits = default(18432bit) @unit(bit); // the length of a data packet 8 * 2304
+	int dataPriority = default(1); //the access category for data packets
 }

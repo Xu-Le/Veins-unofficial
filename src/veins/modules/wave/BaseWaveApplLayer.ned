@@ -40,8 +40,6 @@ simple BaseWaveApplLayer extends BaseApplLayer like IHeterogeneousLayer
 
 	bool sendWhileParking  = default(false); // send messages when the car is parked
 	bool sendBeacons = default(true); // tell the applayer to periodically send beacons
-	bool callRoutings = default(false); // whether send routing requests
-	bool callWarnings = default(false); // whether send warning notifies when emergent incident happens
 	bool dataOnSch = default(true); //tells the applayer whether to use a service channel for datapackets or the control channel
 
 	int beaconLengthBits = default(416bit) @unit(bit); // the length of a beacon packet

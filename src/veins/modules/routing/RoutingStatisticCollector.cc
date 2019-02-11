@@ -51,9 +51,9 @@ void RoutingStatisticCollector::finish()
 	recordScalar("globalDelayAccumulation", globalDelayAccumulation);
 
 	if (globalRequests == 0)
-	    globalRequests = 1;
+		globalRequests = 1;
 	if (globalArrivals == 0)
-	    globalArrivals = 1;
+		globalArrivals = 1;
 
 	double deliveryRatio = static_cast<double>(globalArrivals) / globalRequests;
 	double normalizedDuplications = static_cast<double>(globalDuplications) / globalRequests;
@@ -65,14 +65,11 @@ void RoutingStatisticCollector::finish()
 
 	// append statistic to file for figuring in MATLAB
 	std::ofstream fout("routingStatistics.csv", std::ios_base::out | std::ios_base::app);
-	if ( !fout.is_open() )
-	{
+	if (!fout.is_open())
 		error("cannot open file routingStatistics.csv!");
-	}
-	else
-	{
-		fout << globalRequests << ',' << globalArrivals << ',' << globalDuplications << ',' << globalDelayAccumulation << ',' << deliveryRatio << ',' << normalizedDuplications << ',' << averageDelay << std::endl;
-	}
+
+	fout << globalRequests << ',' << globalArrivals << ',' << globalDuplications << ',' << globalDelayAccumulation << ',' << deliveryRatio << ',' << normalizedDuplications << ',' << averageDelay << std::endl;
+
 	fout.close();
 
 	cComponent::finish();
