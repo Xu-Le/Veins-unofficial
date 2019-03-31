@@ -26,15 +26,15 @@ import org.car2x.veins.modules.routing.RoutingStatisticCollector;
 
 network scenario
 {
-    parameters:
+	parameters:
 		double playgroundSizeX @unit(m); // x size of the area the nodes are in (in meters)
 		double playgroundSizeY @unit(m); // y size of the area the nodes are in (in meters)
 		double playgroundSizeZ @unit(m); // z size of the area the nodes are in (in meters)
 		int numPhone = 33; // number of Phones
 		@display("bgb=$playgroundSizeX,$playgroundSizeY");
 
-    submodules:
-        obstacles: ObstacleControl {
+	submodules:
+		obstacles: ObstacleControl {
 			@display("p=190,24");
 		}
 		annotations: AnnotationManager {
@@ -50,11 +50,10 @@ network scenario
 				playgroundSizeZ = playgroundSizeZ;
 				@display("p=20,24;i=misc/globe");
 		}
-        routingCollector: RoutingStatisticCollector {
-            parameters:
-                @display("p=500,24");
-        }
-        node[numPhone]: Phone {
+		routingCollector: RoutingStatisticCollector {
+			@display("p=500,24");
+		}
+		node[numPhone]: Phone {
 			@display("p=$posX,$posY;i=device/cellphone_s");
 		}
 }

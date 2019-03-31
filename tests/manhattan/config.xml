@@ -12,12 +12,38 @@
 	</Decider>
 	<RoutingPlans>
 		<!-- Ensure simtime is written increasely, or simulation will crash, however the order of RoutingPlan doesn't matter, and the value of simtime should not be the integer since mobility updating through TraCI is executed after sending warning message if they are set at the same simtime -->
-		<RoutingPlan type="-1">
-			<parameter name="simtime" type="double" value="60.1"/>
-			<parameter name="receiver" type="long" value="-1"/>
-			<parameter name="totalbytes" type="int" value="1048576"/>
-			<parameter name="calctime" type="double" value="10.0"/>
+		<RoutingPlan type="634">
+			<parameter name="simtime" type="double" value="220.786325"/>
+			<parameter name="receiver" type="long" value="604"/>
+			<parameter name="totalbytes" type="int" value="2304000"/>
+			<parameter name="calctime" type="double" value="0.0"/>
 		</RoutingPlan>
+		<!--
+		<RoutingPlan type="427">
+			<parameter name="simtime" type="double" value="153.565716"/>
+			<parameter name="receiver" type="long" value="493"/>
+			<parameter name="totalbytes" type="int" value="2304000"/>
+			<parameter name="calctime" type="double" value="0.0"/>
+		</RoutingPlan>
+		<RoutingPlan type="128">
+			<parameter name="simtime" type="double" value="102.491549"/>
+			<parameter name="receiver" type="long" value="103"/>
+			<parameter name="totalbytes" type="int" value="2304000"/>
+			<parameter name="calctime" type="double" value="0.0"/>
+		</RoutingPlan>
+		<RoutingPlan type="140">
+			<parameter name="simtime" type="double" value="102.739118"/>
+			<parameter name="receiver" type="long" value="162"/>
+			<parameter name="totalbytes" type="int" value="2304000"/>
+			<parameter name="calctime" type="double" value="0.0"/>
+		</RoutingPlan>
+		<RoutingPlan type="132">
+			<parameter name="simtime" type="double" value="103.65493"/>
+			<parameter name="receiver" type="long" value="146"/>
+			<parameter name="totalbytes" type="int" value="2304000"/>
+			<parameter name="calctime" type="double" value="0.0"/>
+		</RoutingPlan>
+		-->
 	</RoutingPlans>
 	<TrajectoryPlans>
 		<!-- Notes: do not specify address as the type of TrajectoryPlan, use the full name of UAV module instead -->

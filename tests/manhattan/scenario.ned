@@ -20,7 +20,6 @@ package org.car2x.veins.tests.manhattan;
 
 import org.car2x.veins.nodes.Scenario;
 
-import org.car2x.veins.modules.uav.DeployStatisticCollector;
 import org.car2x.veins.modules.routing.RoutingStatisticCollector;
 import org.car2x.veins.nodes.RSU;
 import org.car2x.veins.nodes.UAV;
@@ -28,13 +27,9 @@ import org.car2x.veins.nodes.UAV;
 network scenario extends Scenario
 {
 	parameters:
-		@signal[optimalityCalculation](type="DeployStatisticCollector");
 		int numRSU = 1; // number of RSUs
 
 	submodules:
-		deployCollector: DeployStatisticCollector {
-			@display("p=500,24");
-		}
 		routingCollector: RoutingStatisticCollector {
 			@display("p=700,24");
 		}

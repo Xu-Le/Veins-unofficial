@@ -22,49 +22,7 @@
 #include "veins/modules/messages/AomdvPkt_m.h"
 #include "veins/modules/routing/RouteRepairInterface.h"
 
-#define RTF_DOWN         0
-#define RTF_UP           1
-#define RTF_IN_REPAIR    2
-#define RTF_IN_PLRR      3
-
-#define RREQ_RETRIES        2
 #define PAOMBR_MAX_PATHS    3
-
-// TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
-#define TTL_START         2
-#define TTL_INCREMENT     2
-#define TTL_THRESHOLD     7
-#define MAX_REPAIR_TTL    5
-#define LOCAL_ADD_TTL     2
-
-// Should be set by the user using best guess (conservative)
-#define NET_DIAMETER           10
-// In worst cases, CCH -> SCH happens just before packet arrives at MAC layer,
-// and note that CCH -> SCH worst case happens at a probability of 50%, thus expected delay is 25ms
-#define NODE_TRAVERSAL_TIME    0.025
-// round trip time of 2 hop count (1 + LOCAL_ADD_TTL)
-#define PLRR_DISCOVERY_TIME    4*NODE_TRAVERSAL_TIME
-
-#define PURGE_ROUTE_PERIOD        0.5
-
-#define ACTIVE_ROUTE_TIMEOUT      6.0
-#define MY_ROUTE_TIMEOUT          6.0
-#define REVERSE_ROUTE_LIFE        6.0
-#define PURGE_BCAST_ID_PERIOD     2.0
-#define BCAST_ID_SAVE             5.0
-// Must be larger than the time difference between a node propagates a route request and gets the route reply back.
-#define RREP_WAIT_TIME            1.0
-// If the link layer feedback is used to detect loss of link, DELETE_PERIOD must be at least ACTIVE_ROUTE_TIMEOUT.
-#define DELETE_PERIOD    ACTIVE_ROUTE_TIMEOUT
-
-#define USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
-#define USE_DYNAMIC_PATH_SHORTENING
-
-#ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
-#define USE_IRRESPONSIBLE_REBROADCAST
-#define PLRR_SUPPRESSION_TIME     3
-#define MAX_RECV_POWER_POLYNOMIAL_DEGREE 4
-#endif
 
 #ifdef USE_DYNAMIC_PATH_SHORTENING
 #undef USE_L2_UNICAST_DATA
@@ -156,7 +114,7 @@ public:
 		PaombrPath* pathSelect(SendState *sendState=nullptr);
 		PaombrPath* pathLookup(LAddress::L3Type nextHop);
 		PaombrPath* pathLookupLastHop(LAddress::L3Type lastHop);
-		PaombrPath* pathLookupMinHop();
+		PaombrPath* pathLookupMaxPET();
 		PaombrPath* disjointPathLookup(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 		bool        disjointPathExists(LAddress::L3Type nextHop, LAddress::L3Type lastHop);
 		void        pathDelete(LAddress::L3Type nextHop);
@@ -174,6 +132,7 @@ public:
 #ifdef USE_DYNAMIC_PATH_SHORTENING
 		void aoReset();
 #endif
+		std::string print();
 		///@}
 
 	private:
@@ -277,12 +236,14 @@ private:
 #endif
 	/** @brief send PAOMBR LR message. */
 	void sendLR(PaombrRtEntry *entry, RREPMessage *rrep);
+	/** @brief send PAOMBR DPSR message. */
+	void sendDPSR(DataMessage *dataPkt, AssistedOrig *pao);
 	///@}
 
 	/** @brief continuously failed to receive beacon message from the neighbor. */
 	void onNeighborLost(LAddress::L3Type neighbor) override;
 	/** @brief repair route locally. */
-	void localRepair(PaombrRtEntry *entry, DataMessage *dataPkt, LAddress::L3Type lastHop);
+	bool localRepair(PaombrRtEntry *entry, DataMessage *dataPkt, LAddress::L3Type lastHop);
 	/** @name route repair interface implementation. */
 	///@{
 	/** @brief link layer notifies that communication link is broken when transmitting. */

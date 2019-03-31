@@ -79,6 +79,9 @@ public:
 	/** @brief obtain relative direction by absolute speed. */
 	static short relativeDirection(Coord ownSpeed, Coord otherSpeed);
 
+	/** @brief write the given string into log file. */
+	static void fileLog(const char *filename, const char *fmt, ...);
+
 	/** @name routing packet's GUID utils. */
 	///@{
 	/** @brief return a GUID hasn't been used before. */

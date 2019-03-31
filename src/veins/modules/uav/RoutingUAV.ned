@@ -34,14 +34,14 @@ simple RoutingUAV extends BaseUAV
 	int pktNetLayerDelay = default(1000); // network layer to MAC layer measured in us
 
 	int flyingInterval = default(500ms) @unit(ms); // the interval of actually updating position while flying
-	int decideInterval = default(10000ms) @unit(ms); // the interval of making a decision
-	int stopFlyingMs = default(5000ms) @unit(ms); // when remainingMs reach this value, stop flying
+	int decideInterval = default(12000ms) @unit(ms); // the interval of making a decision
+	int stopFlyingMs = default(6000ms) @unit(ms); // when remainingMs reach this value, stop flying
 	int theta = default(30); // sector granularity measured in degree
 	int expand = default(3); // expand to how many adjacent sectors to smooth the density in average
 
-	double minGap = default(100); // minimum distance between two UAVs
-	double k_a = default(100);   // coefficient of attractive force of ground users
-	double K_r = default(1000);   // coefficient of repulsive force of other UAVs
-	double R_opt = default(200);  // distance threshold within which bring about repulsive force
+	double minGap = default(180); // minimum distance between two UAVs
+	double k_a = default(100);    // coefficient of attractive force of ground users
+	double K_r = default(0.01);   // coefficient of repulsive force of other UAVs
+	double R_opt = default(250);  // distance threshold within which bring about repulsive force
 	double recvPowerThres = default(-81dBm) @unit(dBm); // received power threshold below which the link is going to break
 }

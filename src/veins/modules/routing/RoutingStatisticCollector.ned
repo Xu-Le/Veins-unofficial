@@ -22,4 +22,10 @@ simple RoutingStatisticCollector
 {
 	@class(RoutingStatisticCollector);
 	@display("i=abstract/db");
+
+	int trafficDensity = default(720vph) @unit(vph);
+	int roadSpeedLimit = default(60km) @unit(km);
+	int rtExpirationTime = default(6s) @unit(s);
+	int packetsPerSecond = default(50);
+	string resultFile; // csv file storing results
 }

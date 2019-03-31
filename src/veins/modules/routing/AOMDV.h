@@ -25,45 +25,13 @@
 #define AOMDV_NODE_DISJOINT_PATHS
 // #define AOMDV_LINK_DISJOINT_PATHS
 
-#define RTF_DOWN         0
-#define RTF_UP           1
-#define RTF_IN_REPAIR    2
-
-#define ALLOWED_HELLO_LOSS    2
-#define RREQ_RETRIES          2
-#define RREQ_RATELIMIT       10
 #define AOMDV_MAX_PATHS       3
 #define AOMDV_MAX_PATH_HOP_DIFF    1
 
-// Should be set by the user using best guess (conservative)
-#define NET_DIAMETER           10
-// In worst cases, CCH -> SCH happens just before packet arrives at MAC layer,
-// and note that CCH -> SCH worst case happens at a probability of 50%, thus expected delay is 25ms
-#define NODE_TRAVERSAL_TIME    0.025
 #define NET_TRAVERSAL_TIME     (2 * NODE_TRAVERSAL_TIME * NET_DIAMETER)
 #define PATH_DISCOVERY_TIME    (2 * NET_TRAVERSAL_TIME)
 
-// TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
-#define TTL_START         2
-#define TTL_INCREMENT     2
-#define TTL_THRESHOLD     7
-#define MAX_REPAIR_TTL    5
-#define LOCAL_ADD_TTL     2
-
-#define PURGE_ROUTE_PERIOD        0.5
-// ACTIVE_ROUTE_TIMEOUT SHOULD be set to a longer value (at least 10,000 milliseconds)
-// if link-layer indications are used to detect link breakages such as in IEEE 802.11 standard.
-#define ACTIVE_ROUTE_TIMEOUT      6.0
-// The configured value for MY_ROUTE_TIMEOUT MUST be at least 2 * PATH_DISCOVERY_TIME.
-#define MY_ROUTE_TIMEOUT          6.0
-#define REVERSE_ROUTE_LIFE        6.0
-#define PURGE_BCAST_ID_PERIOD     2.5
-#define BCAST_ID_SAVE             5.0
-// Must be larger than the time difference between a node propagates a route request and gets the route reply back.
-#define RREP_WAIT_TIME            1.0
 #define RREPACK_WAIT_TIME         1.0
-// If the link layer feedback is used to detect loss of link, DELETE_PERIOD must be at least ACTIVE_ROUTE_TIMEOUT.
-#define DELETE_PERIOD    ACTIVE_ROUTE_TIMEOUT
 
 /**
  * @brief A well known routing protocol designed for MANET.
@@ -266,7 +234,7 @@ private:
 	/** @brief continuously failed to receive beacon message from the neighbor. */
 	void onNeighborLost(LAddress::L3Type neighbor) override;
 	/** @brief repair route locally. */
-	void localRepair(AomdvRtEntry *entry, DataMessage *dataPkt);
+	bool localRepair(AomdvRtEntry *entry, DataMessage *dataPkt);
 	/** @name route repair interface implementation. */
 	///@{
 	/** @brief link layer notifies that communication link is broken when transmitting. */

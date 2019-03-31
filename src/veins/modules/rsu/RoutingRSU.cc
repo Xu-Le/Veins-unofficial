@@ -183,6 +183,7 @@ void RoutingRSU::sendUavBeacon()
 	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at RoutingRSU at " << simTime() << std::endl;
 	UavBeaconMessage *uavBeaconMsg = new UavBeaconMessage("uavBeacon");
 	prepareWSM(uavBeaconMsg, beaconLengthBits, t_channel::type_CCH, beaconPriority, -1);
+	uavBeaconMsg->setSenderPos(curPosition);
 #ifndef USE_VIRTUAL_FORCE_MODEL
 	uavBeaconMsg->setAverageDensity(averageDensity);
 	uavBeaconMsg->setDensityDivision(densityDivision);
@@ -283,7 +284,7 @@ void RoutingRSU::emitUAV()
 	mod->par("posY").setDoubleValue(curPosition.y);
 	mod->finalizeParameters();
 	mod->getDisplayString().parse("b=8,8,oval");
-	mod->getDisplayString().setTagArg("r", 0, V2XRadius);
+	mod->getDisplayString().setTagArg("r", 0, 0.937646*V2XRadius);
 	mod->buildInside();
 	rsuBelongingMap[uavIndexCounter+UAV_ADDRESS_OFFSET] = myAddr;
 	mod->callInitialize();

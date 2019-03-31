@@ -186,13 +186,13 @@ void Mac1609_4::finish()
 	cancelAndDelete(stopIgnoreChannelStateMsg);
 
 	//long totalLostPackets = statsTXRXLostPackets + statsSINRLostPackets + statsSyncLostPackets + statsCollisionLostPackets;
-	recordScalar("RecvUnicastPackets", statsReceivedPackets);
-	recordScalar("RecvBroadcasts", statsReceivedBroadcasts);
-	recordScalar("SentPackets", statsSentPackets);
-	recordScalar("SentAcknowledgements", statsSentAcks);
-	recordScalar("RXTXLostPackets", statsTXRXLostPackets);
-	recordScalar("SINRLostPackets", statsSINRLostPackets);
-	recordScalar("SyncLostPackets", statsSyncLostPackets);
+	//recordScalar("RecvUnicastPackets", statsReceivedPackets);
+	//recordScalar("RecvBroadcasts", statsReceivedBroadcasts);
+	//recordScalar("SentPackets", statsSentPackets);
+	//recordScalar("SentAcknowledgements", statsSentAcks);
+	//recordScalar("RXTXLostPackets", statsTXRXLostPackets);
+	//recordScalar("SINRLostPackets", statsSINRLostPackets);
+	//recordScalar("SyncLostPackets", statsSyncLostPackets);
 	//recordScalar("CollisionLostPackets", statsCollisionLostPackets);
 	//recordScalar("TotalLostPackets", totalLostPackets);
 	//recordScalar("DroppedPacketsInMac", statsDroppedPackets);

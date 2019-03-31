@@ -44,6 +44,8 @@ public:
 
 public:
 	static long gRoutings; ///< how many Routings generated in simulation.
+	static long gComplete; ///< how many data transfer is complete in simulation.
+	static long gIncomplete; ///< how many data transfer is incomplete in simulation.
 	static long gRREQs;    ///< how many RREQs generated in simulation.
 	static long gRREPs;    ///< how many RREPs generated in simulation.
 	static long gRERRs;    ///< how many RERRs generated in simulation.
@@ -65,8 +67,10 @@ public:
 	static int64_t gCtrlBitsTransmitted; ///< this measures the bit efficiency of the protocol in expending control overhead to delivery data.
 	static long gDataPktsTransmitted; ///< rather than measuring pure algorithmic efficiency in terms of bit count, this measure tries to capture
 	static long gCtrlPktsTransmitted; ///< a protocol's channel access efficiency, as the cost of channel access is high in contention-based link layers.
+	static long gDataPktsTransmittedSuccessful; ///< how many packets received by the receiver.
 	static simtime_t gRouteAcquisitionTime; ///< accumulative total of routing delays of all the vehicles.
 	static simtime_t gEndtoendDelay; ///< accumulative total of end-to-end delays of data packets.
+	static simtime_t gLatestRouting; ///< when the latest call routing event happens.
 };
 
 #endif /* __ROUTINGSTATISTICCOLLECTOR_H__ */

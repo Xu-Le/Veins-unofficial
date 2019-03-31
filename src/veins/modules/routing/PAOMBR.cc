@@ -55,9 +55,9 @@ void PAOMBR::initialize(int stage)
 #ifdef USE_XML_CONFIG_FILE
 			initializeRoutingPlanList(par("routingPlan").xmlValue(), myAddr);
 #else
-			double prewait = uniform(par("loPrewait").doubleValue(), par("hiPrewait").doubleValue());
-			if (RoutingStatisticCollector::gRoutings < 100)
+			if (RoutingStatisticCollector::gRoutings < ROUTING_EVENTS_NUM && simTime().dbl() > 90.0)
 			{
+				double prewait = uniform(par("loPrewait").doubleValue(), par("hiPrewait").doubleValue());
 				PlanEntry entry(LAddress::L3BROADCAST(), par("totalBytes").longValue(), SimTime::ZERO);
 				routingPlanList.push_back(std::pair<double, PlanEntry>(simTime().dbl() + prewait, entry));
 			}
@@ -127,13 +127,16 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 	case PAOMBRMsgKinds::RREP_TIMEOUT_EVT:
 	{
 		LAddress::L3Type *brokenNb = static_cast<LAddress::L3Type*>(msg->getContextPointer());
+		WaitForRREPMessage *waitRREPMsg = dynamic_cast<WaitForRREPMessage*>(msg);
 		if (*brokenNb != -1) // local repair failure
-			onLocalRepairFailure(*brokenNb);
-		else
 		{
-			WaitForRREPMessage *waitRREPMsg = dynamic_cast<WaitForRREPMessage*>(msg);
-			sendRREQ(waitRREPMsg->getDestAddr());
+			PaombrRtEntry *rt = lookupRoutingEntry(waitRREPMsg->getDestAddr());
+			ASSERT(rt != nullptr && rt->flags == RTF_IN_REPAIR);
+			downRoutingEntry(rt);
+			onLocalRepairFailure(*brokenNb);
 		}
+		else
+			sendRREQ(waitRREPMsg->getDestAddr());
 		break;
 	}
 #ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
@@ -144,7 +147,7 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 		for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
 		{
 			PaombrRtEntry *rt = itRT->second;
-			if (rt->flags == RTF_IN_PLRR && rt->pathLookup(*breakingNb) != nullptr && rt->connected && rt->pathList.size() == 1)
+			if (rt->flags == RTF_IN_PLRR && rt->pathLookup(*breakingNb) != nullptr && rt->connected)
 				rt->flags = RTF_UP;
 		}
 		break;
@@ -179,7 +182,7 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 		sendState.curOffset += bytesNum;
 
 		++rt->bufPktsNum;
-		if (rt->flags == RTF_UP)
+		if (rt->flags == RTF_UP || rt->flags == RTF_IN_PLRR)
 		{
 			ASSERT(!rt->pathList.empty());
 
@@ -255,9 +258,28 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 		if (dataPkt->getSource() != myAddr)
 		{
 			LAddress::L3Type lastHop = rt->aoLookupLastHop(dataPkt->getSource());
-			ASSERT(lastHop != -1);
+			if (lastHop == -1)
+			{
+				rt->aoInsert(dataPkt->getSource(), myAddr);
+				lastHop = myAddr;
+				RoutingUtils::fileLog("error.txt", "[lastHop == -1] %f: myAddr: %ld, (%ld -> %ld), IP src: %ld, rt:\n%s",
+						simTime().dbl(), myAddr, dataPkt->getSource(), dataPkt->getDestination(), dataPkt->getSenderAddress(), rt->print().c_str());
+			}
 			path = rt->pathLookupLastHop(lastHop);
-			ASSERT(path != nullptr);
+			if (path == nullptr)
+			{
+				if (rt->pathList.empty())
+				{
+					downRoutingEntry(rt);
+					delete dataPkt;
+					++RoutingStatisticCollector::gPktsLinkLost;
+					scheduleAt(simTime() + moment, msg);
+					return;
+				}
+				else
+					path = rt->pathSelect();
+				RoutingUtils::fileLog("warning.txt", "[path == nullptr] %f: myAddr: %ld, source: %ld, rt:\n%s", simTime().dbl(), myAddr, dataPkt->getSource(), rt->print().c_str());
+			}
 		}
 		else
 		{
@@ -301,7 +323,9 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 		Coord &nextHopPos = MobilityObserver::Instance()->globalPosition[path->nextHop];
 		if (curPosition.distance(nextHopPos) > transmissionRadius)
 		{
-			onDataLost(dataPkt->dup());
+			DataMessage *dupDataPkt = dataPkt->dup();
+			onDataLost(dupDataPkt);
+			delete dupDataPkt;
 		}
 
 		if (--rt->bufPktsNum == 0)
@@ -320,6 +344,7 @@ void PAOMBR::handleSelfMsg(cMessage *msg)
 					senderStates.erase(dataPkt->getDestination());
 					ASSERT(findBufferQueue(dataPkt->getDestination()) == false);
 					rt->connected = false;
+					++RoutingStatisticCollector::gComplete;
 				}
 			}
 		}
@@ -412,7 +437,15 @@ void PAOMBR::onBeacon(BeaconMessage *beaconMsg)
 	if (path != nullptr)
 		path->expireAt = simTime() + neighborElapsed;
 	else
+	{
 		path = rt->pathInsert(sender, myAddr, 1, neighborElapsed, neighborElapsed);
+		if (rt->flags == RTF_DOWN)
+		{
+			rt->flags = RTF_UP;
+			if (rt->seqno & 1)
+				++rt->seqno;
+		}
+	}
 
 	// predict link expiration time
 	simtime_t LET = calcLET(neighborInfo->pos, neighborInfo->speed);
@@ -454,7 +487,7 @@ void PAOMBR::onRouting(RoutingMessage *msg)
 	uint8_t ttl = msg->getTTL();
 	msg->setTTL(--ttl);
 
-	EV << "TTL: " << (uint32_t)ttl << "\n";
+	EV << "TTL: " << (uint32_t)ttl << ", IP src: " << msg->getSenderAddress() << "\n";
 #ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
 	// mobility extension, only update old record, it is the duty of beacon messages to maintain neighborhood
 	if ((itN = neighbors.find(msg->getSenderAddress())) != neighbors.end())
@@ -556,6 +589,11 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 	}
 	if (rq->getMinLET() > paombrNb->LET)
 		rq->setMinLET(paombrNb->LET);
+	if (!paombrNb->recvPower_dBm.empty() && paombrNb->recvPower_dBm.back() < recvPowerThres_dBm)
+	{
+		EV << "Recv power too small, discard it." << std::endl;
+		return;
+	}
 #else
 	simtime_t LET = calcLET(itN->second->pos, itN->second->speed);
 	EV << "LET: " << LET << "s, rq->LET: " << rq->getMinLET() << "s.\n";
@@ -594,8 +632,8 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 		EV << "create an entry for the reverse route.\n";
 		rt0 = insertRoutingEntry(rqsrc);
 	}
-	// store the source for whom I provide help
-	rt0->aoInsert(rqdst, rq->getFirstHop());
+	if (propagation) // store the source for whom I provide help
+		rt0->aoInsert(rqdst, rq->getFirstHop());
 
 	/*
 	 * 3.1.1.1. Sufficient Conditions
@@ -661,6 +699,14 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 			rt0->lastHopCount = rt0->pathGetMaxHopCount();
 			EV << "new reverse path: " << reversePath->info() << ", last hop count: " << (uint32_t)rt0->lastHopCount << std::endl;
 		}
+		else
+		{
+			if (rt0->pathList.size() < PAOMBR_MAX_PATHS)
+				EV << "get useless route (will incur joint path)." << std::endl;
+			else
+				EV << "get useless route (too many existing paths)." << std::endl;
+			return;
+		}
 	}
 	// Older seqno (or same seqno with higher hopcount), i.e. I have a more recent route entry - so drop packet.
 	else
@@ -717,15 +763,23 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 		if (rq->getRepairFlag())
 		{
 			EV << "RREQ used for local repair, check whether reply will incur joint path.\n";
+			bool assistMyself = false; // if sources listed in RREQ contain myself, then means routing loop
 			uint32_t srcCount = rq->getSrcCount();
 			for (uint32_t k = 0; k < srcCount; ++k)
 			{
+				if (rq->getSrcs(k) == myAddr)
+					assistMyself = true;
 				LAddress::L3Type lh = rt->aoLookupLastHop(rq->getSrcs(k));
 				if (lh != -1 && lh != rq->getLastHop()) // concat original downstream nodes is allowed, which surely does not incur joint
 				{
 					incurJoint = true;
 					break;
 				}
+			}
+			if (assistMyself)
+			{
+				EV << "Reject to reply because this will incur routing loop." << std::endl;
+				return;
 			}
 		}
 		if (!incurJoint)
@@ -740,7 +794,30 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 				if (rt->advertisedHops == INFINITE_HOPS)
 					rt->advertisedHops = rt->pathGetMaxHopCount();
 
-				PaombrPath *forwardPath = rt->pathSelect();
+				LAddress::L3Type lh = rt->aoLookupLastHop(rqsrc);
+				PaombrPath *forwardPath = rt->pathLookupLastHop(lh); // if I am an original downstream node, prefer original path
+				if (lh == -1 || forwardPath == nullptr)
+				{
+					forwardPath = rt->pathLookupMaxPET();
+					// store the source for whom I provide help (maybe this is an update)
+					rt->aoInsert(rqsrc, forwardPath->lastHop);
+					EV << "insert ao (" << rqsrc << ',' << forwardPath->lastHop << ')';
+				}
+				if (rq->getRepairFlag())
+				{
+					if (ipsrc != rqsrc)
+					{
+						rt->aoInsert(ipsrc, forwardPath->lastHop);
+						EV << ", (" << ipsrc << ',' << forwardPath->lastHop << ')';
+					}
+					uint32_t srcCount = rq->getSrcCount();
+					for (uint32_t k = 0; k < srcCount; ++k)
+					{
+						rt->aoInsert(rq->getSrcs(k), forwardPath->lastHop);
+						EV << ", (" << rq->getSrcs(k) << ',' << forwardPath->lastHop << ')';
+					}
+				}
+				EV << "\n";
 				rt->error = true;
 				rt->connected = true;
 				sendRREP(rq, rt->advertisedHops, rt->seqno, forwardPath->expireAt-simTime(), forwardPath->lastHop);
@@ -766,13 +843,31 @@ void PAOMBR::onRREQ(RREQMessage *rq)
 		}
 #endif
 
-		rt->aoDelete(rqsrc); // I cannot assist this RREQ source
-
 		if (propagation) // do not propagate a duplicate RREQ
 		{
-			// Maximum sequence number seen in route
-			if (rt != nullptr && rq->getDestSeqno() < rt->seqno)
-				rq->setDestSeqno(rt->seqno);
+			if (rt != nullptr)
+			{
+				rt->aoInsert(rqsrc, rqsrc); // trick, we record rqsrc as temporary last hop, modify this when receiving RREP
+				EV << "insert ao (" << rqsrc << ',' << rqsrc << ')';
+				if (rq->getRepairFlag())
+				{
+					if (ipsrc != rqsrc)
+					{
+						rt->aoInsert(ipsrc, rqsrc);
+						EV << ", (" << ipsrc << ',' << rqsrc << ')';
+					}
+					uint32_t srcCount = rq->getSrcCount();
+					for (uint32_t k = 0; k < srcCount; ++k)
+					{
+						rt->aoInsert(rq->getSrcs(k), rqsrc);
+						EV << ", (" << rq->getSrcs(k) << ',' << rqsrc << ')';
+					}
+				}
+				EV << "\n";
+				// Maximum sequence number seen in route
+				if (rq->getDestSeqno() < rt->seqno)
+					rq->setDestSeqno(rt->seqno);
+			}
 
 			// route advertisement
 			if (rt0->advertisedHops == INFINITE_HOPS)
@@ -790,7 +885,7 @@ void PAOMBR::onRREP(RREPMessage *rp)
 
 	LAddress::L3Type ipsrc = rp->getSenderAddress(), ipdst = rp->getIpDest(); // alias
 	LAddress::L3Type rpdst = rp->getDestAddr(); // alias
-	EV << "IP src: " << ipsrc << ", IP dest: " << ipdst << ", RREP dest: " << rpdst <<  "\n";
+	EV << "IP dest: " << ipdst << ", RREP dest: " << rpdst <<  "\n";
 	// If I receive a RREP with myself as source - drop packet (should not occur).
 	// rpdst is the source of the RREP, or rather the destination of the RREQ.
 	if (rpdst == myAddr)
@@ -836,9 +931,6 @@ void PAOMBR::onRREP(RREPMessage *rp)
 		rt = insertRoutingEntry(rpdst);
 	}
 	rt->connected = true;
-
-	if (ipdst == myAddr && rp->getPreemptiveFlag())
-		rt->pathDelete(rp->getBreakingNb());
 
 	PaombrPath *forwardPath = nullptr;
 	uint32_t rpHopCount = rp->getHopCount() + 1;
@@ -889,12 +981,14 @@ void PAOMBR::onRREP(RREPMessage *rp)
 				EV << "get useless route (" << (uint32_t)rt->advertisedHops << " < " << rpHopCount << ")." << std::endl;
 				return;
 			}
+			else
+				rt->pathDelete(rp->getBreakingNb());
 		}
 
-		rt->flags = RTF_UP;
 		// If the path already exists - increase path lifetime
 		if ((forwardPath = rt->disjointPathLookup(ipsrc, rp->getFirstHop())) != nullptr)
 		{
+			rt->flags = RTF_UP;
 			ASSERT(forwardPath->hopCount == rp->getHopCount() + 1);
 			forwardPath->expireAt = simTime() + rp->getLifeTime();
 			forwardPath->PET = simTime() + rp->getMinLET();
@@ -905,6 +999,7 @@ void PAOMBR::onRREP(RREPMessage *rp)
 		// If the path does not already exist, and there is room for it - we add the path
 		else if (rt->disjointPathExists(ipsrc, rp->getFirstHop()) && rt->pathList.size() < PAOMBR_MAX_PATHS)
 		{
+			rt->flags = RTF_UP;
 			// Insert forward path to RREQ destination.
 			forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, rp->getLifeTime(), rp->getMinLET());
 			rt->lastHopCount = rt->pathGetMaxHopCount();
@@ -912,7 +1007,13 @@ void PAOMBR::onRREP(RREPMessage *rp)
 		}
 		// Path did not exist nor could it be added - just drop packet.
 		else
+		{
+			if (rt->pathList.size() < PAOMBR_MAX_PATHS)
+				EV << "get useless route (will incur joint path)." << std::endl;
+			else
+				EV << "get useless route (too many existing paths)." << std::endl;
 			return;
+		}
 	}
 	// The received RREP did not contain more recent information than route table - so drop packet
 	else
@@ -969,8 +1070,9 @@ void PAOMBR::onRREP(RREPMessage *rp)
 
 	rt0->connected = true;
 	b->count = 1;
-	PaombrPath *reversePath = rt0->pathSelect();
-	reversePath->expireAt = simTime() + ACTIVE_ROUTE_TIMEOUT;
+	LAddress::L3Type lastHop = rt0->aoLookupLastHop(rpdst); // first hop from RREQ src to dest
+	PaombrPath *reversePath = rt0->pathLookupLastHop(lastHop);
+	ASSERT(reversePath != nullptr);
 	EV << "I have an active route to RREQ src, reverse path: " << reversePath->info() << "\n";
 
 	// route advertisement
@@ -978,8 +1080,16 @@ void PAOMBR::onRREP(RREPMessage *rp)
 		rt->advertisedHops = rt->pathGetMaxHopCount();
 	rp->setHopCount(rt->advertisedHops);
 	rt->error = true;
+	if (rt->rrepTimeoutEvt != nullptr) // assisted source may execute route repair at the same time, in rare cases, I cannot receive RREP aiming to me
+		cancelEvent(rt->rrepTimeoutEvt);
 	// store the source for whom I provide help
 	rt->aoInsert(ipdst, rp->getFirstHop());
+	if (rp->getRepairFlag())
+	{
+		for (rt->itAO = rt->ao.begin(); rt->itAO != rt->ao.end(); ++rt->itAO)
+			if (rt->itAO->lastHop == ipdst) // trick, we recorded rqsrc as temporary last hop when forwarding RREQ, modify this now
+				rt->itAO->lastHop = rp->getFirstHop();
+	}
 
 	EV << "forward RREP, last hop: " << rp->getFirstHop() << ", hop count: " << (uint32_t)rp->getHopCount() << std::endl;
 	forward(rt0, rp->dup(), rpdst);
@@ -1025,10 +1135,7 @@ void PAOMBR::onRERR(RERRMessage *re)
 				}
 			}
 			else
-			{
-				std::string paths = rt->pathPrint();
-				EV << paths.c_str() << std::endl;
-			}
+				EV << rt->pathPrint().c_str() << std::endl;
 		}
 	}
 	if (destCount > 0)
@@ -1044,15 +1151,20 @@ void PAOMBR::onLR(LRMessage *lr)
 {
 	EV << "node[" << myAddr << "]: onLR!\n";
 
-	lr->setHopCount(lr->getHopCount()+1);
+	PaombrRtEntry *rt = lookupRoutingEntry(lr->getDestination());
+	if (rt == nullptr)
+	{
+		RoutingUtils::fileLog("warning.txt", "[rt == nullptr] %f: myAddr: %ld, (%ld -> %ld)\n", simTime().dbl(), myAddr, lr->getIpDest(), lr->getDestination());
+		return;
+	}
 
+	lr->setHopCount(lr->getHopCount()+1);
 	EV << "this last hop report is for me, its info:\n";
 	EV << "    destination " << lr->getDestination() << "\n";
 	EV << "    old last hop " << lr->getOldLastHop() << "\n";
 	EV << "    new last hop " << lr->getNewLastHop() << "\n";
-	EV << "    hop count " << (uint32_t)lr->getHopCount() << std::endl;
-	PaombrRtEntry *rt = lookupRoutingEntry(lr->getDestination());
-	ASSERT(rt != nullptr);
+	EV << "    hop count " << (uint32_t)lr->getHopCount();
+
 	PaombrPath *path = rt->pathLookupLastHop(lr->getOldLastHop());
 	bool propagation = false;
 	if (path != nullptr)
@@ -1060,16 +1172,22 @@ void PAOMBR::onLR(LRMessage *lr)
 		propagation = path->lastHop == lr->getOldLastHop() || path->lastHop == lr->getNewLastHop();
 		path->lastHop = lr->getNewLastHop();
 		path->hopCount = lr->getHopCount();
-		AssistedOrig *pao = rt->aoLookup(lr->getIpDest());
-		if (pao != nullptr)
-			pao->lastHop = lr->getNewLastHop();
+		for (rt->itAO = rt->ao.begin(); rt->itAO != rt->ao.end(); ++rt->itAO)
+			if (rt->itAO->lastHop == lr->getOldLastHop())
+				rt->itAO->lastHop = lr->getNewLastHop();
+		EV << "\npath info updated";
 	}
 
 	if (lr->getIpDest() != myAddr && propagation) // continue forwarding it
 	{
+		EV << "\nforward LR, IP dest: " << lr->getIpDest();
 		PaombrRtEntry *rt0 = lookupRoutingEntry(lr->getIpDest());
 		forward(rt0, lr->dup(), lr->getDestination());
 	}
+	EV << std::endl;
+#if ROUTING_DEBUG_LOG
+	printRoutingTable();
+#endif
 }
 
 #ifdef USE_DYNAMIC_PATH_SHORTENING
@@ -1153,27 +1271,8 @@ void PAOMBR::onData(DataMessage *dataPkt)
 			pao->maxSeqno = dataPkt->getSequence();
 			if (pao->minAltitude < altitude && dataPkt->getReceiverAddress() == myAddr)
 			{
-				// predict link expiration time
-				if ((itN = neighbors.find(sender)) != neighbors.end())
-				{
-					PaombrNeighborInfo *paombrNb = dynamic_cast<PaombrNeighborInfo*>(itN->second);
-					simtime_t LET_DPS = beaconInterval + DPS_OPERATION_TIME + PLRR_DISCOVERY_TIME;
-					if (paombrNb->LET > LET_DPS && paombrNb->recvPower_dBm.back() > recvPowerThres_dBm)
-					{
-						DPSRMessage *dpsr = new DPSRMessage("routing");
-						prepareWSM(dpsr, routingLengthBits+128, t_channel::type_CCH, routingPriority, lookupL2Address(sender));
-						dpsr->setIpDest(sender);
-						dpsr->setTTL(1);
-						dpsr->setPacketType(AOMDVPacketType::DPSR);
-						dpsr->setDestination(dest);
-						dpsr->setOriginator(dataPkt->getSource());
-						dpsr->setLastHop(pao->lastHop);
-						RoutingStatisticCollector::gCtrlBitsTransmitted += dpsr->getBitLength();
-						RoutingStatisticCollector::gCtrlPktsTransmitted++;
-						RoutingStatisticCollector::gDPSRs++;
-						sendWSM(dpsr);
-					}
-				}
+				if ((itN = neighbors.find(pao->minSender)) != neighbors.end())
+					sendDPSR(dataPkt, pao);
 			}
 			else if (pao->minAltitude > altitude && pao->lastHop == dataPkt->getLastHop())
 			{
@@ -1188,6 +1287,7 @@ void PAOMBR::onData(DataMessage *dataPkt)
 	if (dataPkt->getReceiverAddress() != myAddr)
 		return;
 #endif
+	++RoutingStatisticCollector::gDataPktsTransmittedSuccessful;
 
 	if (dest == myAddr)
 	{
@@ -1239,8 +1339,13 @@ void PAOMBR::onData(DataMessage *dataPkt)
 		}
 #endif
 		EV << "this data packet is for me, seqno: " << dataPkt->getSequence() << ", seqno intervals:\n";
-		for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS)
+		uint32_t i = 1;
+		for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS, ++i)
+		{
 			EV << '[' << recvState.itS->first << ',' << recvState.itS->second << "), ";
+			if (i % 10 == 0)
+				EV << "\n";
+		}
 		EV << std::endl;
 		return;
 	}
@@ -1255,6 +1360,8 @@ void PAOMBR::onData(DataMessage *dataPkt)
 	{
 		if (rt != nullptr)
 		{
+			if (!rt->pathList.empty())
+				RoutingUtils::fileLog("error.txt", "[!rt->pathList.empty()] %f: myAddr: %ld, source: %ld, rt:\n%s", simTime().dbl(), myAddr, dataPkt->getSource(), rt->print().c_str());
 			ASSERT(rt->advertisedHops == INFINITE_HOPS && rt->pathList.empty());
 			EV << "RTF_DOWN, send RERR." << std::endl;
 		}
@@ -1329,7 +1436,12 @@ LAddress::L3Type PAOMBR::forward(PaombrRtEntry *rt, RoutingMessage *pkt, LAddres
 
 		LAddress::L3Type lastHop = rt->aoLookupLastHop(dest); // first hop from RREQ src to dest
 		PaombrPath *path = rt->pathLookupLastHop(lastHop);
-		ASSERT(path != nullptr);
+		if (path == nullptr)
+		{
+			RoutingUtils::fileLog("error.txt", "[path == nullptr] %f: myAddr: %ld, RREQ dst: %ld, rt:\n%s", simTime().dbl(), myAddr, dest, rt->print().c_str());
+			delete pkt;
+			return nextHop;
+		}
 		path->expireAt = simTime() + ACTIVE_ROUTE_TIMEOUT;
 		pkt->setRecipientAddress(lookupL2Address(path->nextHop));
 		nextHop = path->nextHop;
@@ -1374,6 +1486,7 @@ void PAOMBR::sendRREQ(LAddress::L3Type dest, uint8_t TTL, LAddress::L3Type lastH
 		rt->reqCount = 0;
 		ASSERT(rt->reqLastTTL == NET_DIAMETER);
 		rt->flags = RTF_UP; // avoid instantly returning from downRoutingEntry()
+		rt->pathList.clear();
 		downRoutingEntry(rt);
 		onRouteUnreachable(dest);
 		return;
@@ -1426,6 +1539,7 @@ void PAOMBR::sendRREQ(LAddress::L3Type dest, uint8_t TTL, LAddress::L3Type lastH
 	}
 	else // local repair
 	{
+		ASSERT(rt->flags == RTF_IN_REPAIR);
 		rq->setRepairFlag(true);
 		rq->setTTL(TTL);
 		rq->setLastHop(lastHop);
@@ -1497,6 +1611,7 @@ void PAOMBR::sendRREP(RREQMessage *rq, uint8_t hopCount, uint32_t rpseq, simtime
 	else
 		RoutingStatisticCollector::gRREPs++;
 	sendWSM(rp);
+	sendWSM(rp->dup()); // send twice to enhance reliability
 }
 
 void PAOMBR::sendRERR(RERRMessage *rerr)
@@ -1625,8 +1740,14 @@ void PAOMBR::sendLR(PaombrRtEntry *rt, RREPMessage *rp)
 	}
 	for (rt->itAO = rt->ao.begin(); rt->itAO != rt->ao.end(); ++rt->itAO)
 	{
+		rt->itAO->lastHop = rp->getFirstHop();
+
 		PaombrRtEntry *rt0 = lookupRoutingEntry(rt->itAO->originator);
-		ASSERT(rt0 != nullptr);
+		if (rt0 == nullptr)
+		{
+			RoutingUtils::fileLog("warning.txt", "[rt0 == nullptr] %f: myAddr: %ld, source: %ld\n", simTime().dbl(), myAddr, rt->itAO->originator);
+			continue;
+		}
 
 		LRMessage *lr = new LRMessage("routing");
 		prepareWSM(lr, routingLengthBits+128, t_channel::type_CCH, routingPriority, lookupL2Address(rt0->pathSelect()->nextHop));
@@ -1636,7 +1757,7 @@ void PAOMBR::sendLR(PaombrRtEntry *rt, RREPMessage *rp)
 		lr->setDestination(rp->getDestAddr());
 		lr->setOldLastHop(rp->getLastHop());
 		lr->setNewLastHop(rp->getFirstHop());
-		lr->setHopCount(rp->getHopCount());
+		lr->setHopCount(rp->getHopCount()+1);
 
 		EV << "send LR to src " << lr->getIpDest() << ", TTL: " << (uint32_t)lr->getTTL() << std::endl;
 
@@ -1644,7 +1765,30 @@ void PAOMBR::sendLR(PaombrRtEntry *rt, RREPMessage *rp)
 		RoutingStatisticCollector::gCtrlPktsTransmitted++;
 		RoutingStatisticCollector::gLRs++;
 		sendWSM(lr);
-		sendWSM(lr->dup()); // send twice to enhance reliability
+	}
+}
+
+void PAOMBR::sendDPSR(DataMessage *dataPkt, AssistedOrig *pao)
+{
+	PaombrNeighborInfo *paombrNb = dynamic_cast<PaombrNeighborInfo*>(itN->second);
+	simtime_t LET_DPS = beaconInterval + DPS_OPERATION_TIME + PLRR_DISCOVERY_TIME;
+	if (paombrNb->LET > LET_DPS && paombrNb->recvPower_dBm.back() > recvPowerThres_dBm)
+	{
+		DPSRMessage *dpsr = new DPSRMessage("routing");
+		prepareWSM(dpsr, routingLengthBits+128, t_channel::type_CCH, routingPriority, lookupL2Address(dataPkt->getSenderAddress()));
+		dpsr->setIpDest(pao->minSender);
+		dpsr->setTTL(1);
+		dpsr->setPacketType(AOMDVPacketType::DPSR);
+		dpsr->setDestination(dataPkt->getDestination());
+		dpsr->setOriginator(dataPkt->getSource());
+		dpsr->setLastHop(pao->lastHop);
+
+		EV << "send DPSR to " << dpsr->getIpDest() << ", prev hop: " << dataPkt->getSenderAddress() << std::endl;
+
+		RoutingStatisticCollector::gCtrlBitsTransmitted += dpsr->getBitLength();
+		RoutingStatisticCollector::gCtrlPktsTransmitted++;
+		RoutingStatisticCollector::gDPSRs++;
+		sendWSM(dpsr);
 	}
 }
 
@@ -1658,26 +1802,7 @@ void PAOMBR::onNeighborLost(LAddress::L3Type neighbor)
 	cancelAndDelete(paombrNb->PLRRTimeoutEvt);
 #endif
 
-	PaombrPath *path = nullptr;
-	for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
-	{
-		PaombrRtEntry *rt = itRT->second;
-		if ((path = rt->pathLookup(neighbor)) != nullptr)
-		{
-			if (rt->connected && rt->pathList.size() == 1)
-			{
-				rt->brokenNb = neighbor;
-				rt->flags = RTF_IN_REPAIR;
-				rt->advertisedHops = INFINITE_HOPS;
-				++rt->seqno;
-				if (rt->seqno < rt->highestSeqnoHeard)
-					rt->seqno = rt->highestSeqnoHeard;
-				++RoutingStatisticCollector::gLocalRepairs;
-				sendRREQ(itRT->first, path->hopCount + LOCAL_ADD_TTL, rt->pathLookup(neighbor)->lastHop);
-			}
-			rt->pathDelete(neighbor);
-		}
-	}
+	onLocalRepairFailure(neighbor);
 }
 
 /**
@@ -1696,20 +1821,22 @@ void PAOMBR::onNeighborLost(LAddress::L3Type neighbor)
  * has not received a RREP (or other control message creating or updating the route) for that destination,
  * it proceeds as described in Section 6.11 by transmitting a RERR message for that destination.
  */
-void PAOMBR::localRepair(PaombrRtEntry *rt, DataMessage *dataPkt, LAddress::L3Type lastHop)
+bool PAOMBR::localRepair(PaombrRtEntry *rt, DataMessage *dataPkt, LAddress::L3Type lastHop)
 {
-	PaombrRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSource());
-	ASSERT(rt0 != nullptr && rt0->flags == RTF_UP);
-
 	if (rt->flags == RTF_IN_REPAIR)
-		return;
+		return false;
+
+	PaombrRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSource());
+	if (rt0 == nullptr || rt0->flags == RTF_DOWN || rt0->flags == RTF_IN_REPAIR)
+		return true;
+
 	// mark the route as under repair
 	rt->flags = RTF_IN_REPAIR;
-
 	++RoutingStatisticCollector::gLocalRepairs;
 
 	uint8_t MIN_REPAIR_TTL = rt->lastHopCount, halfReverseHop = rt0->lastHopCount/2;
 	sendRREQ(dataPkt->getDestination(), std::max(MIN_REPAIR_TTL, halfReverseHop) + LOCAL_ADD_TTL, lastHop);
+	return false;
 }
 
 //////////////////////////////    RouteRepairInterface    //////////////////////////////
@@ -1725,12 +1852,12 @@ void PAOMBR::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 
 	PaombrRtEntry *rt = lookupRoutingEntry(dataPkt->getDestination());
 	ASSERT(rt != nullptr);
-	LAddress::L3Type lastHop = rt->pathLookup(neighbor)->lastHop;
 	rt->brokenNb = neighbor;
-	rt->pathDelete(neighbor);
+	size_t pathNum = rt->pathList.size();
 	// salvage the packet using an alternate path if available.
-	if ((rt->flags == RTF_UP || rt->flags == RTF_IN_PLRR) && !rt->pathList.empty())
+	if ((rt->flags == RTF_UP || rt->flags == RTF_IN_PLRR) && (pathNum > 1 || (pathNum == 1 && rt->pathLookup(neighbor) == nullptr)))
 	{
+		rt->pathDelete(neighbor);
 		PaombrPath *path = rt->pathSelect();
 		dataPkt->setSenderAddress(myAddr);
 #ifdef USE_L2_UNICAST_DATA
@@ -1749,9 +1876,20 @@ void PAOMBR::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	else if (rt->lastHopCount <= MAX_REPAIR_TTL)
 	{
 		if (dataPkt->getSource() != myAddr)
-			localRepair(rt, dataPkt, lastHop);
+		{
+			LAddress::L3Type lastHop = rt->pathLookup(neighbor)->lastHop;
+			bool brokenRt0 = localRepair(rt, dataPkt, lastHop);
+			if (brokenRt0) // cannot execute local repair due to broken reverse path
+			{
+				rt->flags = RTF_UP; // ensure enter if block in onLocalRepairFailure()
+				onLocalRepairFailure(neighbor);
+			}
+			else
+				rt->pathDelete(neighbor);
+		}
 		else
 		{
+			rt->pathDelete(neighbor);
 			rt->flags = RTF_IN_REPAIR;
 			sendRREQ(dataPkt->getDestination());
 		}
@@ -1759,7 +1897,7 @@ void PAOMBR::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	}
 	else
 	{
-		rt->pathInsert(neighbor, -1, 0, SimTime::ZERO, SimTime::ZERO); // ensure we can enter if block in onLocalRepairFailure()
+		rt->flags = RTF_UP; // ensure enter if block in onLocalRepairFailure()
 		onLocalRepairFailure(neighbor);
 		++RoutingStatisticCollector::gPktsLinkLost;
 	}
@@ -1822,8 +1960,8 @@ void PAOMBR::onRouteReachable(LAddress::L3Type dest)
 
 	if ((itSS = senderStates.find(dest)) != senderStates.end())
 	{
-		if (!itSS->second.sendDataEvt->isScheduled());
-		scheduleAt(simTime(), itSS->second.sendDataEvt);
+		if (!itSS->second.sendDataEvt->isScheduled())
+			scheduleAt(simTime(), itSS->second.sendDataEvt);
 	}
 }
 
@@ -1831,6 +1969,7 @@ void PAOMBR::onRouteUnreachable(LAddress::L3Type dest)
 {
 	EV << "route to dest " << dest << " becomes unreachable, discard buffered packets." << std::endl;
 
+	long _gPktsLinkLost = RoutingStatisticCollector::gPktsLinkLost;
 	for (itRQ = rQueue.begin(); itRQ != rQueue.end();)
 	{
 		if ((*itRQ)->getDestination() == dest)
@@ -1847,6 +1986,8 @@ void PAOMBR::onRouteUnreachable(LAddress::L3Type dest)
 	{
 		cancelAndDelete(itSS->second.sendDataEvt);
 		senderStates.erase(itSS);
+		++RoutingStatisticCollector::gIncomplete;
+		RoutingStatisticCollector::gDataPktsSent += RoutingStatisticCollector::gPktsLinkLost - _gPktsLinkLost;
 	}
 }
 
@@ -1861,26 +2002,29 @@ void PAOMBR::callRouting(const PlanEntry& entry)
 	ASSERT(itN != neighbors.end());
 #endif
 #else
-	const double mapEdgeLength = 4100.0, leastStayTime = 20.0;;
+	if (RoutingStatisticCollector::gRoutings >= ROUTING_EVENTS_NUM || simTime() - RoutingStatisticCollector::gLatestRouting < SimTime(1, SIMTIME_S))
+		return;
+	const double mapEdgeLength = 4100.0;
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 	{
 		NeighborInfo *nb = itN->second;
 		bool accept = false;
-		if (RoutingUtils::relativeDirection(curSpeed, nb->speed) != RoutingUtils::SAME)
+		if (curPosition.distance(nb->pos) < 0.8*transmissionRadius
+			&& RoutingUtils::relativeDirection(curSpeed, nb->speed) != RoutingUtils::SAME)
 		{
 			if (fabs(nb->speed.x) > Epsilon)
 			{
 				if (nb->speed.x > 0) // 0
-					accept = (mapEdgeLength - nb->pos.x) / nb->speed.x > leastStayTime;
+					accept = (mapEdgeLength - nb->pos.x) / nb->speed.x > TRANSFER_DURATION;
 				else // M_PI
-					accept = (mapEdgeLength + nb->pos.x) / fabs(nb->speed.x) > leastStayTime;
+					accept = (mapEdgeLength + nb->pos.x) / fabs(nb->speed.x) > TRANSFER_DURATION;
 			}
 			else
 			{
 				if (nb->speed.y > 0) // M_PI/2
-					accept = (mapEdgeLength - nb->pos.y) / nb->speed.y > leastStayTime;
+					accept = (mapEdgeLength - nb->pos.y) / nb->speed.y > TRANSFER_DURATION;
 				else // 3*M_PI/2
-					accept = (mapEdgeLength + nb->pos.y) / fabs(nb->speed.y) > leastStayTime;
+					accept = (mapEdgeLength + nb->pos.y) / fabs(nb->speed.y) > TRANSFER_DURATION;
 			}
 		}
 		if (accept)
@@ -1895,6 +2039,14 @@ void PAOMBR::callRouting(const PlanEntry& entry)
 		return;
 	}
 	++RoutingStatisticCollector::gRoutings;
+	RoutingStatisticCollector::gLatestRouting = simTime();
+#ifdef TEST_ROUTE_REPAIR_PROTOCOL
+	std::ofstream fout("routingPairs.txt", std::ios_base::out | std::ios_base::app);
+	if (!fout.is_open())
+		error("cannot open file routingPairs.txt!");
+	fout << simTime() << ": " << myAddr << " -> " << receiver << std::endl;
+	fout.close();
+#endif
 #endif
 
 	itSS = senderStates.find(receiver);
@@ -1929,13 +2081,8 @@ void PAOMBR::printRoutingTable()
 {
 	EV << "display my routing table:\n";
 	for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
-	{
-		EV << "  routing path to node[" << itRT->first << "] lists as follows:\n";
-		std::string paths = itRT->second->pathPrint();
-		EV << paths.c_str() << "  source I help lists as follows:";
-		std::string aos = itRT->second->aoPrint();
-		EV << aos.c_str() << std::endl;
-	}
+		EV << "  routing path to node[" << itRT->first << "] lists as follows:\n" << itRT->second->print().c_str();
+	EV << std::endl;
 }
 
 //////////////////////////////    routing table functions    //////////////////////////////
@@ -2220,15 +2367,15 @@ PAOMBR::PaombrPath* PAOMBR::PaombrRtEntry::pathLookupLastHop(LAddress::L3Type la
 	return nullptr;
 }
 
-PAOMBR::PaombrPath* PAOMBR::PaombrRtEntry::pathLookupMinHop()
+PAOMBR::PaombrPath* PAOMBR::PaombrRtEntry::pathLookupMaxPET()
 {
-	uint8_t minHopCount = INFINITE_HOPS;
+	simtime_t maxPET = SimTime::ZERO;
 	PAOMBR::PaombrPath *path = nullptr;
 	for (itPL = pathList.begin(); itPL != pathList.end(); ++itPL)
 	{
-		if (minHopCount > itPL->hopCount)
+		if (maxPET < itPL->PET)
 		{
-			minHopCount = itPL->hopCount;
+			maxPET = itPL->PET;
 			path = &*itPL;
 		}
 	}
@@ -2260,7 +2407,7 @@ void PAOMBR::PaombrRtEntry::pathDelete(LAddress::L3Type nextHop)
 			bool willInvalidate = itPL == itSP;
 			itPL = pathList.erase(itPL);
 			if (willInvalidate) // avoid invalidating iterator itSP
-				itSP = itPL;
+				itSP = itPL != pathList.end() ? itPL : pathList.begin();
 			break;
 		}
 	}
@@ -2276,7 +2423,7 @@ void PAOMBR::PaombrRtEntry::pathPurge()
 			bool willInvalidate = itPL == itSP;
 			itPL = pathList.erase(itPL);
 			if (willInvalidate) // avoid invalidating iterator itSP
-				itSP = itPL;
+				itSP = itPL != pathList.end() ? itPL : pathList.begin();
 		}
 		else
 			++itPL;
@@ -2390,6 +2537,11 @@ void PAOMBR::PaombrRtEntry::aoReset()
 	}
 }
 #endif
+
+std::string PAOMBR::PaombrRtEntry::print()
+{
+	return pathPrint() + "  source I help lists as follows:" + aoPrint() + "\n";
+}
 
 #ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
 //////////////////////////////    PAOMBR::PaombrNeighborInfo    //////////////////////////////

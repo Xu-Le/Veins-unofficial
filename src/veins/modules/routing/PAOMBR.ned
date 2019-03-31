@@ -31,13 +31,13 @@ simple PAOMBR extends BaseWaveApplLayer
 	int sendRRPktsThres = default(5); // how many data packets received will trigger a receiver report
 	int bufferQueueCap = default(64); // the capacity of data packets buffer queue
 
-	int pktNetLayerDelay = default(1000);  // network layer to MAC layer measured in us
-	int pktApplLayerDelay = default(1000); // application layer to network layer measured in us
+	int pktNetLayerDelay = default(1000us) @unit(us);  // network layer to MAC layer measured in us
+	int pktApplLayerDelay = default(1000us) @unit(us); // application layer to network layer measured in us
 
 	double recvPowerThres = default(-77dBm) @unit(dBm); // received power threshold below which the link is going to break
 
 	int totalBytes = default(10240);
-	double loPrewait = default(5.0);
-	double hiPrewait = default(15.0);
+	double loPrewait = default(30.0);
+	double hiPrewait = default(60.0);
 	xml routingPlan;
 }

@@ -22,6 +22,8 @@
 Define_Module(RoutingStatisticCollector);
 
 long RoutingStatisticCollector::gRoutings = 0;
+long RoutingStatisticCollector::gComplete = 0;
+long RoutingStatisticCollector::gIncomplete = 0;
 long RoutingStatisticCollector::gRREQs = 0;
 long RoutingStatisticCollector::gRREPs = 0;
 long RoutingStatisticCollector::gRERRs = 0;
@@ -43,8 +45,10 @@ int64_t RoutingStatisticCollector::gDataBitsTransmitted = 0;
 int64_t RoutingStatisticCollector::gCtrlBitsTransmitted = 0;
 long RoutingStatisticCollector::gDataPktsTransmitted = 0;
 long RoutingStatisticCollector::gCtrlPktsTransmitted = 0;
+long RoutingStatisticCollector::gDataPktsTransmittedSuccessful = 0;
 simtime_t RoutingStatisticCollector::gRouteAcquisitionTime;
 simtime_t RoutingStatisticCollector::gEndtoendDelay;
+simtime_t RoutingStatisticCollector::gLatestRouting;
 
 void RoutingStatisticCollector::initialize(int stage)
 {
@@ -65,6 +69,7 @@ void RoutingStatisticCollector::finish()
 	EV << "RoutingStatisticCollector::finish() called.\n";
 
 	// record statistics
+	int gLowerLayerLost = gDataPktsTransmitted - gDataPktsTransmittedSuccessful;
 	double gCtrlBitsFraction = 0.0, gCtrlPktsFraction = 0.0;
 	if (gCtrlBitsTransmitted > 0 && gDataBitsRecv > 0)
 		gCtrlBitsFraction = static_cast<double>(gCtrlBitsTransmitted) / gDataBitsRecv;
@@ -76,15 +81,18 @@ void RoutingStatisticCollector::finish()
 		gDataPktsRecv = 1;
 	gRouteAcquisitionTime /= gRouteSuccess;
 	gEndtoendDelay /= gDataPktsRecv;
+	recordScalar("gComplete", gComplete);
+	recordScalar("gIncomplete", gIncomplete);
 	recordScalar("gRREQs", gRREQs);
 	recordScalar("gRREPs", gRREPs);
 	recordScalar("gRERRs", gRERRs);
-	recordScalar("gRREPACKs", gRREPACKs);
+	//recordScalar("gRREPACKs", gRREPACKs);
 	recordScalar("gRREQps", gRREQps);
 	recordScalar("gRREPps", gRREPps);
 	recordScalar("gLRs", gLRs);
 	recordScalar("gDPSRs", gDPSRs);
 	recordScalar("gLocalRepairs", gLocalRepairs);
+	recordScalar("gLowerLayerLost", gLowerLayerLost);
 	recordScalar("gPktsLinkLost", gPktsLinkLost);
 	recordScalar("gPktsOverLost", gPktsOverLost);
 	recordScalar("gDataBitsSent", gDataBitsSent);
@@ -102,16 +110,18 @@ void RoutingStatisticCollector::finish()
 	recordScalar("gAverageEndtoendDelay", gEndtoendDelay.dbl());
 
 	// append statistic to file for figuring in MATLAB
-	std::ofstream fout("routingStatistics.csv", std::ios_base::out | std::ios_base::app);
-	if ( !fout.is_open() )
-	{
+	std::ofstream fout(par("resultFile").stringValue(), std::ios_base::out | std::ios_base::app);
+	if (!fout.is_open())
 		error("cannot open file routingStatistics.csv!");
-	}
-	else
-	{
-		fout << gRREQs << ',' << gRREPs << ',' << gRERRs << ',' << gRREPACKs << ',';
-		fout << gRREQps << ',' << gRREPps << ',' << gLRs << ',' << gDPSRs << std::endl;
-	}
+
+	int trafficDensity = par("trafficDensity").longValue();
+	int roadSpeedLimit = par("roadSpeedLimit").longValue();
+	int rtExpirationTime = par("rtExpirationTime").longValue();
+	int packetsPerSecond = par("packetsPerSecond").longValue();
+	fout << trafficDensity << ',' << roadSpeedLimit << ',' << rtExpirationTime << ',' << packetsPerSecond << ',';
+	fout << gDataPktsSent << ',' << gDataPktsRecv << ',' << gEndtoendDelay << ',' << gLowerLayerLost << ',' << gPktsOverLost << ',' << gCtrlPktsFraction << ',';
+	fout << gComplete << ',' << gRREQs << ',' << gRREPs << ',' << gRERRs << ',' << gRREQps << ',' << gRREPps << ',' << gLRs << ',' << gDPSRs << ',' << gLocalRepairs << std::endl;
+
 	fout.close();
 
 	cComponent::finish();

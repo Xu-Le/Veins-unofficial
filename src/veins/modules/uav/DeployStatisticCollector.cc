@@ -87,14 +87,12 @@ void DeployStatisticCollector::initialize(int stage)
 		world = FindModule<BaseWorldUtility*>::findGlobalModule();
 		if (world == nullptr)
 			error("Could not find BaseWorldUtility module");
-#if DO_THEORETICAL_CALCULATION
+
 		calculateInterval = SimTime(par("calculateInterval").longValue(), SIMTIME_S);
 		calculateEvt = new cMessage("calculate evt", DSCMessageKinds::CALCULATE_EVT);
 		calculateEvt->setSchedulingPriority(1); // calculate after UAV's decide event
 		scheduleAt(SimTime(par("emitFirstUavAt").longValue()+2, SIMTIME_S), calculateEvt);
-#else
-		calculateEvt = nullptr;
-#endif
+
 		EV << "DeployStatisticCollector::initialize() called.\n";
 	}
 	else
@@ -107,16 +105,20 @@ void DeployStatisticCollector::finish()
 {
 	EV << "DeployStatisticCollector::finish() called.\n";
 
-#if DO_THEORETICAL_CALCULATION
 	// write statistic to file for figuring in MATLAB
 	std::ofstream fout("deployStatistics.csv", std::ios_base::out | std::ios_base::trunc);
 	if (!fout.is_open())
 		error("cannot open file deployStatistics.csv!");
-	std::list<int>::iterator it1 = calculateAt.begin(), it2 = practical.begin(), it3 = theoretical.begin();
+	std::list<int>::iterator it1 = calculateAt.begin(), it2 = practical.begin();
+#if DO_THEORETICAL_CALCULATION
+	std::list<int>::iterator it3 = theoretical.begin();
 	for (; it1 != calculateAt.end(); ++it1, ++it2, ++it3)
 		fout << *it1 << ',' << *it2 << ',' << *it3 << "\n";
-	fout.close();
+#else
+	for (; it1 != calculateAt.end(); ++it1, ++it2)
+		fout << *it1 << ',' << *it2 << "\n";
 #endif
+	fout.close();
 
 	cancelAndDelete(calculateEvt);
 
@@ -126,9 +128,7 @@ void DeployStatisticCollector::finish()
 void DeployStatisticCollector::importVehicles(std::list<LAddress::L3Type>& vehicleList)
 {
 	EV << "DeployStatisticCollector::importVehicles() called.\n";
-#if DO_THEORETICAL_CALCULATION
 	vehicleSet.splice(vehicleSet.end(), vehicleList);
-#endif
 }
 
 void DeployStatisticCollector::handleMessage(cMessage *msg)
@@ -140,12 +140,10 @@ void DeployStatisticCollector::handleMessage(cMessage *msg)
 	{
 	case DSCMessageKinds::CALCULATE_EVT:
 	{
-#if DO_THEORETICAL_CALCULATION
 		vehicleSet.clear();
 		cSimulation::getActiveSimulation()->getSystemModule()->emit(optimalityCalculationSignal, this);
 		calculate();
 		scheduleAt(simTime() + calculateInterval, calculateEvt);
-#endif
 		break;
 	}
 	default:
@@ -155,7 +153,6 @@ void DeployStatisticCollector::handleMessage(cMessage *msg)
 
 void DeployStatisticCollector::calculate()
 {
-#if DO_THEORETICAL_CALCULATION
 	EV << "DeployStatisticCollector calculate at " << simTime() << "\n";
 
 	vehicleSet.sort();
@@ -169,12 +166,13 @@ void DeployStatisticCollector::calculate()
 
 	calculateAt.push_back(simTime().inUnit(SIMTIME_S));
 	practical.push_back(practicalNum);
-	theoretical.push_back(theoreticalNum);
 	practicalVec.record(practicalNum);
+#if DO_THEORETICAL_CALCULATION
+	theoretical.push_back(theoreticalNum);
 	theoreticalVec.record(theoreticalNum);
+#endif
 
 	EV << "practical: " << practicalNum << ", theoretical: " << theoreticalNum << std::endl;
-#endif
 }
 
 int DeployStatisticCollector::doCalculate()

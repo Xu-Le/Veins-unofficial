@@ -24,10 +24,59 @@
 #include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/routing/RoutingStatisticCollector.h"
 
-#define USE_XML_CONFIG_FILE
+// #define USE_XML_CONFIG_FILE
 // #define USE_L2_UNICAST_DATA
+#define USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
+#define USE_DYNAMIC_PATH_SHORTENING
 // #define USE_RECEIVER_REPORT
 #define INFINITE_HOPS    255
+#ifndef USE_XML_CONFIG_FILE
+#define ROUTING_EVENTS_NUM    100
+#define TRANSFER_DURATION    20.0
+#endif
+
+#define RTF_DOWN         0
+#define RTF_UP           1
+#define RTF_IN_REPAIR    2
+#define RTF_IN_PLRR      3
+
+#define ALLOWED_HELLO_LOSS    2
+#define RREQ_RETRIES          2
+
+// TTL_START should be set to at least 2 if Hello messages are used for local connectivity information.
+#define TTL_START         2
+#define TTL_INCREMENT     2
+#define TTL_THRESHOLD     7
+#define MAX_REPAIR_TTL    5
+#define LOCAL_ADD_TTL     2
+
+// Should be set by the user using best guess (conservative)
+#define NET_DIAMETER           8
+// In worst cases, CCH -> SCH happens just before packet arrives at MAC layer,
+// and note that CCH -> SCH worst case happens at a probability of 50%, thus expected delay is 25ms
+#define NODE_TRAVERSAL_TIME    0.025
+// round trip time of 2 hop count (1 + LOCAL_ADD_TTL)
+#define PLRR_DISCOVERY_TIME    4*NODE_TRAVERSAL_TIME
+
+#define PURGE_ROUTE_PERIOD        0.5
+// ACTIVE_ROUTE_TIMEOUT SHOULD be set to a longer value (at least 10,000 milliseconds)
+// if link-layer indications are used to detect link breakages such as in IEEE 802.11 standard.
+#define ACTIVE_ROUTE_TIMEOUT      6.0
+// The configured value for MY_ROUTE_TIMEOUT MUST be at least 2 * PATH_DISCOVERY_TIME.
+#define MY_ROUTE_TIMEOUT          6.0
+#define REVERSE_ROUTE_LIFE        6.0
+#define PURGE_BCAST_ID_PERIOD     2.0
+#define BCAST_ID_SAVE             3.0
+// Must be larger than the time difference between a node propagates a route request and gets the route reply back.
+#define RREP_WAIT_TIME            1.0
+// If the link layer feedback is used to detect loss of link, DELETE_PERIOD must be at least ACTIVE_ROUTE_TIMEOUT.
+#define DELETE_PERIOD    ACTIVE_ROUTE_TIMEOUT
+
+#ifdef USE_PREEMPTIVE_LOCAL_ROUTE_REPAIR
+#define USE_IRRESPONSIBLE_REBROADCAST
+#define PLRR_SUPPRESSION_TIME    3
+#define MAX_RECV_POWER_POLYNOMIAL_DEGREE 4
+#endif
 
 /**
  * @brief Interface class for route repair protocol design and any concrete subclass should private inherit it.

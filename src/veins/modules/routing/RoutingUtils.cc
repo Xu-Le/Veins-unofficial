@@ -16,6 +16,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
+#include <stdarg.h>
+#include <fstream>
 #include "veins/modules/routing/RoutingUtils.h"
 
 #if RAND_MAX == 0x7fff
@@ -109,6 +111,23 @@ short RoutingUtils::relativeDirection(Coord ownSpeed, Coord otherSpeed)
 	else
 		otherDir = otherSpeed.y > 0 ? M_PI/2 : 3*M_PI/2;
 	return relativeDirection(ownDir, otherDir);
+}
+
+void RoutingUtils::fileLog(const char *filename, const char *fmt, ...)
+{
+	va_list va;
+	va_start(va, fmt);
+	char buffer[1024] = { '\0' };
+	int len = vsnprintf(buffer, 1024, fmt, va);
+	buffer[len] = '\0';
+
+	std::ofstream fout(filename, std::ios_base::out | std::ios_base::app);
+	if (!fout.is_open())
+		throw cRuntimeError("cannot open file %s!", filename);
+	fout << buffer << std::endl;
+	fout.close();
+
+	va_end(va);
 }
 
 int RoutingUtils::generateGUID()

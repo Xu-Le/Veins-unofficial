@@ -48,9 +48,9 @@ void AOMDV::initialize(int stage)
 #ifdef USE_XML_CONFIG_FILE
 			initializeRoutingPlanList(par("routingPlan").xmlValue(), myAddr);
 #else
-			double prewait = uniform(par("loPrewait").doubleValue(), par("hiPrewait").doubleValue());
-			if (RoutingStatisticCollector::gRoutings < 100)
+			if (RoutingStatisticCollector::gRoutings < ROUTING_EVENTS_NUM && simTime().dbl() > 90.0)
 			{
+				double prewait = uniform(par("loPrewait").doubleValue(), par("hiPrewait").doubleValue());
 				PlanEntry entry(LAddress::L3BROADCAST(), par("totalBytes").longValue(), SimTime::ZERO);
 				routingPlanList.push_back(std::pair<double, PlanEntry>(simTime().dbl() + prewait, entry));
 			}
@@ -120,13 +120,16 @@ void AOMDV::handleSelfMsg(cMessage *msg)
 	case AOMDVMsgKinds::RREP_TIMEOUT_EVT:
 	{
 		LAddress::L3Type *brokenNb = static_cast<LAddress::L3Type*>(msg->getContextPointer());
+		WaitForRREPMessage *waitRREPMsg = dynamic_cast<WaitForRREPMessage*>(msg);
 		if (*brokenNb != -1) // local repair failure
-			onLocalRepairFailure(*brokenNb);
-		else
 		{
-			WaitForRREPMessage *waitRREPMsg = dynamic_cast<WaitForRREPMessage*>(msg);
-			sendRREQ(waitRREPMsg->getDestAddr());
+			AomdvRtEntry *rt = lookupRoutingEntry(waitRREPMsg->getDestAddr());
+			ASSERT(rt != nullptr && rt->flags == RTF_IN_REPAIR);
+			downRoutingEntry(rt);
+			onLocalRepairFailure(*brokenNb);
 		}
+		else
+			sendRREQ(waitRREPMsg->getDestAddr());
 		break;
 	}
 	case AOMDVMsgKinds::RREPACK_TIMEOUT_EVT:
@@ -272,6 +275,7 @@ void AOMDV::handleSelfMsg(cMessage *msg)
 					senderStates.erase(dataPkt->getDestination());
 					ASSERT(findBufferQueue(dataPkt->getDestination()) == false);
 					rt->connected = false;
+					++RoutingStatisticCollector::gComplete;
 				}
 			}
 		}
@@ -339,7 +343,15 @@ void AOMDV::onBeacon(BeaconMessage *beaconMsg)
 	if (path != nullptr)
 		path->expireAt = simTime() + neighborElapsed;
 	else
+	{
 		path = rt->pathInsert(sender, myAddr, 1, neighborElapsed);
+		if (rt->flags == RTF_DOWN)
+		{
+			rt->flags = RTF_UP;
+			if (rt->seqno & 1)
+				++rt->seqno;
+		}
+	}
 }
 
 void AOMDV::onRouting(RoutingMessage *msg)
@@ -502,7 +514,6 @@ void AOMDV::onRREQ(RREQMessage *rq)
 
 		EV << "Case II: get useful route (" << (uint32_t)rt0->advertisedHops << " >= " << rqHopCount << ").\n";
 
-		AomdvPath *erp = nullptr;
 		// If path already exists - adjust the lifetime of the path.
 		if ((reversePath = rt0->disjointPathLookup(ipsrc, rq->getFirstHop())) != nullptr)
 		{
@@ -526,14 +537,17 @@ void AOMDV::onRREQ(RREQMessage *rq)
 				rt0->lastHopCount = rt0->pathGetMaxHopCount();
 				EV << "new reverse path: " << reversePath->info() << ", last hop count: " << (uint32_t)rt0->lastHopCount << std::endl;
 			}
-			// If new path differs too much in length compared to previous paths - drop packet.
-			if (rq->getHopCount() + 1 - rt0->pathGetMinHopCount() > AOMDV_MAX_PATH_HOP_DIFF)
+			else
+			{
+				EV << "get useless route (too many existing paths)." << std::endl;
 				return;
+			}
 		}
-		// (RREQ was intended for me) AND
-		// ((Path with RREQ first hop as last hop does not exist) OR (The path exists and has less hop count than RREQ)) - drop packet.
-		else if (rqdst == myAddr && ((erp = rt0->pathLookupLastHop(rq->getFirstHop())) == nullptr || rq->getHopCount() + 1 > erp->hopCount))
+		else
+		{
+			EV << "get useless route (will incur joint path)." << std::endl;
 			return;
+		}
 	}
 	// Older seqno (or same seqno with higher hopcount), i.e. I have a more recent route entry - so drop packet.
 	else
@@ -688,10 +702,10 @@ void AOMDV::onRREP(RREPMessage *rp)
 	{
 		EV << "Case II: get useful route (" << (uint32_t)rt->advertisedHops << " >= " << rpHopCount << ").\n";
 
-		rt->flags = RTF_UP;
 		// If the path already exists - increase path lifetime
 		if ((forwardPath = rt->disjointPathLookup(ipsrc, rp->getFirstHop())) != nullptr)
 		{
+			rt->flags = RTF_UP;
 			ASSERT(forwardPath->hopCount == rp->getHopCount() + 1);
 			forwardPath->expireAt = simTime() + rp->getLifeTime();
 			if (rt->expireAt < forwardPath->expireAt)
@@ -703,6 +717,7 @@ void AOMDV::onRREP(RREPMessage *rp)
 		else if (rt->disjointPathExists(ipsrc, rp->getFirstHop()) && rt->pathList.size() < AOMDV_MAX_PATHS
 				&& rp->getHopCount() + 1 - rt->pathGetMinHopCount() <= AOMDV_MAX_PATH_HOP_DIFF)
 		{
+			rt->flags = RTF_UP;
 			// Insert forward path to RREQ destination.
 			forwardPath = rt->pathInsert(ipsrc, rp->getFirstHop(), rp->getHopCount()+1, rp->getLifeTime());
 			rt->lastHopCount = rt->pathGetMaxHopCount();
@@ -764,9 +779,9 @@ void AOMDV::onRREP(RREPMessage *rp)
 	if (rt->advertisedHops == INFINITE_HOPS)
 		rt->advertisedHops = rt->pathGetMaxHopCount();
 	rp->setHopCount(rt->advertisedHops);
-	forwardPath = rt->pathSelect();
-	rp->setFirstHop(forwardPath->lastHop);
 	rt->error = true;
+	if (rt->rrepTimeoutEvt != nullptr) // assisted source may execute route repair at the same time, in rare cases, I cannot receive RREP aiming to me
+		cancelEvent(rt->rrepTimeoutEvt);
 
 	EV << "forward RREP, last hop: " << forwardPath->lastHop << ", hop count: " << (uint32_t)rp->getHopCount() << std::endl;
 	forward(rt0, rp->dup());
@@ -822,10 +837,7 @@ void AOMDV::onRERR(RERRMessage *re)
 				}
 			}
 			else
-			{
-				std::string paths = rt->pathPrint();
-				EV << paths.c_str() << std::endl;
-			}
+				EV << rt->pathPrint().c_str() << std::endl;
 		}
 	}
 	if (destCount > 0)
@@ -856,6 +868,7 @@ void AOMDV::onData(DataMessage *dataPkt)
 	if (dataPkt->getReceiverAddress() != myAddr)
 		return;
 #endif
+	++RoutingStatisticCollector::gDataPktsTransmittedSuccessful;
 
 	LAddress::L3Type dest = dataPkt->getDestination(); // alias
 	if (dest == myAddr)
@@ -873,8 +886,13 @@ void AOMDV::onData(DataMessage *dataPkt)
 		RoutingStatisticCollector::gEndtoendDelay += simTime() - dataPkt->getCreationTime();
 
 		EV << "this data packet is for me, seqno: " << dataPkt->getSequence() << ", seqno intervals:\n";
-		for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS)
+		uint32_t i = 1;
+		for (recvState.itS = recvState.segments.begin(); recvState.itS != recvState.segments.end(); ++recvState.itS, ++i)
+		{
 			EV << '[' << recvState.itS->first << ',' << recvState.itS->second << "), ";
+			if (i % 10 == 0)
+				EV << "\n";
+		}
 		EV << std::endl;
 		return;
 	}
@@ -1143,26 +1161,7 @@ void AOMDV::onNeighborLost(LAddress::L3Type neighbor)
 	seqno += 2; // Set of neighbors changed
 	ASSERT(seqno % 2 == 0);
 
-	AomdvPath *path = nullptr;
-	for (itRT = routingTable.begin(); itRT != routingTable.end(); ++itRT)
-	{
-		AomdvRtEntry *rt = itRT->second;
-		if ((path = rt->pathLookup(neighbor)) != nullptr)
-		{
-			if (rt->connected && rt->pathList.size() == 1)
-			{
-				rt->brokenNb = neighbor;
-				rt->flags = RTF_IN_REPAIR;
-				rt->advertisedHops = INFINITE_HOPS;
-				++rt->seqno;
-				if (rt->seqno < rt->highestSeqnoHeard)
-					rt->seqno = rt->highestSeqnoHeard;
-				++RoutingStatisticCollector::gLocalRepairs;
-				sendRREQ(itRT->first, path->hopCount + LOCAL_ADD_TTL);
-			}
-			rt->pathDelete(neighbor);
-		}
-	}
+	onLocalRepairFailure(neighbor);
 }
 
 /**
@@ -1181,20 +1180,22 @@ void AOMDV::onNeighborLost(LAddress::L3Type neighbor)
  * has not received a RREP (or other control message creating or updating the route) for that destination,
  * it proceeds as described in Section 6.11 by transmitting a RERR message for that destination.
  */
-void AOMDV::localRepair(AomdvRtEntry *rt, DataMessage *dataPkt)
+bool AOMDV::localRepair(AomdvRtEntry *rt, DataMessage *dataPkt)
 {
-	AomdvRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSource());
-	ASSERT(rt0 != nullptr && rt0->flags == RTF_UP);
-
 	if (rt->flags == RTF_IN_REPAIR)
-		return;
+		return false;
+
+	AomdvRtEntry *rt0 = lookupRoutingEntry(dataPkt->getSource());
+	if (rt0 == nullptr || rt0->flags == RTF_DOWN || rt0->flags == RTF_IN_REPAIR)
+		return true;
+
 	// mark the route as under repair
 	rt->flags = RTF_IN_REPAIR;
-
 	++RoutingStatisticCollector::gLocalRepairs;
 
 	uint8_t MIN_REPAIR_TTL = rt->lastHopCount, halfReverseHop = rt0->lastHopCount/2;
 	sendRREQ(dataPkt->getDestination(), std::max(MIN_REPAIR_TTL, halfReverseHop) + LOCAL_ADD_TTL);
+	return false;
 }
 
 //////////////////////////////    RouteRepairInterface    //////////////////////////////
@@ -1233,11 +1234,20 @@ void AOMDV::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	}
 	else if (rt->lastHopCount <= MAX_REPAIR_TTL)
 	{
-		rt->pathDelete(neighbor);
 		if (dataPkt->getSource() != myAddr)
-			localRepair(rt, dataPkt);
+		{
+			bool brokenRt0 = localRepair(rt, dataPkt);
+			if (brokenRt0) // cannot execute local repair due to broken reverse path
+			{
+				rt->flags = RTF_UP; // ensure enter if block in onLocalRepairFailure()
+				onLocalRepairFailure(neighbor);
+			}
+			else
+				rt->pathDelete(neighbor);
+		}
 		else
 		{
+			rt->pathDelete(neighbor);
 			rt->flags = RTF_IN_REPAIR;
 			sendRREQ(dataPkt->getDestination());
 		}
@@ -1245,6 +1255,7 @@ void AOMDV::onLinkBroken(LAddress::L3Type neighbor, DataMessage *dataPkt)
 	}
 	else
 	{
+		rt->flags = RTF_UP; // ensure enter if block in onLocalRepairFailure()
 		onLocalRepairFailure(neighbor);
 		++RoutingStatisticCollector::gPktsLinkLost;
 	}
@@ -1307,8 +1318,8 @@ void AOMDV::onRouteReachable(LAddress::L3Type dest)
 
 	if ((itSS = senderStates.find(dest)) != senderStates.end())
 	{
-		if (!itSS->second.sendDataEvt->isScheduled());
-		scheduleAt(simTime(), itSS->second.sendDataEvt);
+		if (!itSS->second.sendDataEvt->isScheduled())
+			scheduleAt(simTime(), itSS->second.sendDataEvt);
 	}
 }
 
@@ -1316,6 +1327,7 @@ void AOMDV::onRouteUnreachable(LAddress::L3Type dest)
 {
 	EV << "route to dest " << dest << " becomes unreachable, discard buffered packets." << std::endl;
 
+	long _gPktsLinkLost = RoutingStatisticCollector::gPktsLinkLost;
 	for (itRQ = rQueue.begin(); itRQ != rQueue.end();)
 	{
 		if ((*itRQ)->getDestination() == dest)
@@ -1332,6 +1344,8 @@ void AOMDV::onRouteUnreachable(LAddress::L3Type dest)
 	{
 		cancelAndDelete(itSS->second.sendDataEvt);
 		senderStates.erase(itSS);
+		++RoutingStatisticCollector::gIncomplete;
+		RoutingStatisticCollector::gDataPktsSent += RoutingStatisticCollector::gPktsLinkLost - _gPktsLinkLost;
 	}
 }
 
@@ -1346,26 +1360,29 @@ void AOMDV::callRouting(const PlanEntry& entry)
 	ASSERT(itN != neighbors.end());
 #endif
 #else
-	const double mapEdgeLength = 4100.0, leastStayTime = 20.0;;
+	if (RoutingStatisticCollector::gRoutings >= ROUTING_EVENTS_NUM || simTime() - RoutingStatisticCollector::gLatestRouting < SimTime(1, SIMTIME_S))
+		return;
+	const double mapEdgeLength = 4100.0;
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 	{
 		NeighborInfo *nb = itN->second;
 		bool accept = false;
-		if (RoutingUtils::relativeDirection(curSpeed, nb->speed) != RoutingUtils::SAME)
+		if (curPosition.distance(nb->pos) < 0.8*transmissionRadius
+			&& RoutingUtils::relativeDirection(curSpeed, nb->speed) != RoutingUtils::SAME)
 		{
 			if (fabs(nb->speed.x) > Epsilon)
 			{
 				if (nb->speed.x > 0) // 0
-					accept = (mapEdgeLength - nb->pos.x) / nb->speed.x > leastStayTime;
+					accept = (mapEdgeLength - nb->pos.x) / nb->speed.x > TRANSFER_DURATION;
 				else // M_PI
-					accept = (mapEdgeLength + nb->pos.x) / fabs(nb->speed.x) > leastStayTime;
+					accept = (mapEdgeLength + nb->pos.x) / fabs(nb->speed.x) > TRANSFER_DURATION;
 			}
 			else
 			{
 				if (nb->speed.y > 0) // M_PI/2
-					accept = (mapEdgeLength - nb->pos.y) / nb->speed.y > leastStayTime;
+					accept = (mapEdgeLength - nb->pos.y) / nb->speed.y > TRANSFER_DURATION;
 				else // 3*M_PI/2
-					accept = (mapEdgeLength + nb->pos.y) / fabs(nb->speed.y) > leastStayTime;
+					accept = (mapEdgeLength + nb->pos.y) / fabs(nb->speed.y) > TRANSFER_DURATION;
 			}
 		}
 		if (accept)
@@ -1380,6 +1397,14 @@ void AOMDV::callRouting(const PlanEntry& entry)
 		return;
 	}
 	++RoutingStatisticCollector::gRoutings;
+	RoutingStatisticCollector::gLatestRouting = simTime();
+#ifdef TEST_ROUTE_REPAIR_PROTOCOL
+	std::ofstream fout("routingPairs.txt", std::ios_base::out | std::ios_base::app);
+	if (!fout.is_open())
+		error("cannot open file routingPairs.txt!");
+	fout << simTime() << ": " << myAddr << " -> " << receiver << std::endl;
+	fout.close();
+#endif
 #endif
 
 	itSS = senderStates.find(receiver);
@@ -1641,7 +1666,7 @@ void AOMDV::AomdvRtEntry::pathDelete(LAddress::L3Type nextHop)
 			bool willInvalidate = itPL == itSP;
 			itPL = pathList.erase(itPL);
 			if (willInvalidate) // avoid invalidating iterator itSP
-				itSP = itPL;
+				itSP = itPL != pathList.end() ? itPL : pathList.begin();
 			break;
 		}
 	}
@@ -1657,7 +1682,7 @@ void AOMDV::AomdvRtEntry::pathPurge()
 			bool willInvalidate = itPL == itSP;
 			itPL = pathList.erase(itPL);
 			if (willInvalidate) // avoid invalidating iterator itSP
-				itSP = itPL;
+				itSP = itPL != pathList.end() ? itPL : pathList.begin();
 		}
 		else
 			++itPL;

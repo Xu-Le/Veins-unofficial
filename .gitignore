@@ -24,7 +24,7 @@ tests/**/.tkenvrc
 tests/**/out.tmp
 tests/**/err.tmp
 tests/**/*.txt
-tests/**/*.csv
+tests/*/*.csv
 tests/**/General.anf
 tests/traci
 tests/netedit.exe.lnk

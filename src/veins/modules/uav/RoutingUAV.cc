@@ -76,11 +76,14 @@ void RoutingUAV::initialize(int stage)
 #endif
 
 		flyingInterval = SimTime(par("flyingInterval").longValue(), SIMTIME_MS);
-		nextDecisionAt = decideInterval = SimTime(par("decideInterval").longValue(), SIMTIME_MS);
+		decideInterval = SimTime(par("decideInterval").longValue(), SIMTIME_MS);
+		nextDecisionAt = simTime() + beaconInterval;
+		if (stopFlyingMs > par("decideInterval").longValue())
+			throw cRuntimeError("stopFlyingMs must less than or equal to decideInterval");
 
 		flyingEvt = new cMessage("flying evt", RoutingUAVMessageKinds::FLYING_EVT);
 		decideEvt = new cMessage("decide evt", RoutingUAVMessageKinds::DECIDE_EVT);
-		scheduleAt(simTime() + beaconInterval, decideEvt);
+		scheduleAt(nextDecisionAt, decideEvt);
 	}
 	else if (stage == 1)
 		flyingSpeed = mobility->par("flyingSpeed").doubleValue(); // reuse the parameter in mobility module
@@ -263,8 +266,6 @@ void RoutingUAV::onUavNotify(UavNotifyMessage *uavNotifyMsg)
 void RoutingUAV::onRouting(RoutingMessage *routingMsg)
 {
 	EV << logName() << ": onRouting!\n";
-
-	// int guid = routingMsg->getGUID(); // alias
 }
 
 void RoutingUAV::onData(DataMessage* dataMsg)
@@ -429,6 +430,11 @@ void RoutingUAV::decide()
 	attainResultantForce();
 
 	double L = curDirection.length();
+	if (FWMath::close(L, 0.0))
+	{
+		EV << "force is zero." << std::endl;
+		return;
+	}
 	curDirection /= L;
 	double phi = acos(curDirection.x);
 	if (curDirection.y < 0)
@@ -444,6 +450,9 @@ void RoutingUAV::decide()
 		else // nbInfo->hop > hop
 			nbGreater.push_back(nbInfo);
 	}
+	flyingSpeed = mobility->par("flyingSpeed").doubleValue();
+	flyingSpeed *= atan(L)*2/M_PI;
+	EV << "force: " << L << ", speed: " << flyingSpeed << ", ";
 	const double remainingFlyingDist = (remainingMs - stopFlyingMs)/1000.0*flyingSpeed;
 	Coord dst(curPosition);
 	dst.x += remainingFlyingDist * curDirection.x;
@@ -540,17 +549,19 @@ void RoutingUAV::attainResultantForce()
 	{
 		Coord &vpos = itV->second->pos;
 		Coord force(vpos.x - curPosition.x, vpos.y - curPosition.y);
-		double dist = curPosition.distance(vpos);
-		if (dist < 1.0)
-			dist = 1.0;
+		double diffX = vpos.x - curPosition.x, diffY = vpos.y - curPosition.y;
+		double dist = sqrt(diffX*diffX + diffY*diffY);
+		if (dist < 20.0)
+			continue;
 		force *= k_a / (dist*dist*dist);
 		curDirection += force;
 	}
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
 	{
 		Coord &npos = itN->second->pos;
-		double dist = curPosition.distance(npos);
-		if (dist < R_opt && dist > R_opt/10.0)
+		double diffX = curPosition.x - npos.x, diffY = curPosition.y - npos.y;
+		double dist = sqrt(diffX*diffX + diffY*diffY);
+		if (dist < R_opt && dist > R_opt/5.0)
 		{
 			Coord force(curPosition.x - npos.x, curPosition.y - npos.y);
 			force *= K_r * (R_opt - dist) / dist;
@@ -584,18 +595,18 @@ bool RoutingUAV::isForbidden(Coord dst, std::list<RoutingNeighborInfo*>& nbLess,
 #endif
 	// case 1: leave any neighbor with greater hop count
 	for (it = nbGreater.begin(); it != nbGreater.end(); ++it)
-		flag |= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
+		flag |= willLeave(dst, *it);
 	if (flag)
 		return true;
 	// case 2: leave all neighbors with less hop count
 	flag = true;
 	for (it = nbLess.begin(); it != nbLess.end(); ++it)
-		flag &= dst.distance((*it)->pos) >= U2URadius - maxRelativeMoving((*it)->decideAt);
+		flag &= willLeave(dst, *it);
 	if (flag)
 	{
 		bool closest = true;
 		for (it = nbEqual.begin(); it != nbEqual.end(); ++it)
-			if (dst.distance((*it)->pos) < U2URadius - maxRelativeMoving((*it)->decideAt) && (*it)->hopDist < hopDist)
+			if (!willLeave(dst, *it) && (*it)->hopDist < hopDist)
 				closest = false;
 		if (closest)
 			return true;
@@ -617,14 +628,21 @@ bool RoutingUAV::isForbidden(Coord dst, std::list<RoutingNeighborInfo*>& nbLess,
 	return flag;
 }
 
-double RoutingUAV::maxRelativeMoving(SimTime decideAt)
+bool RoutingUAV::willLeave(Coord &self, RoutingNeighborInfo *nbInfo)
 {
-	if (decideAt == SimTime::ZERO) // only RSU do not set variable decideAt in the packet
-		return 0.0;
-	SimTime sinceDecide = simTime() - decideAt;
-	if (sinceDecide > decideInterval) // beacon message may not fresh enough
-		sinceDecide -= decideInterval;
-	int sinceDecideMs = sinceDecide.inUnit(SIMTIME_MS), flyingMs = decideInterval.inUnit(SIMTIME_MS) - stopFlyingMs;
-	int movingMs = sinceDecideMs < flyingMs ? flyingMs - sinceDecideMs : sinceDecideMs - flyingMs;
-	return flyingSpeed * movingMs / 1000.0;
+	if (nbInfo->decideAt == SimTime::ZERO) // only RSU do not set variable decideAt in the packet
+		return self.distance(nbInfo->pos) >= U2URadius;
+	SimTime sinceDecide = simTime() - nbInfo->decideAt;
+	if (sinceDecide > decideInterval) // beacon message may not fresh enough, for safety, regard it is dangerous
+		return true;
+	//    [---------*------|                ][---------*------|                ]
+	//    ^         <------>                  <-------->
+	// decideAt    curMovingMs               nextMovingMs
+	int flyingMs = decideInterval.inUnit(SIMTIME_MS) - stopFlyingMs, nextMovingMs = sinceDecide.inUnit(SIMTIME_MS);
+	int curMovingMs = flyingMs > nextMovingMs ? flyingMs - nextMovingMs : 0;
+	Coord nb = nbInfo->pos;
+	nb.x += nbInfo->speed.x * curMovingMs / 1000.0;
+	nb.y += nbInfo->speed.y * curMovingMs / 1000.0;
+	double nextMovingDistance = flyingSpeed * std::min(flyingMs, nextMovingMs) / 1000.0;
+	return self.distance(nb) + nextMovingDistance >= U2URadius;
 }

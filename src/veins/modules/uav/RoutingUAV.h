@@ -23,7 +23,7 @@
 #include "veins/modules/messages/RoutingMessage_m.h"
 #include "veins/modules/messages/DataMessage_m.h"
 #include "veins/modules/messages/UavNotifyMessage_m.h"
-#include "veins/modules/routing/RoutingStatisticCollector.h"
+#include "veins/modules/routing/RouteRepairInterface.h"
 
 /**
  * @brief A concrete UAV class which is aware of routing protocols.
@@ -110,8 +110,8 @@ private:
 	bool isForbidden(Coord dst, std::list<RoutingNeighborInfo*>& nbLess,
 								std::list<RoutingNeighborInfo*>& nbEqual,
 								std::list<RoutingNeighborInfo*>& nbGreater);
-	/** @brief attain the maximum possible moving distance of a neighbor. */
-	double maxRelativeMoving(SimTime decideAt);
+	/** @brief check whether will leave this neighbor. */
+	bool willLeave(Coord &self, RoutingNeighborInfo *nbInfo);
 
 private:
 	LAddress::L3Type rsuAddr; ///< address of the RSU.
