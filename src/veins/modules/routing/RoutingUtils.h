@@ -29,7 +29,7 @@
 #define UAV_ADDRESS_OFFSET    20000
 #define ATTAIN_VEHICLE_DENSITY_BY_GOD_VIEW
 // H. Zhao, H. Wang, W. Wu, and J. Wei, "Deployment algorithms for UAV airborne networks towards on-demand coverage,"
-// IEEE J. Sel. Areas Commun., vol. 36, no. 7, pp. 1–16, Jul. 2018.
+// IEEE J. Sel. Areas Commun., vol. 36, no. 7, pp. 1-16, Jul. 2018.
 // SECTION V. DISTRIBUTED MOTION CONTROL ALGORITHM
 // #define USE_VIRTUAL_FORCE_MODEL
 

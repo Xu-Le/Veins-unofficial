@@ -26,6 +26,7 @@ class noncobject HopItems;
 
 packet WarningMessage extends WaveShortMessage
 {
+	@descriptor(false);
 	bool warningSuccess = false; // Is warning message successfully arrive at farthest vehicle?
 	bool direction = false; // Is target to opposite vehicle?
 	int GUID = 0; // Unique identifier of this WarningMessage

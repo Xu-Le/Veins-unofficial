@@ -25,6 +25,7 @@ class noncobject HopItems;
 
 packet RoutingMessage extends WaveShortMessage
 {
+	@descriptor(false);
 	bool routingSuccess = false; // Is routing path successfully found?
 	bool backward = false; // Is routing result known, notify it backward to sender?
 	int GUID = 0; // Unique identifier of this RoutingMessage

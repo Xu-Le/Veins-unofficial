@@ -24,11 +24,10 @@ package org.car2x.veins.modules.obstacle;
 //
 simple ObstacleControl
 {
-    parameters:
-        @class(Veins::ObstacleControl);
-        bool debug = default(false);  // emit debug messages?
-        xml obstacles = default(xml("<obstacles/>")); // list of obstacle types and obstacles to load
-        @display("i=misc/town");
-        @labels(node);
+	parameters:
+		@class(Veins::ObstacleControl);
+		xml obstacles = default(xml("<obstacles/>")); // list of obstacle types and obstacles to load
+		@display("i=misc/town");
+		@labels(node);
 }
 

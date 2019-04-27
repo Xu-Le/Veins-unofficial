@@ -110,8 +110,8 @@ private:
 	bool isForbidden(Coord dst, std::list<RoutingNeighborInfo*>& nbLess,
 								std::list<RoutingNeighborInfo*>& nbEqual,
 								std::list<RoutingNeighborInfo*>& nbGreater);
-	/** @brief attain the maximum possible moving distance of a neighbor. */
-	double maxRelativeMoving(SimTime decideAt);
+	/** @brief check whether will leave this neighbor. */
+	bool willLeave(Coord &self, RoutingNeighborInfo *nbInfo);
 
 private:
 	LAddress::L3Type rsuAddr; ///< address of the RSU.

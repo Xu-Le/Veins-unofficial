@@ -214,13 +214,12 @@ void BaseWaveApplLayer::handleLowerMsg(cMessage *msg)
 		EV_WARN << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
 	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
 	WAVEInformationElement dataRate(16, 1, 12);
@@ -233,6 +232,7 @@ void BaseWaveApplLayer::prepareWSM(WaveShortMessage *wsm, int dataLength, t_chan
 
 	wsm->setPriority(priority);
 	wsm->setSenderAddress(myAddr);
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseWaveApplLayer::sendWSM(WaveShortMessage *wsm)
@@ -280,10 +280,11 @@ void BaseWaveApplLayer::onBeacon(BeaconMessage *beaconMsg)
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all neighbors' information of " << logName() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
+	EV << "display all neighbors' information:\n";
 	for (itN = neighbors.begin(); itN != neighbors.end(); ++itN)
-		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << std::endl;
+		EV << "neighbor[" << itN->first << "]:  pos:" << itN->second->pos << ", speed:" << itN->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 

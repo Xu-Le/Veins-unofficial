@@ -37,5 +37,5 @@ examples/bologna/**/.tkenvrc
 examples/bologna/**/out.tmp
 examples/bologna/**/err.tmp
 examples/bologna/**/*.txt
-examples/bologna/**/*.csv
+examples/bologna/*/*.csv
 examples/bologna/**/General.anf

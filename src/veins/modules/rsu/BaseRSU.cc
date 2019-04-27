@@ -159,13 +159,12 @@ void BaseRSU::handleLowerMsg(cMessage *msg)
 		EV << "unknown message (" << msg->getName() << ") received.\n";
 }
 
-void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, int serial)
+void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channel, int priority, LAddress::L2Type recipient)
 {
 	ASSERT(wsm != nullptr);
 	ASSERT(channel == type_CCH || channel == type_SCH);
 
-	wsm->addBitLength(headerLength);
-	wsm->addBitLength(dataLength);
+	wsm->setBitLength(headerLength+dataLength);
 
 	WAVEInformationElement channelNumber(15, 1, channel == type_CCH ? Channels::CCH : Channels::SCH1);
 	WAVEInformationElement dataRate(16, 1, 12);
@@ -178,6 +177,7 @@ void BaseRSU::prepareWSM(WaveShortMessage *wsm, int dataLength, t_channel channe
 
 	wsm->setPriority(priority);
 	wsm->setSenderAddress(myAddr);
+	wsm->setRecipientAddress(recipient);
 }
 
 void BaseRSU::sendWSM(WaveShortMessage *wsm)
@@ -208,10 +208,11 @@ void BaseRSU::onBeacon(BeaconMessage *beaconMsg)
 	beaconMsg->removeControlInfo();
 
 #if ROUTING_DEBUG_LOG
-	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << std::endl;
-	EV << "display all vehicles' information of " << logName() << std::endl;
+	EV << "    senderPos: " << beaconMsg->getSenderPos() << ", senderSpeed: " << beaconMsg->getSenderSpeed() << "\n";
+	EV << "display all vehicles' information:\n";
 	for (itV = vehicles.begin(); itV != vehicles.end(); ++itV)
-		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << std::endl;
+		EV << "vehicle[" << itV->first << "]:  pos:" << itV->second->pos << ", speed:" << itV->second->speed << "\n";
+	EV << std::endl;
 #endif
 }
 

@@ -38,15 +38,15 @@ double UAV::r = 0.0;
 double UAV::R = 0.0;
 double UAV::v = 10.0;
 #ifndef USE_VIRTUAL_FORCE_MODEL
-double UAV::minGap = 200.0;
+double UAV::minGap = 180.0;
 double UAV::radTheta = 0.0;
 int UAV::theta = 30;
 int UAV::expand = 3;
 int UAV::sectorNum = 12;
 #else
-double UAV::k_a = 1000.0;
-double UAV::K_r = 2000.0;
-double UAV::R_opt = 200.0;
+double UAV::k_a = 100.0;
+double UAV::K_r = 0.01;
+double UAV::R_opt = 250.0;
 #endif
 
 extern double gX;

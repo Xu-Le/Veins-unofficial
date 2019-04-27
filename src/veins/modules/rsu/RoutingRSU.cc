@@ -183,6 +183,7 @@ void RoutingRSU::sendUavBeacon()
 	EV << "Creating UAV Beacon with Priority " << beaconPriority << " at RoutingRSU at " << simTime() << std::endl;
 	UavBeaconMessage *uavBeaconMsg = new UavBeaconMessage("uavBeacon");
 	prepareWSM(uavBeaconMsg, beaconLengthBits, t_channel::type_CCH, beaconPriority, -1);
+	uavBeaconMsg->setSenderPos(curPosition);
 #ifndef USE_VIRTUAL_FORCE_MODEL
 	uavBeaconMsg->setAverageDensity(averageDensity);
 	uavBeaconMsg->setDensityDivision(densityDivision);
@@ -243,29 +244,6 @@ void RoutingRSU::onUavNotify(UavNotifyMessage *uavNotifyMsg)
 void RoutingRSU::onRouting(RoutingMessage *routingMsg)
 {
 	EV << logName() << ": onRouting!\n";
-
-	int guid = routingMsg->getGUID(); // alias
-
-	if ( messageMemory.find(guid) != messageMemory.end() )
-	{
-		EV << "routing message(GUID=" << guid << ") has been rebroadcast recently, discard it.\n";
-		return;
-	}
-
-	// check if the hop count of the message exceeds
-	if ( routingMsg->getHopCount() > maxHopConstraint )
-	{
-		EV << "routing message(GUID=" << guid << ") exceeds its maximum hop count, discard it.\n";
-		return;
-	}
-
-	// catch a new routing message
-	EV << "catch a routing message(GUID=" << guid << "), help to rebroadcast it.\n";
-
-	messageMemory.insert(std::pair<int, simtime_t>(guid, simTime()));
-
-	RoutingMessage *dupWSM = new RoutingMessage(*routingMsg);
-	sendWSM(dupWSM);
 }
 
 void RoutingRSU::onData(DataMessage *dataMsg)
@@ -306,7 +284,7 @@ void RoutingRSU::emitUAV()
 	mod->par("posY").setDoubleValue(curPosition.y);
 	mod->finalizeParameters();
 	mod->getDisplayString().parse("b=8,8,oval");
-	mod->getDisplayString().setTagArg("r", 0, V2XRadius);
+	mod->getDisplayString().setTagArg("r", 0, 0.937646*V2XRadius);
 	mod->buildInside();
 	rsuBelongingMap[uavIndexCounter+UAV_ADDRESS_OFFSET] = myAddr;
 	mod->callInitialize();

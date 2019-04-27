@@ -25,7 +25,7 @@ simple RoutingRSU extends BaseRSU
 	@class(RoutingRSU);
 	@display("i=block/routing");
 
-	int beaconLengthBits = default(1216bit) @unit(bit); // the length of a beacon packet
+	int beaconLengthBits = default(256bit) @unit(bit); // the length of a beacon packet
 	int beaconPriority = default(0); // the access category of the beacon messages
 	int routingLengthBits = default(960bit) @unit(bit); // the length of a routing packet
 	int routingPriority = default(1); // the access category of the routing messages
@@ -33,13 +33,13 @@ simple RoutingRSU extends BaseRSU
 	int dataPriority = default(2); // the access category for data packets
 
 	int totalUavNum = default(1); // the total number of UAV to be emitted per RSU
-	int emitFirstUavAt = default(60); // when to emit the first UAV
-	int theta = default(20); // sector granularity measured in degree
+	int emitFirstUavAt = default(120); // when to emit the first UAV
+	int theta = default(30); // sector granularity measured in degree
 	int expand = default(3); // expand to how many adjacent sectors to smooth the density in average
 
 	double beaconInterval = default(1s) @unit(s); // the intervall between 2 beacon messages
-	double examineUavsInterval = default(2s) @unit(s); // the intervall between 2 examine UAV whether in communication range messages
+	double examineUavsInterval = default(1.5s) @unit(s); // the intervall between 2 examine UAV whether in communication range messages
 	double emitUavInterval = default(120s) @unit(s); // the interval between 2 emit UAV events
 	double attainDensityInterval = default(10s) @unit(s); // the interval between 2 attain density events
-	double UavElapsed = default(3s) @unit(s); // if exceeds this time, assuming has lose connectivity with the UAV
+	double UavElapsed = default(2s) @unit(s); // if exceeds this time, assuming has lose connectivity with the UAV
 }

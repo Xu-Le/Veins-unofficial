@@ -21,6 +21,7 @@
 //
 message WaitTimeElapsedMessage
 {
+	@descriptor(false);
 	// indicates which packet's wait time elapsed
 	int GUID = 0;
 	// whether receive duplicate packets from multiple sources within the waiting period

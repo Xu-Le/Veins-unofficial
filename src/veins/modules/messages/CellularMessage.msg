@@ -27,6 +27,7 @@ enum CellularMsgCC {
 
 packet CellularMessage
 {
+	@descriptor(readonly);
 	int controlCode; // express which kind of control signaling message, see enum CellularMsgCC
 	int vehicle; // identifier of a vehicle
 }

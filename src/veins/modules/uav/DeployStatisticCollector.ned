@@ -25,4 +25,5 @@ simple DeployStatisticCollector
 
 	int calculateInterval = default(10s) @unit(s); // the interval between 2 optimality calculation event
 	int emitFirstUavAt = default(60); // when to emit the first UAV
+	string resultFile; // csv file storing results
 }

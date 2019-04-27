@@ -21,6 +21,7 @@
 //
 message PacketExpiredMessage
 {
+	@descriptor(false);
 	// indicates which packet expired
 	int GUID = 0;
 }

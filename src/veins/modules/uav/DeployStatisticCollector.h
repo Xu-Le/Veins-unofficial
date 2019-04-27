@@ -68,12 +68,14 @@ private:
 
 	cOutVector practicalVec;   ///< same as practical.
 	cOutVector theoreticalVec; ///< same as theoretical.
-#if DO_THEORETICAL_CALCULATION
+
 	std::list<int> calculateAt; ///< a series of time instants at which optimality calculation executes.
 	std::list<int> practical;   ///< attained solution by our strategy in practical.
+#if DO_THEORETICAL_CALCULATION
 	std::list<int> theoretical; ///< global optimal solution theoretically.
-	std::list<LAddress::L3Type> vehicleSet; ///< vehicles that covered by RSU or UAVs in practical.
 #endif
+	std::list<LAddress::L3Type> vehicleSet; ///< vehicles that covered by RSU or UAVs in practical.
+
 	static const simsignalwrap_t optimalityCalculationSignal;
 };
 
